@@ -1,13 +1,16 @@
-from ._calculate import to_polar, to_cartesian, calculate_values, calculate_fluence, calculate_plane
-from ._plot import plot_tlvs, photometric_web, photometric_web_plotly
+from .room import Room
+from .lamp import Lamp
+from .calc_zone import CalcVol, CalcPlane
+from .trigonometry import to_polar, to_cartesian, attitude
+from ._plot import plot_tlvs
 
 __all__ = [
+    "Room",
+    "Lamp",
+    "CalcVol",
+    "CalcPlane",
     "to_polar",
     "to_cartesian",
-    "calculate_values",
-    "calculate_fluence",
-    "calculate_plane",
+    "attitude",
     "plot_tlvs",
-    "photometric_web",
-    "photometric_web_plotly"
 ]

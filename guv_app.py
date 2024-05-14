@@ -25,6 +25,12 @@ with col1:
     fig, ax = plot_ies(ies_file)
     st.pyplot(fig)
     
+    # make the lampdict
+    lamps = []
+    
+    
+    
+    
 with col2:
     # set room dimensions
     col_a, col_b, col_c, col_d = st.columns(4)
@@ -34,9 +40,9 @@ with col2:
     elif units == 'feet':
         defaultvals = [20.0, 13.0, 9.0]
     
-    x = col_a.number_input('Room length (x)', value=defaultvals[0], format="%.2f")
-    y = col_b.number_input('Room width (y)', value=defaultvals[1], format="%.2f")
-    z = col_c.number_input('Room height (z)', value=defaultvals[2], format="%.2f")
+    x = col_a.number_input('Room length (x)', value=defaultvals[0], format="%.2f",min_value=0.01)
+    y = col_b.number_input('Room width (y)', value=defaultvals[1], format="%.2f",min_value=0.01)
+    z = col_c.number_input('Room height (z)', value=defaultvals[2], format="%.2f",min_value=0.01)
        
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
