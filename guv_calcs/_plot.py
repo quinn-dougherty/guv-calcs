@@ -17,21 +17,21 @@ def plot_tlvs(skin_values, eye_values, x, y, height, units, figsize=(8, 3.5), ti
     extent = [0, x, 0, y]
 
     ax1 = plt.subplot(gs[0])
-    im1 = ax1.imshow(skin_values, extent=extent, vmin=vmin, vmax=vmax)
+    ax1.imshow(skin_values, extent=extent, vmin=vmin, vmax=vmax)
     title1 = "Skin dose at " + str(height) + " " + units
     title1 += "\nMax: " + str(round(skin_values.max(), 2)) + " mJ/cm²"
     ax1.set_title(title1)
 
     ax2 = plt.subplot(gs[1])
-    im2 = ax2.imshow(eye_values, extent=extent, vmin=vmin, vmax=vmax)
+    im = ax2.imshow(eye_values, extent=extent, vmin=vmin, vmax=vmax)
     title2 = "Eye dose at " + str(height) + " " + units
     title2 += "\nMax: " + str(round(eye_values.max(), 2)) + " mJ/cm²"
     ax2.set_title(title2)
 
     # Colorbar in the third column of GridSpec
     cbar_ax = plt.subplot(gs[2])
-    cbar = fig.colorbar(
-        im2,
+    fig.colorbar(
+        im,
         label="mJ/cm²/8 hours",
         cax=cbar_ax,
         use_gridspec=False,

@@ -1,6 +1,6 @@
 import numpy as np
 from abc import ABC, abstractmethod
-from ies_utils import get_intensity
+from ies_utils import get_intensity_vectorized
 from .trigonometry import attitude, to_polar
 
 
@@ -40,6 +40,35 @@ class CalcZone(ABC):
         """
         pass
 
+    @abstractmethod
+    def set_dimensions(self, dimensions):
+        pass
+
+    @abstractmethod
+    def set_spacing(self, spacing):
+        pass
+
+    def set_offset(self, offset):
+        if type(offset) is not bool:
+            raise TypeError("Offset must be either True or False")
+        self.offset = offset
+        self._update
+
+    def get_dimensions(self):
+        return self.dimensions
+
+    def get_spacing(self):
+        return np.array(self.spacing)
+
+    def get_num_points(self):
+        return np.array(self.num_points)
+
+    def get_coords(self):
+        return self.coords
+
+    def get_values(self):
+        return self.values
+
     def _update(self):
         """
         Update the number of points based on the spacing, and then the points
@@ -58,13 +87,6 @@ class CalcZone(ABC):
                 for val, div in zip(self.dimensions, self.spacing)
             ]
         self._set_coords()
-
-    def set_spacing(self, spacing):
-        """
-        Set the spacing between points for calculations and update coordinates.
-        """
-        self.spacing = spacing
-        self._update()
 
     def calculate_values(self, lamps: list):
         """
@@ -87,12 +109,7 @@ class CalcZone(ABC):
                 attitude(rel_coords.T, roll=0, pitch=0, yaw=-lamp.angle)
             ).T
             Theta, Phi, R = to_polar(*rel_coords.T)
-            values = np.array(
-                [
-                    get_intensity(theta, phi, lamp.valdict) / r ** 2
-                    for theta, phi, r in zip(Theta, Phi, R)
-                ]
-            )
+            values = get_intensity_vectorized(Theta, Phi, lamp.interpdict) / R ** 2
             if self.fov80:
                 values[Theta0 < 50] = 0
             if self.vert:
@@ -122,7 +139,7 @@ class CalcVol(CalcZone):
     def __init__(
         self,
         zone_id,
-        dimensions,
+        dimensions=None,
         spacing=None,
         offset=None,
         fov80=None,
@@ -130,17 +147,25 @@ class CalcVol(CalcZone):
         horiz=None,
     ):
 
+        super().__init__(zone_id, dimensions, offset, fov80, vert, horiz)
+        self.dimensions = [6, 4, 2.7] if dimensions is None else dimensions
+        if len(self.dimensions) != 3:
+            raise ValueError("CalcVol requires exactly three dimensions.")
+        self.spacing = [0.25, 0.25, 0.1] if spacing is None else spacing
+        if len(self.spacing) != 3:
+            raise ValueError("CalcVol requires exactly three spacing dimensions.")
+        self._update()
+
+    def set_dimensions(self, dimensions):
         if len(dimensions) != 3:
             raise ValueError("CalcVol requires exactly three dimensions.")
+        self.dimensions = dimensions
+        self._update()
 
-        super().__init__(zone_id, dimensions, offset, fov80, vert, horiz)
-        self.spacing = [0.25, 0.25, 0.1] if spacing is None else spacing
-
-        if len(self.spacing) != len(dimensions):
-            raise ValueError(
-                "Dimensions of spacing must be equal to dimensions of calc zone"
-            )
-
+    def set_spacing(self, spacing):
+        if len(spacing) != 3:
+            raise ValueError("CalcVol requires exactly three spacing dimensions.")
+        self.spacing = spacing
         self._update()
 
     def _set_coords(self):
@@ -158,8 +183,8 @@ class CalcPlane(CalcZone):
     def __init__(
         self,
         zone_id,
-        height,
-        dimensions,
+        height=None,
+        dimensions=None,
         spacing=None,
         offset=None,
         fov80=None,
@@ -167,18 +192,28 @@ class CalcPlane(CalcZone):
         horiz=None,
     ):
 
+        super().__init__(zone_id, dimensions, offset, fov80, vert, horiz)
+
+        self.height = 1.9 if height is None else height
+
+        self.dimensions = [6, 4] if dimensions is None else dimensions
+        if len(self.dimensions) != 2:
+            raise ValueError("CalcPlane requires exactly two dimensions.")
+        self.spacing = [0.1, 0.1] if spacing is None else spacing
+        if len(self.spacing) != 2:
+            raise ValueError("CalcPlane requires exactly two spacing dimensions.")
+        self._update()
+
+    def set_dimensions(self, dimensions):
         if len(dimensions) != 2:
             raise ValueError("CalcPlane requires exactly two dimensions.")
+        self.dimensions = dimensions
+        self._update()
 
-        super().__init__(zone_id, dimensions, offset, fov80, vert, horiz)
-        self.height = height
-        self.spacing = [0.1, 0.1] if spacing is None else spacing
-
-        if len(self.spacing) != len(dimensions):
-            raise ValueError(
-                "Dimensions of spacing must be equal to dimensions of calc zone"
-            )
-
+    def set_spacing(self, spacing):
+        if len(spacing) != 2:
+            raise ValueError("CalcPlane requires exactly two spacing dimensions.")
+        self.spacing = spacing
         self._update()
 
     def _set_coords(self):

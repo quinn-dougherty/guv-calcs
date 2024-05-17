@@ -1,9 +1,9 @@
-import numpy as np
 from pathlib import Path
 import warnings
+import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay
-from ies_utils import read_ies_data, plot_ies
+from ies_utils import read_ies_data, plot_ies, total_optical_power
 from .trigonometry import to_cartesian, to_polar, attitude
 
 
@@ -14,12 +14,41 @@ class Lamp:
     and provides methods for moving, rotating, and aiming the lamp
     """
 
-    def __init__(self, filename, intensity_units="mW/Sr", photometric_distance=1.0):
-        self.filename = Path(filename)
-        self.intensity_units = intensity_units
-        self.photometric_distance = photometric_distance
-        self._load()
-        self._orient()
+    def __init__(
+        self,
+        lamp_id,
+        name=None,
+        filename=None,
+        x=None,
+        y=None,
+        z=None,
+        angle=None,
+        aim_point=None,
+        aimx=None,
+        aimy=None,
+        aimz=None,
+        intensity_units=None,
+    ):
+        self.lamp_id = lamp_id
+        self.name = name if name is not None else lamp_id
+        # position
+        self.x = 0.0 if x is None else x
+        self.y = 0.0 if y is None else y
+        self.z = 0.0 if z is None else z
+        self.position = np.array([self.x, self.y, self.z])
+        # orientation
+        self.angle = 0.0 if angle is None else angle
+        self.aimx = self.x if aimx is None else aimx
+        self.aimy = self.y if aimy is None else aimy
+        self.aimz = 0 if aimz is None else aimz
+        self.aim(self.aimx, self.aimy, self.aimz)  # updates heading and bank
+
+        # load file and coordinates
+        self.filename = filename
+        self.intensity_units = "mW/Sr" if intensity_units is None else intensity_units
+        if self.filename is not None:
+            self._load()
+            self._orient()
 
     def _load(self):
         """
@@ -30,6 +59,7 @@ class Lamp:
         self.thetas = self.valdict["thetas"]
         self.phis = self.valdict["phis"]
         self.values = self.valdict["values"]
+        self.interpdict = self.lampdict["interp_vals"]
 
         units_type = self.lampdict["units_type"]
         if units_type == 1:
@@ -40,6 +70,7 @@ class Lamp:
             msg = "Lamp dimension units could not be determined. Your ies file may be malformed. Units of meters are being assumed."
             warnings.warn(msg)
             self.units = "meters"
+
         self.dimensions = [
             self.lampdict["width"],
             self.lampdict["length"],
@@ -51,22 +82,28 @@ class Lamp:
         """
         Initializes the orientation of the lamp based on its photometric data.
         """
-        self.position = np.array([0, 0, 0])
-        self.angle = 0
-        self.bank = 0
-        self.heading = 0
-        self.aim_point = None
 
         # true value coordinates
         tgrid, pgrid = np.meshgrid(self.thetas, self.phis)
         tflat, pflat = tgrid.flatten(), pgrid.flatten()
         tflat = 180 - tflat  # to account for reversed z direction
-        x, y, z = to_cartesian(tflat, pflat, self.photometric_distance)
+        x, y, z = to_cartesian(tflat, pflat, 1)
         self.coords = np.array([x, y, z]).T
 
         # photometric web coordinates
         xp, yp, zp = to_cartesian(tflat, pflat, self.values.flatten())
         self.photometric_coords = np.array([xp, yp, zp]).T
+
+    def get_total_power(self):
+        """return the lamp's total optical power"""
+        self.total_optical_power = total_optical_power(self.interpdict)
+        return self.total_optical_power
+
+    def reload(self, filename):
+        """replace the ies file without erasing any position/rotation/aiming information"""
+        self.filename = filename
+        self._load()
+        self._orient()
 
     def transform(self, coords, scale=1):
         """
@@ -92,7 +129,13 @@ class Lamp:
 
     def move(self, x, y, z):
         """Designate lamp position in cartesian space"""
-        self.position = np.array([x, y, z])
+        self.x = x
+        self.y = y
+        self.z = z
+        position = np.array([x, y, z])
+        self.position = position
+        diff = position - self.position
+        self.aim_point += diff 
         return self
 
     def rotate(self, angle):
@@ -102,6 +145,7 @@ class Lamp:
 
     def aim(self, x, y, z):
         """aim lamp at a point in cartesian space"""
+
         self.aim_point = np.array([x, y, z])
         xr, yr, zr = self.aim_point - self.position
         self.heading = np.degrees(np.arctan2(yr, xr))
