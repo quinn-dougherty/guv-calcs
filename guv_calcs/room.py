@@ -98,15 +98,21 @@ class Room:
         for name, zone in self.calc_zones.items():
             zone.calculate_values(lamps=self.lamps)
 
-    def plotly(self, title="", color="#cc61ff", alpha=0.4):
-        fig = go.Figure()
-        for label, lamp in self.lamps.items():
+    def plotly(self, fig=None, select_id=None, title="", color="#cc61ff", alpha=0.4):
+        if fig is None:
+            fig = go.Figure()
+        for lamp_id, lamp in self.lamps.items():
             if lamp.filename is not None:
                 x, y, z = lamp.transform(
                     lamp.photometric_coords, scale=lamp.values.max()
                 ).T
                 Theta, Phi, R = to_polar(*lamp.photometric_coords.T)
                 tri = Delaunay(np.column_stack((Theta.flatten(), Phi.flatten())))
+                label=lamp.name
+                if select_id is not None and select_id==lamp_id:
+                    lampcolor=color#'#ff6161'
+                else:
+                    lampcolor='blue'
                 fig.add_trace(
                     go.Mesh3d(
                         x=x,
@@ -115,7 +121,7 @@ class Room:
                         i=tri.simplices[:, 0],
                         j=tri.simplices[:, 1],
                         k=tri.simplices[:, 2],
-                        color=color,
+                        color=lampcolor,
                         opacity=alpha,
                         name=label,
                     )
@@ -130,20 +136,21 @@ class Room:
                         showlegend=False,
                     )
                 )
-                fig.update_layout(
-                    scene=dict(
-                        xaxis=dict(range=[0, self.x]),
-                        yaxis=dict(range=[0, self.y]),
-                        zaxis=dict(range=[0, self.z]),
-                        aspectratio=dict(
-                            x=self.x / self.z, y=self.y / self.z, z=self.z / self.z
-                        ),
-                    )
-                )
-                fig.update_scenes(camera_projection_type="orthographic")
-
+        fig.update_layout(
+            scene=dict(
+                xaxis=dict(range=[0, self.x]),
+                yaxis=dict(range=[0, self.y]),
+                zaxis=dict(range=[0, self.z]),
+                aspectratio=dict(
+                    x=self.x / self.z, y=self.y / self.z, z=self.z / self.z
+                ),
+            ),  height=650
+        )
+        fig.update_scenes(camera_projection_type="orthographic")
+        return fig
+        
     def plot(
-        self, fig=None, ax=None, elev=30, azim=-45, title="", color="#cc61ff", alpha=0.4
+        self, fig=None, ax=None, elev=30, azim=-45, title="", color="#cc61ff", alpha=0.4, select_id=None,
     ):
         """
         Generates a 3D plot of the room and the lamps in it
@@ -151,9 +158,19 @@ class Room:
         if fig is None:
             fig = plt.figure()
         if ax is None:
-            ax = fig.add_subplot(111, projection="3d")
-        for label, lamp in self.lamps.items():
+            ax = fig.add_subplot(111, projection="3d")            
+        ax.set_title(title)
+        ax.view_init(azim=azim, elev=elev)
+        ax.set_xlim(0, self.x)
+        ax.set_ylim(0, self.y)
+        ax.set_zlim(0, self.z)
+        for lampid, lamp in self.lamps.items():
             if lamp.filename is not None:
+                label=lamp.name
+                if select_id is not None and select_id==lampid:
+                    lampcolor=color#'#ff6161'
+                else:
+                    lampcolor='blue'
                 x, y, z = lamp.transform(
                     lamp.photometric_coords, scale=lamp.values.max()
                 ).T
@@ -165,7 +182,7 @@ class Room:
                     z,
                     triangles=tri.simplices,
                     label=label,
-                    color=color,
+                    color=lampcolor,
                     alpha=alpha,
                 )
                 ax.plot(
@@ -175,9 +192,5 @@ class Room:
                     color="black",
                     alpha=0.7,
                 )
-                ax.set_title(title)
-                ax.view_init(azim=azim, elev=elev)
-                ax.set_xlim(0, self.x)
-                ax.set_ylim(0, self.y)
-                ax.set_zlim(0, self.z)
-        return fig
+        
+        return fig, ax

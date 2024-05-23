@@ -1,6 +1,31 @@
 import numpy as np
 from pathlib import Path
 
+# def add_standard_zones(room):
+    # height = 1.9 if room.units=='meters' else 6.5
+
+    # eyezone = CalcPlane(
+        # zone_id='EyeLimits',
+        # name='Eye Limits',
+        # height=height,
+        # dimensions=[room.x,room.y],
+        # vert=True,
+        # horiz=False,
+        # fov80=True,
+    # )
+    # skinzone = CalcPlane(
+        # zone_id='EyeLimits',
+        # name='Eye Limits',
+        # height=height,
+        # dimensions=[room.x,room.y],
+        # vert=True,
+        # horiz=False,
+        # fov80=False,
+    # )
+        # CalcPlane("Skin", height=height, dimensions=[room.x,room.y], vert=False, horiz=True, fov80=False))
+        # CalcPlane("Eye", height=height, dimensions=[room.x,room.y], vert=True, horiz=False, fov80=True))
+
+
 def get_lamp_position(lamp_idx, x, y, num_divisions=100):
     xp = np.linspace(0,x,num_divisions+1)
     yp = np.linspace(0,y,num_divisions+1)

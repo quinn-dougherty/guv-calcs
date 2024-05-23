@@ -126,6 +126,9 @@ class Lamp:
         """Return lamp's true position coordinates in polar space"""
         cartesian = self.transform(self.coords) - self.position
         return np.array(to_polar(*cartesian.T)).round(sigfigs)
+        
+    def set_name(self,name):
+        self.name = name
 
     def move(self, x, y, z):
         """Designate lamp position in cartesian space"""

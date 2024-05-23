@@ -4,17 +4,18 @@ from ies_utils import get_intensity_vectorized
 from .trigonometry import attitude, to_polar
 
 
-class CalcZone(ABC):
+class CalcZone(object):
     """
-    Abstract base class representing a calculation zone.
+    Base class representing a calculation zone.
 
     This class provides a template for setting up zones within which various
     calculations related to lighting conditions are performed. Subclasses should
     provide specific implementations of the coordinate setting method.
     """
 
-    def __init__(self, zone_id, dimensions, offset, fov80, vert, horiz):
+    def __init__(self, zone_id, name=None, dimensions=None, offset=None, fov80=None, vert=None, horiz=None):
         self.zone_id = zone_id
+        self.name = zone_id if name is None else name
         self.dimensions = dimensions
         self.offset = True if offset is None else offset
         self.fov80 = False if fov80 is None else fov80
@@ -29,24 +30,24 @@ class CalcZone(ABC):
         self.coords = None
         self.values = None
 
-    @abstractmethod
-    def _set_coords(self):
-        """
-        Set up the coordinates in the calculation zone.
+    # @abstractmethod
+    # def _set_coords(self):
+        # """
+        # Set up the coordinates in the calculation zone.
 
-        This method should be implemented by all subclasses to define how the coordinates
-        are structured based on the zone's dimensions and offset. The implementation
-        will depend on whether the zone is a volume or a plane.
-        """
-        pass
+        # This method should be implemented by all subclasses to define how the coordinates
+        # are structured based on the zone's dimensions and offset. The implementation
+        # will depend on whether the zone is a volume or a plane.
+        # """
+        # pass
 
-    @abstractmethod
-    def set_dimensions(self, dimensions):
-        pass
+    # @abstractmethod
+    # def set_dimensions(self, dimensions):
+        # pass
 
-    @abstractmethod
-    def set_spacing(self, spacing):
-        pass
+    # @abstractmethod
+    # def set_spacing(self, spacing):
+        # pass
 
     def set_offset(self, offset):
         if type(offset) is not bool:
@@ -139,6 +140,7 @@ class CalcVol(CalcZone):
     def __init__(
         self,
         zone_id,
+        name=None,
         dimensions=None,
         spacing=None,
         offset=None,
@@ -147,25 +149,29 @@ class CalcVol(CalcZone):
         horiz=None,
     ):
 
-        super().__init__(zone_id, dimensions, offset, fov80, vert, horiz)
+        super().__init__(zone_id, name, dimensions, offset, fov80, vert, horiz)
         self.dimensions = [6, 4, 2.7] if dimensions is None else dimensions
         if len(self.dimensions) != 3:
             raise ValueError("CalcVol requires exactly three dimensions.")
         self.spacing = [0.25, 0.25, 0.1] if spacing is None else spacing
         if len(self.spacing) != 3:
             raise ValueError("CalcVol requires exactly three spacing dimensions.")
+        self.x, self.y, self.z = self.dimensions
+        self.x_spacing, self.y_spacing, self.z_spacing = self.spacing
         self._update()
 
     def set_dimensions(self, dimensions):
         if len(dimensions) != 3:
             raise ValueError("CalcVol requires exactly three dimensions.")
         self.dimensions = dimensions
+        self.x,self.y,self.z = self.dimensions
         self._update()
 
     def set_spacing(self, spacing):
         if len(spacing) != 3:
             raise ValueError("CalcVol requires exactly three spacing dimensions.")
         self.spacing = spacing
+        self.x_spacing, self.y_spacing, self.z_spacing = self.spacing
         self._update()
 
     def _set_coords(self):
@@ -183,6 +189,7 @@ class CalcPlane(CalcZone):
     def __init__(
         self,
         zone_id,
+        name=None,
         height=None,
         dimensions=None,
         spacing=None,
@@ -192,21 +199,25 @@ class CalcPlane(CalcZone):
         horiz=None,
     ):
 
-        super().__init__(zone_id, dimensions, offset, fov80, vert, horiz)
+        super().__init__(zone_id, name, dimensions, offset, fov80, vert, horiz)
 
         self.height = 1.9 if height is None else height
 
-        self.dimensions = [6, 4] if dimensions is None else dimensions
+        self.dimensions = [6.0, 4.0] if dimensions is None else dimensions
         if len(self.dimensions) != 2:
             raise ValueError("CalcPlane requires exactly two dimensions.")
+        self.x, self.y = self.dimensions
         self.spacing = [0.1, 0.1] if spacing is None else spacing
         if len(self.spacing) != 2:
             raise ValueError("CalcPlane requires exactly two spacing dimensions.")
+        
+        self.x_spacing, self.y_spacing = self.spacing                
         self._update()
 
     def set_dimensions(self, dimensions):
         if len(dimensions) != 2:
             raise ValueError("CalcPlane requires exactly two dimensions.")
+        self.x, self.y = self.dimensions
         self.dimensions = dimensions
         self._update()
 
@@ -214,6 +225,7 @@ class CalcPlane(CalcZone):
         if len(spacing) != 2:
             raise ValueError("CalcPlane requires exactly two spacing dimensions.")
         self.spacing = spacing
+        self.x_spacing, self.y_spacing = self.spacing
         self._update()
 
     def _set_coords(self):
