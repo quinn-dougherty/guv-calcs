@@ -101,20 +101,46 @@ class Room:
     def plotly(self, fig=None, select_id=None, title="", color="#cc61ff", alpha=0.4):
         if fig is None:
             fig = go.Figure()
+        traces = [trace.name for trace in fig.data]
         for lamp_id, lamp in self.lamps.items():
-            if lamp.filename is not None:
+            if lamp.filename is not None and lamp.visible is True:
                 x, y, z = lamp.transform(
                     lamp.photometric_coords, scale=lamp.values.max()
                 ).T
                 Theta, Phi, R = to_polar(*lamp.photometric_coords.T)
                 tri = Delaunay(np.column_stack((Theta.flatten(), Phi.flatten())))
-                label=lamp.name
-                if select_id is not None and select_id==lamp_id:
-                    lampcolor=color#'#ff6161'
+                label = lamp.lamp_id
+                if select_id is not None and select_id == lamp_id:
+                    lampcolor = color  #'#ff6161'
                 else:
-                    lampcolor='blue'
-                fig.add_trace(
-                    go.Mesh3d(
+                    lampcolor = "#5e8ff7"
+
+                lamptrace = go.Mesh3d(
+                    x=x,
+                    y=y,
+                    z=z,
+                    i=tri.simplices[:, 0],
+                    j=tri.simplices[:, 1],
+                    k=tri.simplices[:, 2],
+                    color=lampcolor,
+                    opacity=alpha,
+                    name=label,
+                    showlegend=False,
+                )
+                aimtrace = go.Scatter3d(
+                    x=[lamp.position[0], lamp.aim_point[0]],
+                    y=[lamp.position[1], lamp.aim_point[1]],
+                    z=[lamp.position[2], lamp.aim_point[2]],
+                    mode="lines",
+                    line=dict(color="black", width=2, dash="dash"),
+                    name=label + "_aim",
+                    showlegend=False,
+                )
+                if lamptrace.name not in traces:
+                    fig.add_trace(lamptrace)
+                    fig.add_trace(aimtrace)
+                else:
+                    fig.update_traces(
                         x=x,
                         y=y,
                         z=z,
@@ -122,20 +148,15 @@ class Room:
                         j=tri.simplices[:, 1],
                         k=tri.simplices[:, 2],
                         color=lampcolor,
-                        opacity=alpha,
-                        name=label,
+                        selector=({"name": lamptrace.name}),
                     )
-                )
-                fig.add_trace(
-                    go.Scatter3d(
+                    fig.update_traces(
                         x=[lamp.position[0], lamp.aim_point[0]],
                         y=[lamp.position[1], lamp.aim_point[1]],
                         z=[lamp.position[2], lamp.aim_point[2]],
-                        mode="lines",
-                        line=dict(color="black", width=2, dash="dash"),
-                        showlegend=False,
+                        selector=({"name": aimtrace.name}),
                     )
-                )
+
         fig.update_layout(
             scene=dict(
                 xaxis=dict(range=[0, self.x]),
@@ -144,13 +165,22 @@ class Room:
                 aspectratio=dict(
                     x=self.x / self.z, y=self.y / self.z, z=self.z / self.z
                 ),
-            ),  height=650
+            ),
+            height=750,
         )
         fig.update_scenes(camera_projection_type="orthographic")
         return fig
-        
+
     def plot(
-        self, fig=None, ax=None, elev=30, azim=-45, title="", color="#cc61ff", alpha=0.4, select_id=None,
+        self,
+        fig=None,
+        ax=None,
+        elev=30,
+        azim=-45,
+        title="",
+        color="#cc61ff",
+        alpha=0.4,
+        select_id=None,
     ):
         """
         Generates a 3D plot of the room and the lamps in it
@@ -158,7 +188,7 @@ class Room:
         if fig is None:
             fig = plt.figure()
         if ax is None:
-            ax = fig.add_subplot(111, projection="3d")            
+            ax = fig.add_subplot(111, projection="3d")
         ax.set_title(title)
         ax.view_init(azim=azim, elev=elev)
         ax.set_xlim(0, self.x)
@@ -166,11 +196,11 @@ class Room:
         ax.set_zlim(0, self.z)
         for lampid, lamp in self.lamps.items():
             if lamp.filename is not None:
-                label=lamp.name
-                if select_id is not None and select_id==lampid:
-                    lampcolor=color#'#ff6161'
+                label = lamp.name
+                if select_id is not None and select_id == lampid:
+                    lampcolor = color  #'#ff6161'
                 else:
-                    lampcolor='blue'
+                    lampcolor = "blue"
                 x, y, z = lamp.transform(
                     lamp.photometric_coords, scale=lamp.values.max()
                 ).T
@@ -192,5 +222,5 @@ class Room:
                     color="black",
                     alpha=0.7,
                 )
-        
+
         return fig, ax

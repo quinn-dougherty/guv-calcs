@@ -1,5 +1,6 @@
 import numpy as np
-from abc import ABC, abstractmethod
+
+# from abc import ABC, abstractmethod
 from ies_utils import get_intensity_vectorized
 from .trigonometry import attitude, to_polar
 
@@ -11,16 +12,61 @@ class CalcZone(object):
     This class provides a template for setting up zones within which various
     calculations related to lighting conditions are performed. Subclasses should
     provide specific implementations of the coordinate setting method.
+
+    NOTE: I changed this from an abstract base class to an object superclass
+    to make it more convenient to work with the website, but this class doesn't really
+    work on its own
+
+    Parameters:
+    --------
+    zone_id: str
+        identification tag for internal tracking
+    name: str, default=None
+        externally visible name for zone
+    dimensions: array of floats, default=None
+        array of len 2 if CalcPlane, of len 3 if CalcVol
+    offset: bool, default=True
+    fov80: bool, default=False
+        apply 80 degree field of view filtering - used for calculating eye limits
+    vert: bool, default=False
+        calculate vertical irradiance only
+    horiz: bool, default=False
+        calculate horizontal irradiance only
+    dose: bool, default=False
+        whether to calculate a dose over N hours or just fluence
+    hours: float, default = 8.0
+        number of hours to calculate dose over. Only relevant if dose is True.
+    visible: bool, default = True
+        whether or not the calc zone is visible in the room plot
     """
 
-    def __init__(self, zone_id, name=None, dimensions=None, offset=None, fov80=None, vert=None, horiz=None):
+    def __init__(
+        self,
+        zone_id,
+        name=None,
+        dimensions=None,
+        offset=None,
+        fov80=None,
+        vert=None,
+        horiz=None,
+        dose=None,
+        hours=None,
+        visible=None,
+    ):
         self.zone_id = zone_id
         self.name = zone_id if name is None else name
+        self.visible = True if visible is None else visible
         self.dimensions = dimensions
         self.offset = True if offset is None else offset
         self.fov80 = False if fov80 is None else fov80
         self.vert = False if vert is None else vert
         self.horiz = False if horiz is None else horiz
+        self.dose = False if dose is None else dose
+        if self.dose:
+            self.units = "mJ/cm2"
+        else:
+            self.units = "uW/cm2"
+        self.hours = 8.0 if hours is None else hours  # only used if dose is true
         # these will all be calculated after spacing is set, which is set in the subclass
         self.spacing = None
         self.num_points = None
@@ -32,44 +78,22 @@ class CalcZone(object):
 
     # @abstractmethod
     # def _set_coords(self):
-        # """
-        # Set up the coordinates in the calculation zone.
+    # """
+    # Set up the coordinates in the calculation zone.
 
-        # This method should be implemented by all subclasses to define how the coordinates
-        # are structured based on the zone's dimensions and offset. The implementation
-        # will depend on whether the zone is a volume or a plane.
-        # """
-        # pass
+    # This method should be implemented by all subclasses to define how the coordinates
+    # are structured based on the zone's dimensions and offset. The implementation
+    # will depend on whether the zone is a volume or a plane.
+    # """
+    # pass
 
     # @abstractmethod
     # def set_dimensions(self, dimensions):
-        # pass
+    # pass
 
     # @abstractmethod
     # def set_spacing(self, spacing):
-        # pass
-
-    def set_offset(self, offset):
-        if type(offset) is not bool:
-            raise TypeError("Offset must be either True or False")
-        self.offset = offset
-        self._update
-
-    def get_dimensions(self):
-        return self.dimensions
-
-    def get_spacing(self):
-        return np.array(self.spacing)
-
-    def get_num_points(self):
-        return np.array(self.num_points)
-
-    def get_coords(self):
-        return self.coords
-
-    def get_values(self):
-        return self.values
-
+    # pass
     def _update(self):
         """
         Update the number of points based on the spacing, and then the points
@@ -88,6 +112,61 @@ class CalcZone(object):
                 for val, div in zip(self.dimensions, self.spacing)
             ]
         self._set_coords()
+
+    def set_offset(self, offset):
+        if type(offset) is not bool:
+            raise TypeError("Offset must be either True or False")
+        self.offset = offset
+        self._update
+
+    def set_value_type(self, dose):
+        """
+        if true values will be in dose over time
+        if false
+        """
+        if type(dose) is not bool:
+            raise TypeError("Dose must be either True or False")
+
+        # convert values if they need converting
+        if dose and not self.dose:
+            self.values = self.values * 3.6 * self.time
+        elif self.dose and not dose:
+            self.values = self.values / (3.6 * self.time)
+
+        self.dose = dose
+        if self.dose:
+            self.units = "mJ/cm2"
+        else:
+            self.units = "uW/cm2"
+
+    def set_dose_time(self, time):
+        if type(time) not in [float, int]:
+            raise TypeError("Time must be numeric")
+        self.time = time
+
+    def get_dimensions(self):
+        return self.dimensions
+
+    def get_spacing(self):
+        return np.array(self.spacing)
+
+    def get_num_points(self):
+        return np.array(self.num_points)
+
+    def get_coords(self):
+        return self.coords
+
+    def get_values(self):
+        """
+        Return calculated values. the calculate method must be called first.
+        Returns in units of uW/cm2 if dose is false, in units of mJ/cm2 if dose is true
+        Dose is calculated in this method. Querying the CalcZone object for values will
+        """
+        if self.values is not None:
+            values = self.values
+        else:
+            values = None
+        return values
 
     def calculate_values(self, lamps: list):
         """
@@ -128,6 +207,9 @@ class CalcZone(object):
             total_values
         )  # mask any nans near light source
         self.values = total_values
+        # convert to dose
+        if self.dose:
+            self.values = self.values * 3.6 * self.time
         return self.values
 
 
@@ -164,7 +246,7 @@ class CalcVol(CalcZone):
         if len(dimensions) != 3:
             raise ValueError("CalcVol requires exactly three dimensions.")
         self.dimensions = dimensions
-        self.x,self.y,self.z = self.dimensions
+        self.x, self.y, self.z = self.dimensions
         self._update()
 
     def set_spacing(self, spacing):
@@ -210,8 +292,14 @@ class CalcPlane(CalcZone):
         self.spacing = [0.1, 0.1] if spacing is None else spacing
         if len(self.spacing) != 2:
             raise ValueError("CalcPlane requires exactly two spacing dimensions.")
-        
-        self.x_spacing, self.y_spacing = self.spacing                
+
+        self.x_spacing, self.y_spacing = self.spacing
+        self._update()
+
+    def set_height(self, height):
+        if type(height) not in [float, int]:
+            raise TypeError("Height must be numeric")
+        self.height = height
         self._update()
 
     def set_dimensions(self, dimensions):

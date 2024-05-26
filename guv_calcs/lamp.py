@@ -28,9 +28,11 @@ class Lamp:
         aimy=None,
         aimz=None,
         intensity_units=None,
+        visible=None,
     ):
         self.lamp_id = lamp_id
-        self.name = name if name is not None else lamp_id
+        self.name = lamp_id if name is None else name
+        self.visible = True if visible is None else visible
         # position
         self.x = 0.0 if x is None else x
         self.y = 0.0 if y is None else y
@@ -93,7 +95,34 @@ class Lamp:
         # photometric web coordinates
         xp, yp, zp = to_cartesian(tflat, pflat, self.values.flatten())
         self.photometric_coords = np.array([xp, yp, zp]).T
+        
+    def _recalculate_aim_point(self, dimensions=None, distance=None):
+        """
+        internal method to call if setting tilt/bank or orientation/heading
+        if `dimensions` is passed, `distance` is not used
+        """
+        distance = 1 if distance is None else distance
+        heading_rad = np.radians(self.heading)
+        # Correcting bank angle for the pi shift
+        bank_rad = np.radians(self.bank-180)
 
+        # Convert from spherical to Cartesian coordinates
+        dx = np.sin(bank_rad) * np.cos(heading_rad)
+        dy = np.sin(bank_rad) * np.sin(heading_rad)
+        dz = np.cos(bank_rad)
+        if dimensions is not None:
+            distances = []
+            dimx, dimy, dimz = dimensions
+            if dx != 0:
+                distances.append((dimx - self.x) / dx if dx > 0 else self.x / -dx)
+            if dy != 0:
+                distances.append((dimy - self.y) / dy if dy > 0 else self.y / -dy)
+            if dz != 0:
+                distances.append((dimz - self.z) / dz if dz > 0 else self.z / -dz)
+            distance = min([d for d in distances])
+        self.aim_point = self.position + np.array([dx, dy, dz]) * distance
+        self.aimx, self.aimy, self.aimz = self.aim_point
+        
     def get_total_power(self):
         """return the lamp's total optical power"""
         self.total_optical_power = total_optical_power(self.interpdict)
@@ -111,6 +140,7 @@ class Lamp:
         Applies rotation, then aiming, then scaling, then translation.
         Scale parameter should generally only be used for photometric_coords
         """
+        # in case user has updated x y and z
         coords = np.array(attitude(coords.T, roll=0, pitch=0, yaw=self.angle)).T
         coords = np.array(
             attitude(coords.T, roll=0, pitch=self.bank, yaw=self.heading)
@@ -126,19 +156,21 @@ class Lamp:
         """Return lamp's true position coordinates in polar space"""
         cartesian = self.transform(self.coords) - self.position
         return np.array(to_polar(*cartesian.T)).round(sigfigs)
-        
-    def set_name(self,name):
-        self.name = name
 
-    def move(self, x, y, z):
+    def move(self, x=None, y=None, z=None):
         """Designate lamp position in cartesian space"""
-        self.x = x
-        self.y = y
-        self.z = z
+        # determine new position   selected_lamp.
+        x = self.x if x is None else x
+        y = self.y if y is None else y
+        z = self.z if z is None else z
         position = np.array([x, y, z])
-        self.position = position
+        # update aim point based on new position
         diff = position - self.position
-        self.aim_point += diff 
+        self.aim_point += diff
+        self.aimx, self.aimy, self.aimz = self.aim_point
+        # update position
+        self.position = position
+        self.x, self.y, self.z = self.position
         return self
 
     def rotate(self, angle):
@@ -146,13 +178,38 @@ class Lamp:
         self.angle = angle
         return self
 
-    def aim(self, x, y, z):
-        """aim lamp at a point in cartesian space"""
+    def set_orientation(self, orientation, dimensions=None, distance=None):
+        """
+        set orientation/heading.
+        alternative to setting aim point with `aim`
+        distinct from rotation; applies to a tilted lamp. to rotate a lamp along its axis,
+        use the `rotate` method
+        """
+        orientation = (orientation+360)% 360
+        self.heading = orientation
+        self._recalculate_aim_point(dimensions=dimensions, distance=distance)
 
+    def set_tilt(self, tilt, dimensions=None, distance=None):
+        """
+        set tilt/bank
+        alternative to setting aim point with `aim`
+        """
+        self.bank = (tilt+360)%360
+        self._recalculate_aim_point(dimensions=dimensions, distance=distance)
+
+    def aim(self, x=None, y=None, z=None):
+        """aim lamp at a point in cartesian space"""
+        x = self.aimx if x is None else x
+        y = self.aimy if y is None else y
+        z = self.aimz if z is None else z
         self.aim_point = np.array([x, y, z])
+        self.aimx, self.aimy, self.aimz = self.aim_point
         xr, yr, zr = self.aim_point - self.position
         self.heading = np.degrees(np.arctan2(yr, xr))
         self.bank = np.degrees(np.arctan2(np.sqrt(xr ** 2 + yr ** 2), zr) - np.pi)
+        print(self.heading,self.bank)
+        # self.heading = (heading+360)%360
+        # self.bank = (bank+360)%360
         return self
 
     def plot_ies(self, title="", figsize=(6.4, 4.8)):
