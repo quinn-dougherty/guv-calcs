@@ -129,9 +129,9 @@ class CalcZone(object):
 
         # convert values if they need converting
         if dose and not self.dose:
-            self.values = self.values * 3.6 * self.time
+            self.values = self.values * 3.6 * self.hours
         elif self.dose and not dose:
-            self.values = self.values / (3.6 * self.time)
+            self.values = self.values / (3.6 * self.hours)
 
         self.dose = dose
         if self.dose:
@@ -139,10 +139,10 @@ class CalcZone(object):
         else:
             self.units = "uW/cm2"
 
-    def set_dose_time(self, time):
-        if type(time) not in [float, int]:
-            raise TypeError("Time must be numeric")
-        self.time = time
+    def set_dose_time(self, hours):
+        if type(hours) not in [float, int]:
+            raise TypeError("Hours must be numeric")
+        self.hours = hours
 
     def get_dimensions(self):
         return self.dimensions
@@ -173,7 +173,7 @@ class CalcZone(object):
         Calculate and return irradiance values at all coordinate points within the zone.
         """
         total_values = np.zeros(self.coords.shape[0])
-        for lamp in lamps:
+        for lamp_id, lamp in lamps.items():
             # determine lamp placement + calculate relative coordinates
             rel_coords = self.coords - lamp.position
             # store the theta and phi data based on this orientation
@@ -209,7 +209,7 @@ class CalcZone(object):
         self.values = total_values
         # convert to dose
         if self.dose:
-            self.values = self.values * 3.6 * self.time
+            self.values = self.values * 3.6 * self.hours
         return self.values
 
 
@@ -229,9 +229,12 @@ class CalcVol(CalcZone):
         fov80=None,
         vert=None,
         horiz=None,
+        dose=None,
+        hours=None,
+        visible=None,
     ):
 
-        super().__init__(zone_id, name, dimensions, offset, fov80, vert, horiz)
+        super().__init__(zone_id, name, dimensions, offset, fov80, vert, horiz,dose,hours,visible)
         self.dimensions = [6, 4, 2.7] if dimensions is None else dimensions
         if len(self.dimensions) != 3:
             raise ValueError("CalcVol requires exactly three dimensions.")
@@ -279,9 +282,12 @@ class CalcPlane(CalcZone):
         fov80=None,
         vert=None,
         horiz=None,
+        dose=None,
+        hours=None,
+        visible=None,
     ):
 
-        super().__init__(zone_id, name, dimensions, offset, fov80, vert, horiz)
+        super().__init__(zone_id, name, dimensions, offset, fov80, vert, horiz,dose,hours,visible)
 
         self.height = 1.9 if height is None else height
 

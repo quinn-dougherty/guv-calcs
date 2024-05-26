@@ -3,8 +3,8 @@ from pathlib import Path
 import streamlit as st
 from guv_calcs.calc_zone import CalcZone, CalcPlane, CalcVol
 
-
 def initialize_lamp(lamp):
+    """initialize lamp editing widgets with their present values"""
     keys = [
         f"pos_x_{lamp.lamp_id}",
         f"pos_y_{lamp.lamp_id}",
@@ -30,8 +30,8 @@ def initialize_lamp(lamp):
     for key, val in zip(keys, vals):
         st.session_state[key] = val
 
-
 def update_lamp_position(lamp):
+    """update lamp position and aim point based on widget input"""
     x = st.session_state[f"pos_x_{lamp.lamp_id}"]
     y = st.session_state[f"pos_y_{lamp.lamp_id}"]
     z = st.session_state[f"pos_z_{lamp.lamp_id}"]
@@ -39,8 +39,8 @@ def update_lamp_position(lamp):
     # update widgets
     update_lamp_aim_point(lamp)
 
-
 def update_lamp_orientation(lamp):
+    """update lamp object aim point, and tilt/orientation widgets"""
     aimx = st.session_state[f"aim_x_{lamp.lamp_id}"]
     aimy = st.session_state[f"aim_y_{lamp.lamp_id}"]
     aimz = st.session_state[f"aim_z_{lamp.lamp_id}"]
@@ -49,21 +49,25 @@ def update_lamp_orientation(lamp):
     st.session_state[f"tilt_{lamp.lamp_id}"] = lamp.bank
 
 def update_from_tilt(lamp, room):
+    """update tilt+aim point in lamp, and aim point widget"""
     tilt = st.session_state[f"tilt_{lamp.lamp_id}"]
     lamp.set_tilt(tilt,dimensions=room.dimensions)
     update_lamp_aim_point(lamp)
     
 def update_from_orientation(lamp,room):
+    """update orientation+aim point in lamp, and aim point widget"""
     orientation = st.session_state[f"orientation_{lamp.lamp_id}"]
     lamp.set_orientation(orientation,room.dimensions)
     update_lamp_aim_point(lamp)
     
 def update_lamp_aim_point(lamp):
+    """reset aim point widget if any other parameter has been altered"""
     st.session_state[f"aim_x_{lamp.lamp_id}"] = lamp.aimx
     st.session_state[f"aim_y_{lamp.lamp_id}"] = lamp.aimy
     st.session_state[f"aim_z_{lamp.lamp_id}"] = lamp.aimz
 
 def remove_lamp(lamp):
+    """remove widget parameters if lamp has been deleted"""
     keys = [
         f"pos_x_{lamp.lamp_id}",
         f"pos_y_{lamp.lamp_id}",
@@ -72,12 +76,14 @@ def remove_lamp(lamp):
         f"aim_y_{lamp.lamp_id}",
         f"aim_z_{lamp.lamp_id}",
         f"rotation_{lamp.lamp_id}",
+        f"orientation_{lamp.lamp_id}",
+        f"tilt_{lamp.lamp_id}",
     ]
     for key in keys:
         del st.session_state[key]
 
-
 def add_standard_zones(room):
+    """pre-populate the calc zone list. cached so it only runs once."""
 
     fluence = CalcVol(
         zone_id="WholeRoomFluence",
@@ -92,8 +98,8 @@ def add_standard_zones(room):
         name="Skin Dose (8 Hours)",
         height=height,
         dimensions=[room.x, room.y],
-        vert=True,
-        horiz=False,
+        vert=False,
+        horiz=True,
         fov80=False,
         dose=True,
         hours=8,

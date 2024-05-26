@@ -36,6 +36,7 @@ st.write(
 # Check and initialize session state variables
 if "room" not in st.session_state:
     st.session_state.room = Room()
+    st.session_state.room = add_standard_zones(st.session_state.room)
 room = st.session_state.room
 
 if "editing" not in st.session_state:
@@ -224,7 +225,7 @@ with st.sidebar:
     # calc zone editing sidebar
     elif (
         st.session_state.editing in ["zones", "planes", "volumes"]
-        and st.session_state.selected_zone_id
+        # and st.session_state.selected_zone_id
     ):
         st.subheader("Edit Calculation Zone")
         cola, colb = st.columns([3, 1])
@@ -335,8 +336,7 @@ with st.sidebar:
             if offset != selected_zone.offset:
                 selected_zone.set_offset(offset)
             selected_zone.fov80 = st.checkbox("Field of View 80°")
-            selected_zone.visible = st.checkbox("Show in plot")
-
+            
             value_options = ["Irradiance (uW/cm2)", "Dose (mJ/cm2)"]
             value_index = 1 if selected_zone.dose else 0
             value_type = st.selectbox(
@@ -345,13 +345,13 @@ with st.sidebar:
             if value_type == "Dose (mJ/cm2)":
                 selected_zone.set_value_type(dose=True)
                 dose_time = st.number_input(
-                    "Exposure time (hours)", value=selected_zone.time
+                    "Exposure time (hours)", value=selected_zone.hours
                 )
                 selected_zone.set_dose_time(dose_time)
             elif value_type == "Irradiance (uW/cm2)":
                 selected_zone.set_value_type(dose=False)
 
-        if st.session_state.editing == "volumes":
+        elif st.session_state.editing == "volumes":
             col1, col2, col3 = st.columns(3)
             with col1:
                 x = st.number_input(
@@ -408,7 +408,8 @@ with st.sidebar:
         if st.session_state.editing == "zones":
             del_button = st.button("Cancel", use_container_width=True)
             close_button = None
-        elif st.session_state.editing in ["planes", "volumes"]:
+        elif st.session_state.editing in ["planes", "volumes"]:            
+            selected_zone.visible = st.checkbox("Show in plot")
             col7, col8 = st.columns(2)
             del_button = col7.button(
                 "Delete Calc Zone", type="primary", use_container_width=True
@@ -457,10 +458,16 @@ with st.sidebar:
             st.rerun()
     elif st.session_state.editing == "results":
         st.subheader("Results")
-        close_button = st.button("Close", use_container_width=True)
-        if close_button:
-            st.session_state.editing = None
-            st.rerun()
+        for zone_id,zone in room.calc_zones.items():
+            vals = zone.values
+            st.write(zone.name,':')
+            st.write('Average:',round(vals.mean(),3))
+            st.write('Min:',round(vals.min(),3))
+            st.write('Max:',round(vals.max(),3))
+        # close_button = st.button("Close", use_container_width=True)
+        # if close_button:
+            # st.session_state.editing = None
+            # st.rerun()
     else:
         st.write("")
 
@@ -505,7 +512,13 @@ with right_pane:
     if st.session_state.selected_zone_id != selected_zone_id:
         st.session_state.selected_zone_id = selected_zone_id
         if st.session_state.selected_zone_id is not None:
-            st.session_state.editing = "zones"
+            selected_zone = room.calc_zones[st.session_state.selected_zone_id]
+            if isinstance(selected_zone, CalcPlane):
+                st.session_state.editing = "planes"
+            elif isinstance(selected_zone, CalcVol):
+                st.session_state.editing = "volumes"
+            else:
+                st.session_state.editing = "zones"
         st.rerun()
     add_calc_zone = st.button("Add Calculation Zone", use_container_width=True)
 
