@@ -95,7 +95,7 @@ class Lamp:
         # photometric web coordinates
         xp, yp, zp = to_cartesian(tflat, pflat, self.values.flatten())
         self.photometric_coords = np.array([xp, yp, zp]).T
-        
+
     def _recalculate_aim_point(self, dimensions=None, distance=None):
         """
         internal method to call if setting tilt/bank or orientation/heading
@@ -104,7 +104,7 @@ class Lamp:
         distance = 1 if distance is None else distance
         heading_rad = np.radians(self.heading)
         # Correcting bank angle for the pi shift
-        bank_rad = np.radians(self.bank-180)
+        bank_rad = np.radians(self.bank - 180)
 
         # Convert from spherical to Cartesian coordinates
         dx = np.sin(bank_rad) * np.cos(heading_rad)
@@ -122,7 +122,7 @@ class Lamp:
             distance = min([d for d in distances])
         self.aim_point = self.position + np.array([dx, dy, dz]) * distance
         self.aimx, self.aimy, self.aimz = self.aim_point
-        
+
     def get_total_power(self):
         """return the lamp's total optical power"""
         self.total_optical_power = total_optical_power(self.interpdict)
@@ -185,7 +185,7 @@ class Lamp:
         distinct from rotation; applies to a tilted lamp. to rotate a lamp along its axis,
         use the `rotate` method
         """
-        orientation = (orientation+360)% 360
+        orientation = (orientation + 360) % 360
         self.heading = orientation
         self._recalculate_aim_point(dimensions=dimensions, distance=distance)
 
@@ -194,7 +194,7 @@ class Lamp:
         set tilt/bank
         alternative to setting aim point with `aim`
         """
-        self.bank = (tilt+360)%360
+        self.bank = (tilt + 360) % 360
         self._recalculate_aim_point(dimensions=dimensions, distance=distance)
 
     def aim(self, x=None, y=None, z=None):
@@ -207,7 +207,7 @@ class Lamp:
         xr, yr, zr = self.aim_point - self.position
         self.heading = np.degrees(np.arctan2(yr, xr))
         self.bank = np.degrees(np.arctan2(np.sqrt(xr ** 2 + yr ** 2), zr) - np.pi)
-        print(self.heading,self.bank)
+        print(self.heading, self.bank)
         # self.heading = (heading+360)%360
         # self.bank = (bank+360)%360
         return self

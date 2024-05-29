@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay
 import plotly.graph_objs as go
+from guv_calcs.calc_zone import CalcZone, CalcPlane, CalcVol
 from .trigonometry import to_polar
 
 
@@ -84,7 +85,13 @@ class Room:
         """
         Adds a calculation zone to the room if it fits within the room's boundaries.
         """
-        self._check_position(calc_zone.dimensions)
+        if isinstance(calc_zone, CalcPlane):
+            dimensions = [calc_zone.x2, calc_zone.y2]
+        elif isinstance(calc_zone, CalcVol):
+            dimensions = [calc_zone.x2, calc_zone.y2, calc_zone.z2]
+        elif isinstance(calc_zone, CalcZone):
+            dimensions = self.dimensions
+        self._check_position(dimensions)
         self.calc_zones[calc_zone.zone_id] = calc_zone
 
     def remove_calc_zone(self, zone_id):
@@ -98,65 +105,188 @@ class Room:
         for name, zone in self.calc_zones.items():
             zone.calculate_values(lamps=self.lamps)
 
-    def plotly(self, fig=None, select_id=None, title="", color="#cc61ff", alpha=0.4):
+    def _set_visibility(self, fig, trace_id: str, val: bool):
+        """change visibility of lamp or calc zone trace"""
+        traces = [trace.name for trace in fig.data]
+        if trace_id in traces:
+            fig.data[traces.index(trace_id)].visible = val
+        return fig
+
+    def _plot_lamp(self, lamp, fig, select_id=None, color="#cc61ff"):
+        """plot lamp as a photometric web"""
+
+        x, y, z = lamp.transform(lamp.photometric_coords, scale=lamp.values.max()).T
+        Theta, Phi, R = to_polar(*lamp.photometric_coords.T)
+        tri = Delaunay(np.column_stack((Theta.flatten(), Phi.flatten())))
+        label = lamp.lamp_id
+        if select_id is not None and select_id == label:
+            lampcolor = "#cc61ff"  #'#ff6161'
+        else:
+            lampcolor = "#5e8ff7"
+
+        lamptrace = go.Mesh3d(
+            x=x,
+            y=y,
+            z=z,
+            i=tri.simplices[:, 0],
+            j=tri.simplices[:, 1],
+            k=tri.simplices[:, 2],
+            color=lampcolor,
+            opacity=0.4,
+            name=label,
+            showlegend=False,
+        )
+        aimtrace = go.Scatter3d(
+            x=[lamp.position[0], lamp.aim_point[0]],
+            y=[lamp.position[1], lamp.aim_point[1]],
+            z=[lamp.position[2], lamp.aim_point[2]],
+            mode="lines",
+            line=dict(color="black", width=2, dash="dash"),
+            name=label + "_aim",
+            showlegend=False,
+        )
+        traces = [trace.name for trace in fig.data]
+        if lamptrace.name not in traces:
+            fig.add_trace(lamptrace)
+            fig.add_trace(aimtrace)
+        else:
+            fig.update_traces(
+                x=x,
+                y=y,
+                z=z,
+                i=tri.simplices[:, 0],
+                j=tri.simplices[:, 1],
+                k=tri.simplices[:, 2],
+                color=lampcolor,
+                selector=({"name": lamptrace.name}),
+            )
+            fig.update_traces(
+                x=[lamp.position[0], lamp.aim_point[0]],
+                y=[lamp.position[1], lamp.aim_point[1]],
+                z=[lamp.position[2], lamp.aim_point[2]],
+                selector=({"name": aimtrace.name}),
+            )
+        return fig
+
+    def _plot_plane(self, zone, fig, select_id=None):
+        """plot a calculation plane"""
+        label = zone.zone_id
+        if select_id is not None and select_id == label:
+            zonecolor = "red"
+        else:
+            zonecolor = "#5e8ff7"
+        zonetrace = go.Scatter3d(
+            x=zone.coords.T[0],
+            y=zone.coords.T[1],
+            z=zone.coords.T[2],
+            mode="markers",
+            marker=dict(size=2, color=zonecolor),
+            opacity=0.5,
+            name=label,
+        )
+        traces = [trace.name for trace in fig.data]
+        if zonetrace.name not in traces:
+            fig.add_trace(zonetrace)
+        else:
+            fig.update_traces(
+                x=zone.coords.T[0],
+                y=zone.coords.T[1],
+                z=zone.coords.T[2],
+                marker=dict(size=2, color=zonecolor),
+                selector=({"name": zonetrace.name}),
+            )
+
+        return fig
+
+    def _plot_vol(self, zone, fig, select_id=None):
+        # Define the vertices of the rectangular prism
+        vertices = [
+            (zone.x1, zone.y1, zone.z1),  # 0
+            (zone.x2, zone.y1, zone.z1),  # 1
+            (zone.x2, zone.y2, zone.z1),  # 2
+            (zone.x1, zone.y2, zone.z1),  # 3
+            (zone.x1, zone.y1, zone.z2),  # 4
+            (zone.x2, zone.y1, zone.z2),  # 5
+            (zone.x2, zone.y2, zone.z2),  # 6
+            (zone.x1, zone.y2, zone.z2),  # 7
+        ]
+
+        # Define edges by vertex indices
+        edges = [
+            (0, 1),
+            (1, 2),
+            (2, 3),
+            (3, 0),  # Bottom face
+            (4, 5),
+            (5, 6),
+            (6, 7),
+            (7, 4),  # Top face
+            (0, 4),
+            (1, 5),
+            (2, 6),
+            (3, 7),  # Side edges
+        ]
+
+        # Create lists for x, y, z coordinates
+        x_coords = []
+        y_coords = []
+        z_coords = []
+
+        # Append coordinates for each edge, separated by None to create breaks
+        for v1, v2 in edges:
+            x_coords.extend([vertices[v1][0], vertices[v2][0], None])
+            y_coords.extend([vertices[v1][1], vertices[v2][1], None])
+            z_coords.extend([vertices[v1][2], vertices[v2][2], None])
+
+        label = zone.zone_id
+        if select_id is not None and select_id == label:
+            zonecolor = "red"
+        else:
+            zonecolor = "#5e8ff7"
+        # Create a single trace for all edges
+        zonetrace = go.Scatter3d(
+            x=x_coords,
+            y=y_coords,
+            z=z_coords,
+            mode="lines",
+            line=dict(color=zonecolor, width=5, dash="dot"),
+            name=label,
+        )
+        traces = [trace.name for trace in fig.data]
+        if zonetrace.name not in traces:
+            fig.add_trace(zonetrace)
+        else:
+            fig.update_traces(
+                x=x_coords,
+                y=y_coords,
+                z=z_coords,
+                line=dict(color=zonecolor, width=5, dash="dot"),
+                selector=({"name": zonetrace.name}),
+            )
+        return fig
+
+    def plotly(self, fig=None, select_id=None, title=""):
         if fig is None:
             fig = go.Figure()
-        traces = [trace.name for trace in fig.data]
+        # plot lamps
         for lamp_id, lamp in self.lamps.items():
-            if lamp.filename is not None and lamp.visible is True:
-                x, y, z = lamp.transform(
-                    lamp.photometric_coords, scale=lamp.values.max()
-                ).T
-                Theta, Phi, R = to_polar(*lamp.photometric_coords.T)
-                tri = Delaunay(np.column_stack((Theta.flatten(), Phi.flatten())))
-                label = lamp.lamp_id
-                if select_id is not None and select_id == lamp_id:
-                    lampcolor = color  #'#ff6161'
-                else:
-                    lampcolor = "#5e8ff7"
-
-                lamptrace = go.Mesh3d(
-                    x=x,
-                    y=y,
-                    z=z,
-                    i=tri.simplices[:, 0],
-                    j=tri.simplices[:, 1],
-                    k=tri.simplices[:, 2],
-                    color=lampcolor,
-                    opacity=alpha,
-                    name=label,
-                    showlegend=False,
-                )
-                aimtrace = go.Scatter3d(
-                    x=[lamp.position[0], lamp.aim_point[0]],
-                    y=[lamp.position[1], lamp.aim_point[1]],
-                    z=[lamp.position[2], lamp.aim_point[2]],
-                    mode="lines",
-                    line=dict(color="black", width=2, dash="dash"),
-                    name=label + "_aim",
-                    showlegend=False,
-                )
-                if lamptrace.name not in traces:
-                    fig.add_trace(lamptrace)
-                    fig.add_trace(aimtrace)
-                else:
-                    fig.update_traces(
-                        x=x,
-                        y=y,
-                        z=z,
-                        i=tri.simplices[:, 0],
-                        j=tri.simplices[:, 1],
-                        k=tri.simplices[:, 2],
-                        color=lampcolor,
-                        selector=({"name": lamptrace.name}),
-                    )
-                    fig.update_traces(
-                        x=[lamp.position[0], lamp.aim_point[0]],
-                        y=[lamp.position[1], lamp.aim_point[1]],
-                        z=[lamp.position[2], lamp.aim_point[2]],
-                        selector=({"name": aimtrace.name}),
-                    )
-
+            if lamp.filename is not None and lamp.visible:
+                fig = self._plot_lamp(lamp=lamp, fig=fig, select_id=select_id)
+                fig = self._set_visibility(fig, lamp_id, True)
+            else:
+                fig = self._set_visibility(fig, lamp_id, False)
+        # plot zones
+        for zone_id, zone in self.calc_zones.items():
+            if zone.visible:
+                if isinstance(zone, CalcPlane):
+                    fig = self._plot_plane(zone=zone, fig=fig, select_id=select_id)
+                    fig = self._set_visibility(fig, zone_id, True)
+                elif isinstance(zone, CalcVol):
+                    fig = self._plot_vol(zone=zone, fig=fig, select_id=select_id)
+                    fig = self._set_visibility(fig, zone_id, True)
+            else:
+                fig = self._set_visibility(fig, zone_id, False)
+        # set views
         fig.update_layout(
             scene=dict(
                 xaxis=dict(range=[0, self.x]),
@@ -195,7 +325,7 @@ class Room:
         ax.set_ylim(0, self.y)
         ax.set_zlim(0, self.z)
         for lampid, lamp in self.lamps.items():
-            if lamp.filename is not None:
+            if lamp.filename is not None and lamp.visible:
                 label = lamp.name
                 if select_id is not None and select_id == lampid:
                     lampcolor = color  #'#ff6161'

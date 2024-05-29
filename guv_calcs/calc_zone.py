@@ -44,7 +44,6 @@ class CalcZone(object):
         self,
         zone_id,
         name=None,
-        dimensions=None,
         offset=None,
         fov80=None,
         vert=None,
@@ -56,7 +55,6 @@ class CalcZone(object):
         self.zone_id = zone_id
         self.name = zone_id if name is None else name
         self.visible = True if visible is None else visible
-        self.dimensions = dimensions
         self.offset = True if offset is None else offset
         self.fov80 = False if fov80 is None else fov80
         self.vert = False if vert is None else vert
@@ -68,7 +66,17 @@ class CalcZone(object):
             self.units = "uW/cm2"
         self.hours = 8.0 if hours is None else hours  # only used if dose is true
         # these will all be calculated after spacing is set, which is set in the subclass
+        self.x1 = None
+        self.x2 = None
+        self.y1 = None
+        self.y2 = None
+        self.z1 = None
+        self.z2 = None
+        self.height = None
         self.spacing = None
+        self.x_spacing = None
+        self.y_spacing = None
+        self.z_spacing = None
         self.num_points = None
         self.xp = None
         self.yp = None
@@ -76,42 +84,11 @@ class CalcZone(object):
         self.coords = None
         self.values = None
 
-    # @abstractmethod
-    # def _set_coords(self):
-    # """
-    # Set up the coordinates in the calculation zone.
+    def set_dimensions(self, dimensions):
+        raise NotImplementedError
 
-    # This method should be implemented by all subclasses to define how the coordinates
-    # are structured based on the zone's dimensions and offset. The implementation
-    # will depend on whether the zone is a volume or a plane.
-    # """
-    # pass
-
-    # @abstractmethod
-    # def set_dimensions(self, dimensions):
-    # pass
-
-    # @abstractmethod
-    # def set_spacing(self, spacing):
-    # pass
-    def _update(self):
-        """
-        Update the number of points based on the spacing, and then the points
-        """
-        self.num_points = [
-            int(dim / space) for dim, space in zip(self.dimensions, self.spacing)
-        ]
-        if self.offset:
-            self.points = [
-                np.linspace(div / 2, val - div / 2, int(val / div))
-                for val, div in zip(self.dimensions, self.spacing)
-            ]
-        else:
-            self.points = [
-                np.linspace(0, val, int(val / div))
-                for val, div in zip(self.dimensions, self.spacing)
-            ]
-        self._set_coords()
+    def set_spacing(self, spacing):
+        raise NotImplementedError
 
     def set_offset(self, offset):
         if type(offset) is not bool:
@@ -143,30 +120,6 @@ class CalcZone(object):
         if type(hours) not in [float, int]:
             raise TypeError("Hours must be numeric")
         self.hours = hours
-
-    def get_dimensions(self):
-        return self.dimensions
-
-    def get_spacing(self):
-        return np.array(self.spacing)
-
-    def get_num_points(self):
-        return np.array(self.num_points)
-
-    def get_coords(self):
-        return self.coords
-
-    def get_values(self):
-        """
-        Return calculated values. the calculate method must be called first.
-        Returns in units of uW/cm2 if dose is false, in units of mJ/cm2 if dose is true
-        Dose is calculated in this method. Querying the CalcZone object for values will
-        """
-        if self.values is not None:
-            values = self.values
-        else:
-            values = None
-        return values
 
     def calculate_values(self, lamps: list):
         """
@@ -223,8 +176,15 @@ class CalcVol(CalcZone):
         self,
         zone_id,
         name=None,
-        dimensions=None,
-        spacing=None,
+        x1=None,
+        x2=None,
+        y1=None,
+        y2=None,
+        z1=None,
+        z2=None,
+        x_spacing=None,
+        y_spacing=None,
+        z_spacing=None,
         offset=None,
         fov80=None,
         vert=None,
@@ -234,32 +194,58 @@ class CalcVol(CalcZone):
         visible=None,
     ):
 
-        super().__init__(zone_id, name, dimensions, offset, fov80, vert, horiz,dose,hours,visible)
-        self.dimensions = [6, 4, 2.7] if dimensions is None else dimensions
-        if len(self.dimensions) != 3:
-            raise ValueError("CalcVol requires exactly three dimensions.")
-        self.spacing = [0.25, 0.25, 0.1] if spacing is None else spacing
-        if len(self.spacing) != 3:
-            raise ValueError("CalcVol requires exactly three spacing dimensions.")
-        self.x, self.y, self.z = self.dimensions
-        self.x_spacing, self.y_spacing, self.z_spacing = self.spacing
+        super().__init__(
+            zone_id, name, offset, fov80, vert, horiz, dose, hours, visible
+        )
+        self.x1 = 0 if x1 is None else x1
+        self.x2 = 6 if x2 is None else x2
+        self.y1 = 0 if y1 is None else y1
+        self.y2 = 4 if y2 is None else y2
+        self.z1 = 0 if z1 is None else z1
+        self.z2 = 2.7 if z2 is None else z2
+        self.x_spacing = 0.1 if x_spacing is None else x_spacing
+        self.y_spacing = 0.1 if y_spacing is None else y_spacing
+        self.z_spacing = 0.1 if z_spacing is None else z_spacing
         self._update()
 
-    def set_dimensions(self, dimensions):
-        if len(dimensions) != 3:
-            raise ValueError("CalcVol requires exactly three dimensions.")
-        self.dimensions = dimensions
-        self.x, self.y, self.z = self.dimensions
+    def set_dimensions(self, x1=None, x2=None, y1=None, y2=None, z1=None, z2=None):
+        self.x1 = self.x1 if x1 is None else x1
+        self.x2 = self.x2 if x2 is None else x2
+        self.y1 = self.y1 if y1 is None else y1
+        self.y2 = self.y2 if y2 is None else y2
+        self.z1 = self.z1 if z1 is None else z1
+        self.z2 = self.z2 if z2 is None else z2
         self._update()
 
-    def set_spacing(self, spacing):
-        if len(spacing) != 3:
-            raise ValueError("CalcVol requires exactly three spacing dimensions.")
-        self.spacing = spacing
-        self.x_spacing, self.y_spacing, self.z_spacing = self.spacing
+    def set_spacing(self, x_spacing=None, y_spacing=None, z_spacing=None):
+        self.x_spacing = self.x_spacing if x_spacing is None else x_spacing
+        self.y_spacing = self.y_spacing if y_spacing is None else y_spacing
+        self.z_spacing = self.z_spacing if z_spacing is None else z_spacing
         self._update()
 
-    def _set_coords(self):
+    def _update(self):
+        """
+        Update the number of points based on the spacing, and then the points
+        """
+        numx = int((self.x2 - self.x1) / self.x_spacing)
+        numy = int((self.y2 - self.y1) / self.y_spacing)
+        numz = int((self.z2 - self.z1) / self.z_spacing)
+        self.num_points = np.array([numx, numy, numz])
+        if self.offset:
+            xpoints = np.linspace(
+                self.x1 + (self.x_spacing / 2), self.x2 - (self.x_spacing / 2), numx
+            )
+            ypoints = np.linspace(
+                self.y1 + (self.y_spacing / 2), self.y2 - (self.y_spacing / 2), numy
+            )
+            zpoints = np.linspace(
+                self.z1 + (self.z_spacing / 2), self.z2 - (self.z_spacing / 2), numz
+            )
+        else:
+            xpoints = np.linspace(self.x1, self.x2, numx)
+            ypoints = np.linspace(self.y1, self.y2, numy)
+            zpoints = np.linspace(self.z1, self.z2, numz)
+        self.points = [xpoints, ypoints, zpoints]
         self.xp, self.yp, self.zp = self.points
         X, Y, Z = [grid.reshape(-1) for grid in np.meshgrid(*self.points)]
         self.coords = np.array((X, Y, Z)).T
@@ -275,9 +261,13 @@ class CalcPlane(CalcZone):
         self,
         zone_id,
         name=None,
+        x1=None,
+        x2=None,
+        y1=None,
+        y2=None,
         height=None,
-        dimensions=None,
-        spacing=None,
+        x_spacing=None,
+        y_spacing=None,
         offset=None,
         fov80=None,
         vert=None,
@@ -287,19 +277,17 @@ class CalcPlane(CalcZone):
         visible=None,
     ):
 
-        super().__init__(zone_id, name, dimensions, offset, fov80, vert, horiz,dose,hours,visible)
+        super().__init__(
+            zone_id, name, offset, fov80, vert, horiz, dose, hours, visible
+        )
 
         self.height = 1.9 if height is None else height
-
-        self.dimensions = [6.0, 4.0] if dimensions is None else dimensions
-        if len(self.dimensions) != 2:
-            raise ValueError("CalcPlane requires exactly two dimensions.")
-        self.x, self.y = self.dimensions
-        self.spacing = [0.1, 0.1] if spacing is None else spacing
-        if len(self.spacing) != 2:
-            raise ValueError("CalcPlane requires exactly two spacing dimensions.")
-
-        self.x_spacing, self.y_spacing = self.spacing
+        self.x1 = 0 if x1 is None else x1
+        self.x2 = 6 if x2 is None else x2
+        self.y1 = 0 if y1 is None else y1
+        self.y2 = 4 if y2 is None else y2
+        self.x_spacing = 0.1 if x_spacing is None else x_spacing
+        self.y_spacing = 0.1 if y_spacing is None else y_spacing
         self._update()
 
     def set_height(self, height):
@@ -308,24 +296,36 @@ class CalcPlane(CalcZone):
         self.height = height
         self._update()
 
-    def set_dimensions(self, dimensions):
-        if len(dimensions) != 2:
-            raise ValueError("CalcPlane requires exactly two dimensions.")
-        self.x, self.y = self.dimensions
-        self.dimensions = dimensions
+    def set_dimensions(self, x1=None, x2=None, y1=None, y2=None):
+        self.x1 = self.x1 if x1 is None else x1
+        self.x2 = self.x2 if x2 is None else x2
+        self.y1 = self.y1 if y1 is None else y1
+        self.y2 = self.y2 if y2 is None else y2
         self._update()
 
-    def set_spacing(self, spacing):
-        if len(spacing) != 2:
-            raise ValueError("CalcPlane requires exactly two spacing dimensions.")
-        self.spacing = spacing
-        self.x_spacing, self.y_spacing = self.spacing
+    def set_spacing(self, x_spacing=None, y_spacing=None):
+        self.x_spacing = self.x_spacing if x_spacing is None else x_spacing
+        self.y_spacing = self.y_spacing if y_spacing is None else y_spacing
         self._update()
 
-    def _set_coords(self):
+    def _update(self):
         """
-        Setup the coordinate grid for volumetric calculations based on the provided dimensions and spacing.
+        Update the number of points based on the spacing, and then the points
         """
+        numx = int((self.x2 - self.x1) / self.x_spacing)
+        numy = int((self.y2 - self.y1) / self.y_spacing)
+        self.num_points = np.array([numx, numy])
+        if self.offset:
+            xpoints = np.linspace(
+                self.x1 + (self.x_spacing / 2), self.x2 - (self.x_spacing / 2), numx
+            )
+            ypoints = np.linspace(
+                self.y1 + (self.y_spacing / 2), self.y2 - (self.y_spacing / 2), numy
+            )
+        else:
+            xpoints = np.linspace(self.x1, self.x2, numx)
+            ypoints = np.linspace(self.y1, self.y2, numy)
+        self.points = [xpoints, ypoints]
         self.xp, self.yp = self.points
         X, Y = [grid.reshape(-1) for grid in np.meshgrid(*self.points)]
         xy_coords = np.array([np.array((x0, y0)) for x0, y0 in zip(X, Y)])

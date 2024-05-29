@@ -14,6 +14,6 @@ __all__ = [
     "to_cartesian",
     "attitude",
     "plot_tlvs",
-    "get_lamp_positions",
+    "get_lamp_position",
     "get_ies_files",
 ]

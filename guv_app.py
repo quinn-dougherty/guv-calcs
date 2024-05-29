@@ -11,16 +11,27 @@ from guv_calcs._website_helpers import (
     get_ies_files,
     add_standard_zones,
     initialize_lamp,
+    initialize_zone,
     remove_lamp,
+    remove_zone,
+    update_lamp_name,
+    update_zone_name,
+    update_lamp_visibility,
+    update_zone_visibility,
     update_lamp_position,
     update_lamp_orientation,
     update_from_tilt,
-    update_from_orientation
+    update_from_orientation,
+    update_plane_dimensions,
+    update_vol_dimensions,
+    clear_lamp_cache,
+    clear_zone_cache,
 )
 
 # TODO:
-# suppress that widget warning
-# way to set tilt/orientation for lamp
+# suppress that widget warning in the terminal (eventually, or whatever)
+# figure out way to get plotly to show fullscreen
+# calc zone plotting. for fluence/volumes: draw a dashed line box. for planes: scatterplot just like acuity.
 
 # layout / page setup
 st.set_page_config(
@@ -30,7 +41,7 @@ st.set_page_config(
 )
 st.set_option("deprecation.showPyplotGlobalUse", False)  # silence this warning
 st.write(
-    "<style>div.block-container{padding-top:2rem;}</style>", unsafe_allow_html=True
+    "<style>div.block-container{padding-top:1rem;}</style>", unsafe_allow_html=True
 )
 
 # Check and initialize session state variables
@@ -61,7 +72,6 @@ if "fig" not in st.session_state:
             z=[0],
             opacity=0,
             showlegend=False,
-            # mode='markers'
         )
     )
 fig = st.session_state.fig
@@ -76,25 +86,16 @@ with st.sidebar:
         st.session_state.editing == "lamps"
         and st.session_state.selected_lamp_id is not None
     ):
-
+        st.subheader("Edit Luminaire")
         selected_lamp = room.lamps[st.session_state.selected_lamp_id]
 
-        st.session_state.selected_lamp = selected_lamp
-
-        st.subheader("Edit Luminaire")
-
-        cola, colb = st.columns([3, 1])
-        selected_lamp.name = cola.text_input(
+        # name
+        st.text_input(
             "Name",
-            value=selected_lamp.name,
             key=f"name_{selected_lamp.lamp_id}",
-            # label_visibility="collapsed"
+            on_change=update_lamp_name,
+            args=[selected_lamp],
         )
-        colb.write("")
-        colb.write("")
-        save = colb.button("Enter", use_container_width=True)
-        if save:
-            st.rerun()
 
         # File input
         options = [None] + get_ies_files() + ["Select local file..."]
@@ -119,7 +120,7 @@ with st.sidebar:
         # Position inputs
         col1, col2, col3 = st.columns(3)
         with col1:
-            x = st.number_input(
+            st.number_input(
                 "Position X",
                 min_value=0.0,
                 step=0.1,
@@ -128,7 +129,7 @@ with st.sidebar:
                 args=[selected_lamp],
             )
         with col2:
-            y = st.number_input(
+            st.number_input(
                 "Position Y",
                 min_value=0.0,
                 step=0.1,
@@ -137,7 +138,7 @@ with st.sidebar:
                 args=[selected_lamp],
             )
         with col3:
-            z = st.number_input(
+            st.number_input(
                 "Position Z",
                 min_value=0.0,
                 step=0.1,
@@ -145,11 +146,10 @@ with st.sidebar:
                 on_change=update_lamp_position,
                 args=[selected_lamp],
             )
-        # selected_lamp.move(x, y, z) # now done in
+
         # Rotation input
         angle = st.number_input(
             "Rotation",
-            # value=selected_lamp.angle,
             min_value=0.0,
             max_value=360.0,
             step=1.0,
@@ -161,32 +161,31 @@ with st.sidebar:
         # Aim point inputs
         col4, col5, col6 = st.columns(3)
         with col4:
-            aimx = st.number_input(
+            st.number_input(
                 "Aim X",
                 key=f"aim_x_{selected_lamp.lamp_id}",
                 on_change=update_lamp_orientation,
                 args=[selected_lamp],
             )
         with col5:
-            aimy = st.number_input(
+            st.number_input(
                 "Aim Y",
                 key=f"aim_y_{selected_lamp.lamp_id}",
                 on_change=update_lamp_orientation,
                 args=[selected_lamp],
             )
         with col6:
-            aimz = st.number_input(
+            st.number_input(
                 "Aim Z",
                 key=f"aim_z_{selected_lamp.lamp_id}",
                 on_change=update_lamp_orientation,
                 args=[selected_lamp],
             )
-        # selected_lamp.aim(aimx, aimy, aimz)
 
         st.write("Set tilt and orientation")
         col7, col8 = st.columns(2)
         with col7:
-            tilt = st.number_input(
+            st.number_input(
                 "Tilt",
                 format="%.1f",
                 step=1.0,
@@ -195,7 +194,7 @@ with st.sidebar:
                 args=[selected_lamp, room],
             )
         with col8:
-            orientation = st.number_input(
+            st.number_input(
                 "Orientation",
                 format="%.1f",
                 step=1.0,
@@ -203,7 +202,14 @@ with st.sidebar:
                 on_change=update_from_orientation,
                 args=[selected_lamp, room],
             )
-        
+
+        st.checkbox(
+            "Show in plot",
+            on_change=update_lamp_visibility,
+            args=[selected_lamp],
+            key=f"visible_{selected_lamp.lamp_id}",
+        )
+
         del_button = col7.button(
             "Delete Lamp", type="primary", use_container_width=True
         )
@@ -224,102 +230,102 @@ with st.sidebar:
             st.rerun()
     # calc zone editing sidebar
     elif (
-        st.session_state.editing in ["zones", "planes", "volumes"]
+        st.session_state.editing
+        in ["zones", "planes", "volumes"]
         # and st.session_state.selected_zone_id
     ):
         st.subheader("Edit Calculation Zone")
-        cola, colb = st.columns([3, 1])
-        calc_types = ["Plane", "Volume"]
-        zone_type = cola.selectbox("Select calculation type", options=calc_types)
-        colb.write("")
-        colb.write("")
-        if colb.button("Go"):
-            if zone_type == "Plane":
-                idx = len([val for val in room.calc_zones.keys() if "Plane" in val]) + 1
-                new_zone = CalcPlane(
-                    zone_id=st.session_state.selected_zone_id,
-                    name="CalcPlane" + str(idx),
-                )
-                st.session_state.editing = "planes"
-            elif zone_type == "Volume":
-                idx = len([val for val in room.calc_zones.keys() if "Vol" in val]) + 1
-                new_zone = CalcVol(
-                    zone_id=st.session_state.selected_zone_id, name="CalcVol" + str(idx)
-                )
-                st.session_state.editing = "volumes"
-            room.add_calc_zone(new_zone)
-            st.rerun()
-
-        selected_zone = room.calc_zones[st.session_state.selected_zone_id]
-        if st.session_state.editing in ["planes", "volumes"]:
-
+        if st.session_state.editing == "zones":
             cola, colb = st.columns([3, 1])
-            selected_zone.name = cola.text_input(
+            calc_types = ["Plane", "Volume"]
+            zone_type = cola.selectbox("Select calculation type", options=calc_types)
+            colb.write("")
+            colb.write("")
+            if colb.button("Go"):
+                if zone_type == "Plane":
+                    idx = len([val for val in room.calc_zones.keys() if "Plane" in val]) + 1
+                    new_zone = CalcPlane(
+                        zone_id=st.session_state.selected_zone_id,
+                        name="CalcPlane" + str(idx),
+                    )
+                    st.session_state.editing = "planes"
+                elif zone_type == "Volume":
+                    idx = len([val for val in room.calc_zones.keys() if "Vol" in val]) + 1
+                    new_zone = CalcVol(
+                        zone_id=st.session_state.selected_zone_id, name="CalcVol" + str(idx)
+                    )
+                    st.session_state.editing = "volumes"
+                room.add_calc_zone(new_zone)
+                initialize_zone(new_zone)
+                st.rerun()            
+        elif st.session_state.editing in ["planes", "volumes"]:
+            selected_zone = room.calc_zones[st.session_state.selected_zone_id]
+            st.text_input(
                 "Name",
-                value=selected_zone.name,
                 key=f"name_{selected_zone.zone_id}",
-                # label_visibility="collapsed"
+                on_change=update_zone_name,
+                args=[selected_zone],
             )
-            colb.write("")
-            colb.write("")
-            save = colb.button("Enter", use_container_width=True)
-            if save:
-                st.rerun()
 
         if st.session_state.editing == "planes":
 
             col1, col2 = st.columns([2, 1])
             # xy dimensions and height
-            height = col1.number_input(
+            col1.number_input(
                 "Height",
                 min_value=0.0,
-                max_value=room.z,
-                value=selected_zone.height,
-                step=None,
                 key=f"height_{selected_zone.zone_id}",
+                on_change=update_plane_dimensions,
+                args=[selected_zone],
             )
-            if height != selected_zone.height:
-                selected_zone.set_height(height)
-
             col2.write("")
             col2.write("")
             col2.write(room.units)
             col2, col3 = st.columns(2)
             with col2:
-                x = st.number_input(
-                    "X dimension",
+                st.number_input(
+                    "X1",
                     min_value=0.0,
-                    value=selected_zone.x,
-                    step=0.1,
-                    key=f"xdim_{selected_zone.zone_id}",
+                    key=f"x1_{selected_zone.zone_id}",
+                    on_change=update_plane_dimensions,
+                    args=[selected_zone],
                 )
-                x_spacing = st.number_input(
+                st.number_input(
+                    "X2",
+                    min_value=0.0,
+                    key=f"x2_{selected_zone.zone_id}",
+                    on_change=update_plane_dimensions,
+                    args=[selected_zone],
+                )
+                st.number_input(
                     "X spacing",
                     min_value=0.01,
-                    value=selected_zone.x_spacing,
-                    step=0.01,
-                    key=f"xspace_{selected_zone.zone_id}",
+                    key=f"x_spacing_{selected_zone.zone_id}",
+                    on_change=update_plane_dimensions,
+                    args=[selected_zone],
                 )
             with col3:
-                y = st.number_input(
-                    "Y dimension",
+                st.number_input(
+                    "Y1",
                     min_value=0.0,
-                    # max_value=room.y,
-                    value=selected_zone.y,
-                    step=0.1,
-                    key=f"ydim_{selected_zone.zone_id}",
+                    key=f"y1_{selected_zone.zone_id}",
+                    on_change=update_plane_dimensions,
+                    args=[selected_zone],
                 )
-                y_spacing = st.number_input(
+                st.number_input(
+                    "Y2",
+                    min_value=0.0,
+                    key=f"y2_{selected_zone.zone_id}",
+                    on_change=update_plane_dimensions,
+                    args=[selected_zone],
+                )
+                st.number_input(
                     "Y spacing",
                     min_value=0.01,
-                    # max_value=room.y,
-                    value=selected_zone.y_spacing,
-                    step=0.01,
-                    key=f"yspace_{selected_zone.zone_id}",
+                    key=f"y_spacing_{selected_zone.zone_id}",
+                    on_change=update_plane_dimensions,
+                    args=[selected_zone],
                 )
-            selected_zone.set_dimensions([x, y])
-            selected_zone.set_spacing([x_spacing, y_spacing])
-
             options = ["All angles", "Horizontal irradiance", "Vertical irradiance"]
             calc_type = st.selectbox("Calculation type", options, index=0)
             if calc_type == "Horizontal irradiance":
@@ -332,11 +338,8 @@ with st.sidebar:
                 selected_zone.vert = False
                 selected_zone.horiz = False
 
-            offset = st.checkbox("Offset", value=True)
-            if offset != selected_zone.offset:
-                selected_zone.set_offset(offset)
             selected_zone.fov80 = st.checkbox("Field of View 80°")
-            
+
             value_options = ["Irradiance (uW/cm2)", "Dose (mJ/cm2)"]
             value_index = 1 if selected_zone.dose else 0
             value_type = st.selectbox(
@@ -351,77 +354,113 @@ with st.sidebar:
             elif value_type == "Irradiance (uW/cm2)":
                 selected_zone.set_value_type(dose=False)
 
+            st.checkbox(
+                "Offset",
+                key=f"offset_{selected_zone.zone_id}",
+                on_change=update_plane_dimensions,
+                args=[selected_zone],
+            )
+
         elif st.session_state.editing == "volumes":
             col1, col2, col3 = st.columns(3)
             with col1:
-                x = st.number_input(
-                    "X dimension",
+                st.number_input(
+                    "X1",
                     min_value=0.0,
-                    # max_value=room.x,
-                    value=room.x,
-                    step=0.1,
-                    key=f"xdim_{selected_zone.zone_id}",
+                    key=f"x1_{selected_zone.zone_id}",
+                    on_change=update_vol_dimensions,
+                    args=[selected_zone],
                 )
-                x_spacing = st.number_input(
+                st.number_input(
+                    "X2",
+                    min_value=0.0,
+                    key=f"x2_{selected_zone.zone_id}",
+                    on_change=update_vol_dimensions,
+                    args=[selected_zone],
+                )
+                st.number_input(
                     "X spacing",
                     min_value=0.01,
-                    # max_value=room.x,
-                    value=selected_zone.spacing[0],
-                    step=0.01,
-                    key=f"xspace_{selected_zone.zone_id}",
+                    key=f"x_spacing_{selected_zone.zone_id}",
+                    on_change=update_vol_dimensions,
+                    args=[selected_zone],
                 )
             with col2:
-                y = st.number_input(
-                    "Y dimension",
+                st.number_input(
+                    "Y1",
                     min_value=0.0,
-                    # max_value=room.y,
-                    value=room.y,
-                    step=0.1,
-                    key=f"ydim_{selected_zone.zone_id}",
+                    key=f"y1_{selected_zone.zone_id}",
+                    on_change=update_vol_dimensions,
+                    args=[selected_zone],
                 )
-                y_spacing = st.number_input(
+                st.number_input(
+                    "Y2",
+                    min_value=0.0,
+                    key=f"y2_{selected_zone.zone_id}",
+                    on_change=update_vol_dimensions,
+                    args=[selected_zone],
+                )
+                st.number_input(
                     "Y spacing",
                     min_value=0.01,
-                    # max_value=room.y,
-                    value=selected_zone.spacing[1],
-                    step=0.01,
-                    key=f"yspace_{selected_zone.zone_id}",
+                    key=f"y_spacing_{selected_zone.zone_id}",
+                    on_change=update_vol_dimensions,
+                    args=[selected_zone],
                 )
             with col3:
-                z = st.number_input(
-                    "Z dimension",
+                st.number_input(
+                    "Z1",
                     min_value=0.0,
-                    # max_value=room.z,
-                    value=room.z,
-                    step=0.1,
-                    key=f"zdim_{selected_zone.zone_id}",
+                    key=f"z1_{selected_zone.zone_id}",
+                    on_change=update_vol_dimensions,
+                    args=[selected_zone],
                 )
-                z_spacing = st.number_input(
+                st.number_input(
+                    "Z2",
+                    min_value=0.0,
+                    key=f"z2_{selected_zone.zone_id}",
+                    on_change=update_vol_dimensions,
+                    args=[selected_zone],
+                )
+                st.number_input(
                     "Z spacing",
                     min_value=0.01,
-                    # max_value=room.z,
-                    value=selected_zone.z_spacing,
-                    step=0.01,
-                    key=f"zspace_{selected_zone.zone_id}",
+                    key=f"z_spacing_{selected_zone.zone_id}",
+                    on_change=update_vol_dimensions,
+                    args=[selected_zone],
                 )
 
+            st.checkbox(
+                "Offset",
+                key=f"offset_{selected_zone.zone_id}",
+                on_change=update_vol_dimensions,
+                args=[selected_zone],
+            )
         if st.session_state.editing == "zones":
             del_button = st.button("Cancel", use_container_width=True)
             close_button = None
-        elif st.session_state.editing in ["planes", "volumes"]:            
-            selected_zone.visible = st.checkbox("Show in plot")
-            col7, col8 = st.columns(2)
-            del_button = col7.button(
-                "Delete Calc Zone", type="primary", use_container_width=True
+        elif st.session_state.editing in ["planes", "volumes"]:
+
+            st.checkbox(
+                "Show in plot",
+                on_change=update_zone_visibility,
+                args=[selected_zone],
+                key=f"visible_{selected_zone.zone_id}",
             )
+            col7, col8 = st.columns(2)
+            del_button = col7.button("Delete", type="primary", use_container_width=True)
             close_button = col8.button("Close", use_container_width=True)
 
         if close_button:  # maybe replace with an enable/disable button?
+            if isinstance(selected_zone, CalcZone):
+                remove_zone(selected_zone)
+                room.remove_calc_zone(st.session_state.selected_zone_id)
             st.session_state.editing = None
             st.session_state.selected_zone_id = None
             st.rerun()
         if del_button:
             room.remove_calc_zone(st.session_state.selected_zone_id)
+            remove_zone(selected_zone)
             st.session_state.editing = None
             st.session_state.selected_zone_id = None
             st.rerun()
@@ -432,18 +471,10 @@ with st.sidebar:
         col_a, col_b, col_c = st.columns(3)
         units = st.selectbox("Room units", ["meters", "feet"], index=0)
 
-        x = col_a.number_input(
-            "Room length (x)",
-            value=room.x,  # , format="%.2f", min_value=0.01,# step=0.1,
-        )
-        y = col_b.number_input(
-            "Room width (y)",
-            value=room.y,  # , format="%.2f", min_value=0.01,# step=0.1,
-        )
-        z = col_c.number_input(
-            "Room height (z)",
-            value=room.z,  # , format="%.2f", min_value=0.01,# step=0.1,
-        )
+        x = col_a.number_input("Room length (x)", value=room.x)
+        y = col_b.number_input("Room width (y)", value=room.y)
+        z = col_c.number_input("Room height (z)", value=room.z)
+
         dimensions = np.array((x, y, z))
         if units != room.units:
             room.set_units(units)
@@ -458,16 +489,20 @@ with st.sidebar:
             st.rerun()
     elif st.session_state.editing == "results":
         st.subheader("Results")
-        for zone_id,zone in room.calc_zones.items():
+        for zone_id, zone in room.calc_zones.items():
             vals = zone.values
-            st.write(zone.name,':')
-            st.write('Average:',round(vals.mean(),3))
-            st.write('Min:',round(vals.min(),3))
-            st.write('Max:',round(vals.max(),3))
-        # close_button = st.button("Close", use_container_width=True)
-        # if close_button:
-            # st.session_state.editing = None
-            # st.rerun()
+            st.write(zone.name, ":")
+            st.write("Average:", round(vals.mean(), 3))
+            st.write("Min:", round(vals.min(), 3))
+            st.write("Max:", round(vals.max(), 3))
+
+        st.write("")
+        st.write("")
+        st.write("")
+        close_button = st.button("Close", use_container_width=True)
+        if close_button:
+            st.session_state.editing = None
+            st.rerun()
     else:
         st.write("")
 
@@ -477,33 +512,34 @@ with right_pane:
     edit_room = st.button("Edit Room", use_container_width=True)
     # st.divider()
 
-    # Dropdown menus for luminaires
+    # Dropdown menus for luminaires; map display names to IDs
     lamp_names = {None: None}
     for lamp_id, lamp in room.lamps.items():
         lamp_names[lamp.name] = lamp_id
-
     lamp_sel_idx = list(lamp_names.values()).index(st.session_state.selected_lamp_id)
     selected_lamp_name = st.selectbox(
         "Select luminaire", options=list(lamp_names), index=lamp_sel_idx
     )
     selected_lamp_id = lamp_names[selected_lamp_name]
-    # if different, update and rerun
     if st.session_state.selected_lamp_id != selected_lamp_id:
+        # if different, update and rerun
         st.session_state.selected_lamp_id = selected_lamp_id
         if st.session_state.selected_lamp_id is not None:
+            # if lamp is selected, open editing pane
             st.session_state.editing = "lamps"
             selected_lamp = room.lamps[st.session_state.selected_lamp_id]
+            # initialize widgets in editing pane
             initialize_lamp(selected_lamp)
+            # clear widgets of anything to do with zone editing if it's currently loaded
+            clear_zone_cache(room)
         st.rerun()
-    add_lamp = st.button("Add Luminaire", use_container_width=True)
 
-    # st.divider()
+    add_lamp = st.button("Add Luminaire", use_container_width=True)
 
     # Drop down menu for calculation zones
     zone_names = {None: None}
     for zone_id, zone in room.calc_zones.items():
         zone_names[zone.name] = zone_id
-
     zone_sel_idx = list(zone_names.values()).index(st.session_state.selected_zone_id)
     selected_zone_name = st.selectbox(
         "Select calculation zone", options=list(zone_names), index=zone_sel_idx
@@ -515,24 +551,31 @@ with right_pane:
             selected_zone = room.calc_zones[st.session_state.selected_zone_id]
             if isinstance(selected_zone, CalcPlane):
                 st.session_state.editing = "planes"
+                initialize_zone(selected_zone)
             elif isinstance(selected_zone, CalcVol):
                 st.session_state.editing = "volumes"
+                initialize_zone(selected_zone)
             else:
                 st.session_state.editing = "zones"
+            clear_lamp_cache(room)
         st.rerun()
     add_calc_zone = st.button("Add Calculation Zone", use_container_width=True)
+
+    st.write("")
+    show_results = st.button("Show results")
 
     if calculate:
         room.calculate()
         st.session_state.editing = "results"
-        st.session_state.selected_zone_id = None
-        st.session_state.selected_lamp_id = None
+        # clear out any other selected objects and remove ones that haven't been fully initialized
+        clear_lamp_cache(room)
+        clear_zone_cache(room)
         st.rerun()
 
     if edit_room:
         st.session_state.editing = "room"
-        st.session_state.selected_zone_id = None
-        st.session_state.selected_lamp_id = None
+        clear_lamp_cache(room)
+        clear_zone_cache(room)
         st.rerun()
 
     # Adding new lamps
@@ -550,7 +593,7 @@ with right_pane:
         # Automatically select for editing
         st.session_state.editing = "lamps"
         st.session_state.selected_lamp_id = new_lamp.lamp_id
-
+        clear_zone_cache(room)
         st.rerun()
 
     # Adding new calculation zones
@@ -561,18 +604,31 @@ with right_pane:
         # this zone object contains nothing but the name and ID and will be
         # replaced by a CalcPlane or CalcVol object
         new_zone = CalcZone(
-            zone_id=new_zone_id, dimensions=room.dimensions, visible=False
+            zone_id=new_zone_id, visible=False
         )
         # add to room
         room.add_calc_zone(new_zone)
         # select for editing
         st.session_state.editing = "zones"
         st.session_state.selected_zone_id = new_zone_id
+        clear_lamp_cache(room)
+        st.rerun()
+
+    if show_results:
+        st.session_state.editing = "results"
+        clear_lamp_cache(room)
+        clear_zone_cache(room)
         st.rerun()
 
 # plot
 with left_pane:
     # fig, ax = room.plot(select_id=st.session_state.selected_lamp_id)
     # st.pyplot(fig,use_container_width=True)
-    fig = room.plotly(fig=fig, select_id=st.session_state.selected_lamp_id)
+    if st.session_state.selected_lamp_id:
+        select_id = st.session_state.selected_lamp_id
+    elif st.session_state.selected_zone_id:
+        select_id = st.session_state.selected_zone_id
+    else:
+        select_id = None
+    fig = room.plotly(fig=fig, select_id=select_id)
     st.plotly_chart(fig, use_container_width=True, height=750)
