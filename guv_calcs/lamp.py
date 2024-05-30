@@ -1,4 +1,5 @@
 from pathlib import Path
+import pathlib
 import warnings
 import numpy as np
 import matplotlib.pyplot as plt
@@ -19,6 +20,7 @@ class Lamp:
         lamp_id,
         name=None,
         filename=None,
+        filedata=None,
         x=None,
         y=None,
         z=None,
@@ -44,19 +46,40 @@ class Lamp:
         self.aimy = self.y if aimy is None else aimy
         self.aimz = 0 if aimz is None else aimz
         self.aim(self.aimx, self.aimy, self.aimz)  # updates heading and bank
-
+        
+        # misc
+        self.intensity_units = "mW/Sr" if intensity_units is None else intensity_units
+        
         # load file and coordinates
         self.filename = filename
-        self.intensity_units = "mW/Sr" if intensity_units is None else intensity_units
-        if self.filename is not None:
+        self.filedata = filedata
+        self._check_filename()
+                
+        # filename is just a label, filedata controls everything.
+        if self.filedata is not None:
             self._load()
             self._orient()
+
+    def _check_filename(self):
+        """
+        determine datasource
+        if filename is a path AND file exists AND filedata is None, it replaces filedata
+        otherwise filedata stays the same
+        """
+        FILE_IS_PATH = False
+        # if filename is string, check if it's a path
+        if isinstance(self.filename, (str,pathlib.PosixPath)):
+            if Path(self.filename).is_file():
+                FILE_IS_PATH = True
+        # if filename is a path and exists, it will replace filedata, but only if filedata wasn't specified to begin with
+        if FILE_IS_PATH and self.filedata is None:
+            self.filedata = self.filename
 
     def _load(self):
         """
         Loads lamp data from an IES file and initializes photometric properties.
         """
-        self.lampdict = read_ies_data(self.filename)
+        self.lampdict = read_ies_data(self.filedata)
         self.valdict = self.lampdict["full_vals"]
         self.thetas = self.valdict["thetas"]
         self.phis = self.valdict["phis"]
@@ -128,11 +151,29 @@ class Lamp:
         self.total_optical_power = total_optical_power(self.interpdict)
         return self.total_optical_power
 
-    def reload(self, filename):
+    def reload(self, filename=None, filedata=None):
         """replace the ies file without erasing any position/rotation/aiming information"""
+        
         self.filename = filename
-        self._load()
-        self._orient()
+        self.filedata = filedata
+        # if filename is a path, filedata is filename
+        self._check_filename
+
+        if self.filedata is not None:
+            self._load()
+            self._orient()
+        else: 
+            self.lampdict = None
+            self.valdict = None
+            self.thetas = None
+            self.phis = None
+            self.values = None
+            self.interpdict = None
+            self.units = None
+            self.dimensions = None
+            self.input_watts = None
+            self.coords = None
+            self.photometric_coords = None
 
     def transform(self, coords, scale=1):
         """
@@ -207,14 +248,13 @@ class Lamp:
         xr, yr, zr = self.aim_point - self.position
         self.heading = np.degrees(np.arctan2(yr, xr))
         self.bank = np.degrees(np.arctan2(np.sqrt(xr ** 2 + yr ** 2), zr) - np.pi)
-        print(self.heading, self.bank)
         # self.heading = (heading+360)%360
         # self.bank = (bank+360)%360
         return self
 
-    def plot_ies(self, title="", figsize=(6.4, 4.8)):
+    def plot_ies(self, title=""):
         """standard polar plot of an ies file"""
-        fig, ax = plot_ies(self.filename, title=title, figsize=figsize)
+        fig, ax = plot_ies(fdata=self.valdict, title=title)
         return fig, ax
 
     def plot_3d(

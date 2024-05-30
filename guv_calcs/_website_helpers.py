@@ -1,10 +1,25 @@
 import numpy as np
 from pathlib import Path
 import streamlit as st
+import requests
 from guv_calcs.calc_zone import CalcZone, CalcPlane, CalcVol
 
 
+
+
+def load_spectra(lamp):
+    pass
+
+def reload_lamp(lamp,fname,fdata):
+    # now both fname and fdata are set. the lamp object handles it if they are None.
+    if fname != lamp.filename and fdata != lamp.filedata:
+        lamp.reload(filename=fname, filedata=fdata)
+
 def clear_lamp_cache(room):
+    """
+    remove any lamps from the room and the widgets that don't have an 
+    associated filename, and deselect the lamp.
+    """
     if st.session_state.selected_lamp_id:
         selected_lamp = room.lamps[st.session_state.selected_lamp_id]
         if selected_lamp.filename is None:
@@ -14,6 +29,10 @@ def clear_lamp_cache(room):
 
 
 def clear_zone_cache(room):
+    """
+    remove any calc zones from the room and the widgets that don't have an
+    associated zone type, and deselect the zone
+    """    
     if st.session_state.selected_zone_id:
         selected_zone = room.calc_zones[st.session_state.selected_zone_id]
         if isinstance(selected_zone, CalcZone):
@@ -67,7 +86,8 @@ def initialize_zone(zone):
         f"visible_{zone.zone_id}",
     ]
     if isinstance(zone, CalcPlane):
-        keys.append(f"height_{zone.zone_id}")
+        keys.append(f"height_{zone.zone_id}"),        
+        keys.append(f"fov80_{zone.zone_id}"),
     elif isinstance(zone, CalcVol):
         keys.append(f"z1_{zone.zone_id}")
         keys.append(f"z2_{zone.zone_id}")
@@ -86,6 +106,7 @@ def initialize_zone(zone):
     ]
     if isinstance(zone, CalcPlane):
         vals.append(zone.height)
+        vals.append(zone.fov80)
     elif isinstance(zone, CalcVol):
         vals.append(zone.z1)
         vals.append(zone.z2)
@@ -335,11 +356,21 @@ def _place_points(grid_size, num_points):
             grid[best_point] = 1  # Marking the grid cell as occupied
     return points
 
-
-def get_ies_files():
+def get_local_ies_files():
     """placeholder until I get to grabbing the ies files off the website"""
-    # set lamps
     root = Path("./ies_files")
     p = root.glob("**/*")
     ies_files = [x for x in p if x.is_file() and x.suffix == ".ies"]
     return ies_files
+
+def get_ies_files():
+    """retrive ies files from osluv website"""
+    BASE_URL = 'https://assay.osluv.org/static/assay/'
+
+    index_data = requests.get(f'{BASE_URL}/index.json').json()
+
+    output = {}
+    for guid, data in index_data.items():
+        output[data['reporting_name']] =  f'{BASE_URL}/{data["slug"]}.ies'
+
+    return output

@@ -1,6 +1,4 @@
 import numpy as np
-
-# from abc import ABC, abstractmethod
 from ies_utils import get_intensity_vectorized
 from .trigonometry import attitude, to_polar
 
@@ -127,32 +125,33 @@ class CalcZone(object):
         """
         total_values = np.zeros(self.coords.shape[0])
         for lamp_id, lamp in lamps.items():
-            # determine lamp placement + calculate relative coordinates
-            rel_coords = self.coords - lamp.position
-            # store the theta and phi data based on this orientation
-            Theta0, Phi0, R0 = to_polar(*rel_coords.T)
-            # apply all transformations that have been applied to this lamp, but in reverse
-            rel_coords = np.array(
-                attitude(rel_coords.T, roll=0, pitch=0, yaw=-lamp.heading)
-            ).T
-            rel_coords = np.array(
-                attitude(rel_coords.T, roll=0, pitch=-lamp.bank, yaw=0)
-            ).T
-            rel_coords = np.array(
-                attitude(rel_coords.T, roll=0, pitch=0, yaw=-lamp.angle)
-            ).T
-            Theta, Phi, R = to_polar(*rel_coords.T)
-            values = get_intensity_vectorized(Theta, Phi, lamp.interpdict) / R ** 2
-            if self.fov80:
-                values[Theta0 < 50] = 0
-            if self.vert:
-                values *= np.sin(np.radians(Theta0))
-            if self.horiz:
-                values *= np.cos(np.radians(Theta0))
-            if lamp.intensity_units == "mW/Sr":
-                total_values += values / 10  # convert from mW/Sr to uW/cm2
-            else:
-                raise KeyError("Units not recognized")
+            if lamp.filedata is not None:
+                # determine lamp placement + calculate relative coordinates
+                rel_coords = self.coords - lamp.position
+                # store the theta and phi data based on this orientation
+                Theta0, Phi0, R0 = to_polar(*rel_coords.T)
+                # apply all transformations that have been applied to this lamp, but in reverse
+                rel_coords = np.array(
+                    attitude(rel_coords.T, roll=0, pitch=0, yaw=-lamp.heading)
+                ).T
+                rel_coords = np.array(
+                    attitude(rel_coords.T, roll=0, pitch=-lamp.bank, yaw=0)
+                ).T
+                rel_coords = np.array(
+                    attitude(rel_coords.T, roll=0, pitch=0, yaw=-lamp.angle)
+                ).T
+                Theta, Phi, R = to_polar(*rel_coords.T)
+                values = get_intensity_vectorized(Theta, Phi, lamp.interpdict) / R ** 2
+                if self.fov80:
+                    values[Theta0 < 50] = 0
+                if self.vert:
+                    values *= np.sin(np.radians(Theta0))
+                if self.horiz:
+                    values *= np.cos(np.radians(Theta0))
+                if lamp.intensity_units == "mW/Sr":
+                    total_values += values / 10  # convert from mW/Sr to uW/cm2
+                else:
+                    raise KeyError("Units not recognized")
         total_values = total_values.reshape(
             self.num_points
         )  # reshape to correct dimensions

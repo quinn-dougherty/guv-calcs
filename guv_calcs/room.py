@@ -266,11 +266,12 @@ class Room:
         return fig
 
     def plotly(self, fig=None, select_id=None, title=""):
+        """plot all """
         if fig is None:
             fig = go.Figure()
         # plot lamps
         for lamp_id, lamp in self.lamps.items():
-            if lamp.filename is not None and lamp.visible:
+            if lamp.filedata is not None and lamp.visible:
                 fig = self._plot_lamp(lamp=lamp, fig=fig, select_id=select_id)
                 fig = self._set_visibility(fig, lamp_id, True)
             else:
@@ -287,6 +288,7 @@ class Room:
             else:
                 fig = self._set_visibility(fig, zone_id, False)
         # set views
+
         fig.update_layout(
             scene=dict(
                 xaxis=dict(range=[0, self.x]),
@@ -297,6 +299,9 @@ class Room:
                 ),
             ),
             height=750,
+            autosize=False,
+            margin=go.layout.Margin(l=0, r=0, b=0, t=0, pad=0)
+        
         )
         fig.update_scenes(camera_projection_type="orthographic")
         return fig
@@ -313,6 +318,7 @@ class Room:
         select_id=None,
     ):
         """
+        DEPRECATED
         Generates a 3D plot of the room and the lamps in it
         """
         if fig is None:

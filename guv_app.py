@@ -1,4 +1,5 @@
 import streamlit as st
+import requests
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
@@ -9,6 +10,7 @@ from guv_calcs.calc_zone import CalcZone, CalcPlane, CalcVol
 from guv_calcs._website_helpers import (
     get_lamp_position,
     get_ies_files,
+    get_local_ies_files,
     add_standard_zones,
     initialize_lamp,
     initialize_zone,
@@ -41,8 +43,12 @@ st.set_page_config(
 )
 st.set_option("deprecation.showPyplotGlobalUse", False)  # silence this warning
 st.write(
-    "<style>div.block-container{padding-top:1rem;}</style>", unsafe_allow_html=True
+    "<style>div.block-container{padding-top:2rem;}</style>", unsafe_allow_html=True
 )
+
+SELECT_LOCAL = "Select local file..."
+ies_files = get_local_ies_files()
+vendored_lamps = get_ies_files()
 
 # Check and initialize session state variables
 if "room" not in st.session_state:
@@ -56,11 +62,16 @@ if "editing" not in st.session_state:
 if "selected_lamp_id" not in st.session_state:
     st.session_state.selected_lamp_id = None  # use None when no lamp is selected
 
-if "selected_lamp" not in st.session_state:
-    st.session_state.selected_lamp = None
-
 if "selected_zone_id" not in st.session_state:
     st.session_state.selected_zone_id = None  # use None when no lamp is selected
+
+if "lampfile_options" not in st.session_state:
+     # (name, URL)
+    options = [None] + list(vendored_lamps.keys()) + [SELECT_LOCAL]
+    st.session_state.lampfile_options = options
+
+if "uploaded_files" not in st.session_state:
+    st.session_state.uploaded_files = {}
 
 if "fig" not in st.session_state:
     st.session_state.fig = go.Figure()
@@ -76,7 +87,7 @@ if "fig" not in st.session_state:
     )
 fig = st.session_state.fig
 
-ies_files = [None] + get_ies_files() + ["Select local file..."]
+
 # Set up overall layout
 left_pane, right_pane = st.columns([4, 1])
 
@@ -98,24 +109,60 @@ with st.sidebar:
         )
 
         # File input
-        options = [None] + get_ies_files() + ["Select local file..."]
-        fname_idx = options.index(selected_lamp.filename)
+        fname_idx = st.session_state.lampfile_options.index(selected_lamp.filename)
         fname = st.selectbox(
-            "Select file", options, key=f"file_{selected_lamp.lamp_id}", index=fname_idx
+            "Select lamp", st.session_state.lampfile_options, index=fname_idx,key=f"file_{selected_lamp.lamp_id}"
         )
-
-        if fname == "Select local file...":
+        
+        # determine fdata from fname
+        if fname == SELECT_LOCAL:
             uploaded_file = st.file_uploader(
-                "Upload a file", key=f"upload_{selected_lamp.lamp_id}"
+                "Upload a file", type="ies", key=f"upload_{selected_lamp.lamp_id}"
             )
             if uploaded_file is not None:
-                fname = uploaded_file.read()
-
-        if fname not in [None, "Select local file..."]:
+                fdata = uploaded_file.read()
+                fname = uploaded_file.name
+                st.session_state.uploaded_files[fname] = fdata
+                vendorfiles = list(vendored_lamps.keys())
+                uploadfiles = list(st.session_state.uploaded_files.keys())
+                options = [None] + vendorfiles + uploadfiles + [SELECT_LOCAL]
+                st.session_state.lampfile_options = options
+            else:
+                fdata = None
+        elif fname is None:
+            fdata = None
+        else:
+            # only reload if different from before
             if fname != selected_lamp.filename:
-                selected_lamp.reload(fname)
+                try:
+                    fdata = requests.get(vendored_lamps[fname]).content
+                except KeyError:
+                    fdata = st.session_state.uploaded_files[fname]
+        
+        # now both fname and fdata are set. the lamp object handles it if they are None.
+        if fname != selected_lamp.filename and fdata != selected_lamp.filedata:
+            selected_lamp.reload(filename=fname, filedata=fdata)
+            st.rerun()
+
+        # plot if there is data to plot with
+        if selected_lamp.filedata is not None:
             iesfig, iesax = selected_lamp.plot_ies()
             st.pyplot(iesfig, use_container_width=True)
+
+        ########################################################
+        ### Somewhere in here there should be spectra stuff!
+        
+        # if SELECT_LOCAL and selected_lamp.spectra is None:
+            # # button appears prompting user to upload spectra
+            # st.button("Upload spectra")
+            # uploaded_spectra = st.file_uploader(
+                # "Upload spectra CSV", key=f"spectra_upload_{selected_lamp.lamp_id}"
+            # )
+            # if uploaded_spectra is not None:
+                # load_spectra(selected_lamp)
+            # else:
+                # st.write("In order for GUV photobiological safety calculations to be accurate, a spectra is required. Please upload a .csv file with exactly 1 header row, where the first column is Wavelength, and the second column is intensity. :red[If a spectra is not provided, photobiological safety calculations will be inaccurate.]")
+            
 
         # Position inputs
         col1, col2, col3 = st.columns(3)
@@ -232,7 +279,7 @@ with st.sidebar:
     elif (
         st.session_state.editing
         in ["zones", "planes", "volumes"]
-        # and st.session_state.selected_zone_id
+        and st.session_state.selected_zone_id
     ):
         st.subheader("Edit Calculation Zone")
         if st.session_state.editing == "zones":
@@ -338,7 +385,8 @@ with st.sidebar:
                 selected_zone.vert = False
                 selected_zone.horiz = False
 
-            selected_zone.fov80 = st.checkbox("Field of View 80°")
+            selected_zone.fov80 = st.checkbox("Field of View 80°",
+                                    key=f"fov80_{selected_zone.zone_id}")
 
             value_options = ["Irradiance (uW/cm2)", "Dose (mJ/cm2)"]
             value_index = 1 if selected_zone.dose else 0
