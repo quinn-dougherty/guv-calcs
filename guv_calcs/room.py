@@ -172,7 +172,7 @@ class Room:
         """plot a calculation plane"""
         label = zone.zone_id
         if select_id is not None and select_id == label:
-            zonecolor = "red"
+            zonecolor = "#cc61ff" # slightly pale red
         else:
             zonecolor = "#5e8ff7"
         zonetrace = go.Scatter3d(
@@ -240,7 +240,7 @@ class Room:
 
         label = zone.zone_id
         if select_id is not None and select_id == label:
-            zonecolor = "red"
+            zonecolor = "#cc61ff" 
         else:
             zonecolor = "#5e8ff7"
         # Create a single trace for all edges
