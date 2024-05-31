@@ -56,7 +56,6 @@ class Room:
             raise ValueError("Room requires exactly three dimensions.")
         self.dimensions = np.array(dimensions)
         self.x, self.y, self.z = self.dimensions
-        self.volume = self.x * self.y * self.z
 
     def get_units(self):
         """return room units"""
@@ -68,6 +67,7 @@ class Room:
 
     def get_volume(self):
         """return room volume"""
+        self.volume = self.x * self.y * self.z
         return self.volume
 
     def add_lamp(self, lamp):
@@ -103,34 +103,34 @@ class Room:
         Triggers the calculation of lighting values in each calculation zone based on the current lamps in the room.
         """
         for name, zone in self.calc_zones.items():
-            if zone.enable:
+            if zone.enabled:
                 zone.calculate_values(lamps=self.lamps)
 
     # def _set_visibility(self, fig, trace_id, val):
-        # """change visibility of lamp or calc zone trace"""
-        # traces = [trace.name for trace in fig.data]
-        # if trace_id in traces:
-            # # fig.data[traces.index(trace_id)].visible = val
-            # fig.update_traces(visible=val,selector=({"name": trace_id}))
-            # print(val)
-        # return fig
+    # """change visibility of lamp or calc zone trace"""
+    # traces = [trace.name for trace in fig.data]
+    # if trace_id in traces:
+    # # fig.data[traces.index(trace_id)].visible = val
+    # fig.update_traces(visible=val,selector=({"name": trace_id}))
+    # print(val)
+    # return fig
 
     # def _get_visibility(self, fig, trace_id):
-        # """get visibility status of a trace"""
-        # traces = [trace.name for trace in fig.data]
-        # if trace_id in traces:
-            # vis = fig.data[traces.index(trace_id)].visible
-        # else: 
-            # vis = None
-        # return vis
+    # """get visibility status of a trace"""
+    # traces = [trace.name for trace in fig.data]
+    # if trace_id in traces:
+    # vis = fig.data[traces.index(trace_id)].visible
+    # else:
+    # vis = None
+    # return vis
 
-    def _set_color(self, select_id, label, enable):
-        if not enable:
-            color = "#d1d1d1" # grey
+    def _set_color(self, select_id, label, enabled):
+        if not enabled:
+            color = "#d1d1d1"  # grey
         elif select_id is not None and select_id == label:
-            color = "#cc61ff" # purple
+            color = "#cc61ff"  # purple
         else:
-            color = "#5e8ff7" # blue
+            color = "#5e8ff7"  # blue
         return color
 
     def _update_trace_by_id(self, fig, trace_id, **updates):
@@ -145,7 +145,7 @@ class Room:
     def _remove_traces_by_ids(self, fig, active_ids):
         # Convert fig.data, which is a tuple, to a list to allow modifications
         traces = list(fig.data)
-        
+
         # Iterate in reverse to avoid modifying the list while iterating
         for i in reversed(range(len(traces))):
             trace = traces[i]
@@ -160,8 +160,8 @@ class Room:
         x, y, z = lamp.transform(lamp.photometric_coords, scale=lamp.values.max()).T
         Theta, Phi, R = to_polar(*lamp.photometric_coords.T)
         tri = Delaunay(np.column_stack((Theta.flatten(), Phi.flatten())))
-        lampcolor = self._set_color(select_id,label=lamp.lamp_id,enable=lamp.enable)
-        
+        lampcolor = self._set_color(select_id, label=lamp.lamp_id, enabled=lamp.enabled)
+
         lamptrace = go.Mesh3d(
             x=x,
             y=y,
@@ -175,7 +175,7 @@ class Room:
             customdata=[lamp.lamp_id],
             legendgroup="lamps",
             legendgrouptitle_text="Lamps",
-            showlegend=True
+            showlegend=True,
         )
         aimtrace = go.Scatter3d(
             x=[lamp.position[0], lamp.aim_point[0]],
@@ -187,13 +187,15 @@ class Room:
             customdata=[lamp.lamp_id + "_aim"],
             showlegend=False,
         )
-        
+
         traces = [trace.customdata[0] for trace in fig.data]
         if lamptrace.customdata[0] not in traces:
             fig.add_trace(lamptrace)
             fig.add_trace(aimtrace)
         else:
-            self._update_trace_by_id(fig,lamp.lamp_id, 
+            self._update_trace_by_id(
+                fig,
+                lamp.lamp_id,
                 x=x,
                 y=y,
                 z=z,
@@ -201,9 +203,12 @@ class Room:
                 j=tri.simplices[:, 1],
                 k=tri.simplices[:, 2],
                 color=lampcolor,
-                name=lamp.name) 
+                name=lamp.name,
+            )
 
-            self._update_trace_by_id(fig, lamp.lamp_id+'_aim', 
+            self._update_trace_by_id(
+                fig,
+                lamp.lamp_id + "_aim",
                 x=[lamp.position[0], lamp.aim_point[0]],
                 y=[lamp.position[1], lamp.aim_point[1]],
                 z=[lamp.position[2], lamp.aim_point[2]],
@@ -212,7 +217,7 @@ class Room:
 
     def _plot_plane(self, zone, fig, select_id=None):
         """plot a calculation plane"""
-        zonecolor = self._set_color(select_id,zone.zone_id,zone.enable)
+        zonecolor = self._set_color(select_id, zone.zone_id, zone.enabled)
         zonetrace = go.Scatter3d(
             x=zone.coords.T[0],
             y=zone.coords.T[1],
@@ -230,7 +235,9 @@ class Room:
         if zonetrace.name not in traces:
             fig.add_trace(zonetrace)
         else:
-            self._update_trace_by_id(fig, zone.zone_id,
+            self._update_trace_by_id(
+                fig,
+                zone.zone_id,
                 x=zone.coords.T[0],
                 y=zone.coords.T[1],
                 z=zone.coords.T[2],
@@ -279,7 +286,7 @@ class Room:
             y_coords.extend([vertices[v1][1], vertices[v2][1], None])
             z_coords.extend([vertices[v1][2], vertices[v2][2], None])
 
-        zonecolor = self._set_color(select_id,label=zone.zone_id,enable=zone.enable)
+        zonecolor = self._set_color(select_id, label=zone.zone_id, enabled=zone.enabled)
         # Create a single trace for all edges
         zonetrace = go.Scatter3d(
             x=x_coords,
@@ -296,33 +303,37 @@ class Room:
         if zonetrace.name not in traces:
             fig.add_trace(zonetrace)
         else:
-            self._update_trace_by_id(fig, zone.zone_id,
+            self._update_trace_by_id(
+                fig,
+                zone.zone_id,
                 x=x_coords,
                 y=y_coords,
                 z=z_coords,
                 line=dict(color=zonecolor, width=5, dash="dot"),
-                )
+            )
         return fig
 
-    def plotly(self, fig=None, select_id=None, title="",):
-        """plot all """
+    def plotly(
+        self,
+        fig=None,
+        select_id=None,
+        title="",
+    ):
+        """plot all"""
         if fig is None:
             fig = go.Figure()
 
         # first delete any extraneous traces
         lamp_ids = list(self.lamps.keys())
-        aim_ids = [lampid+'_aim' for lampid in lamp_ids]
+        aim_ids = [lampid + "_aim" for lampid in lamp_ids]
         zone_ids = list(self.calc_zones.keys())
-        for active_ids in [lamp_ids,aim_ids,zone_ids]:
+        for active_ids in [lamp_ids, aim_ids, zone_ids]:
             self._remove_traces_by_ids(fig, active_ids)
 
         # plot lamps
         for lamp_id, lamp in self.lamps.items():
             if lamp.filedata is not None:
                 fig = self._plot_lamp(lamp=lamp, fig=fig, select_id=select_id)
-                traces = [trace.name for trace in fig.data]
-                # vis = self._get_visibility(fig, lamp_id)
-                # fig = self._set_visibility(fig, lamp_id+"_aim", vis)
         for zone_id, zone in self.calc_zones.items():
             if isinstance(zone, CalcPlane):
                 fig = self._plot_plane(zone=zone, fig=fig, select_id=select_id)
@@ -344,15 +355,11 @@ class Room:
             legend=dict(
                 x=0,
                 y=1,
-                yanchor='top',
-                xanchor='left',
-                # orientation='h',
-                # font=dict(family="Courier", size=12, color="blue"),
-                # bgcolor="LightSteelBlue"
+                yanchor="top",
+                xanchor="left",
             ),
         )
         fig.update_scenes(camera_projection_type="orthographic")
-        # print(dir(fig.layout.scene.camera))
         return fig
 
     def plot(
@@ -383,7 +390,7 @@ class Room:
             if lamp.filename is not None and lamp.visible:
                 label = lamp.name
                 if select_id is not None and select_id == lampid:
-                    lampcolor = color  #'#ff6161'
+                    lampcolor = color
                 else:
                     lampcolor = "blue"
                 x, y, z = lamp.transform(

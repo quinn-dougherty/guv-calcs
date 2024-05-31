@@ -34,7 +34,7 @@ class CalcZone(object):
         whether to calculate a dose over N hours or just fluence
     hours: float, default = 8.0
         number of hours to calculate dose over. Only relevant if dose is True.
-    enable: bool, default = True
+    enabled: bool, default = True
         whether or not the calc zone is enabled for calculations
     """
 
@@ -48,11 +48,11 @@ class CalcZone(object):
         horiz=None,
         dose=None,
         hours=None,
-        enable=None,
+        enabled=None,
     ):
         self.zone_id = zone_id
         self.name = zone_id if name is None else name
-        self.enable = True if enable is None else enable
+        self.enabled = True if enabled is None else enabled
         self.offset = True if offset is None else offset
         self.fov80 = False if fov80 is None else fov80
         self.vert = False if vert is None else vert
@@ -125,7 +125,7 @@ class CalcZone(object):
         """
         total_values = np.zeros(self.coords.shape[0])
         for lamp_id, lamp in lamps.items():
-            if lamp.filedata is not None and lamp.enable:
+            if lamp.filedata is not None and lamp.enabled:
                 # determine lamp placement + calculate relative coordinates
                 rel_coords = self.coords - lamp.position
                 # store the theta and phi data based on this orientation
@@ -190,11 +190,11 @@ class CalcVol(CalcZone):
         horiz=None,
         dose=None,
         hours=None,
-        enable=None,
+        enabled=None,
     ):
 
         super().__init__(
-            zone_id, name, offset, fov80, vert, horiz, dose, hours, enable
+            zone_id, name, offset, fov80, vert, horiz, dose, hours, enabled
         )
         self.x1 = 0 if x1 is None else x1
         self.x2 = 6 if x2 is None else x2
@@ -273,11 +273,11 @@ class CalcPlane(CalcZone):
         horiz=None,
         dose=None,
         hours=None,
-        enable=None,
+        enabled=None,
     ):
 
         super().__init__(
-            zone_id, name, offset, fov80, vert, horiz, dose, hours, enable
+            zone_id, name, offset, fov80, vert, horiz, dose, hours, enabled
         )
 
         self.height = 1.9 if height is None else height

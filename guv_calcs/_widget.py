@@ -1,9 +1,10 @@
 import streamlit as st
 from guv_calcs.calc_zone import CalcPlane, CalcVol
 
+
 def clear_lamp_cache(room):
     """
-    remove any lamps from the room and the widgets that don't have an 
+    remove any lamps from the room and the widgets that don't have an
     associated filename, and deselect the lamp.
     """
     if st.session_state.selected_lamp_id:
@@ -18,10 +19,10 @@ def clear_zone_cache(room):
     """
     remove any calc zones from the room and the widgets that don't have an
     associated zone type, and deselect the zone
-    """    
+    """
     if st.session_state.selected_zone_id:
         selected_zone = room.calc_zones[st.session_state.selected_zone_id]
-        if not isinstance(selected_zone, CalcPlane) and not isinstance(selected_zone, CalcVol):
+        if not isinstance(selected_zone, (CalcPlane, CalcVol)):
             remove_zone(selected_zone)
             room.remove_calc_zone(st.session_state.selected_zone_id)
     st.session_state.selected_zone_id = None
@@ -40,7 +41,7 @@ def initialize_lamp(lamp):
         f"rotation_{lamp.lamp_id}",
         f"orientation_{lamp.lamp_id}",
         f"tilt_{lamp.lamp_id}",
-        f"enable_{lamp.lamp_id}",
+        f"enabled_{lamp.lamp_id}",
     ]
     vals = [
         lamp.name,
@@ -53,11 +54,10 @@ def initialize_lamp(lamp):
         lamp.angle,
         lamp.heading,
         lamp.bank,
-        lamp.enable,
+        lamp.enabled,
     ]
-    
+    print(lamp.enabled)
     add_keys(keys, vals)
-    
 
 
 def initialize_zone(zone):
@@ -71,10 +71,10 @@ def initialize_zone(zone):
         f"x_spacing_{zone.zone_id}",
         f"y_spacing_{zone.zone_id}",
         f"offset_{zone.zone_id}",
-        f"enable_{zone.zone_id}",
+        f"enabled_{zone.zone_id}",
     ]
     if isinstance(zone, CalcPlane):
-        keys.append(f"height_{zone.zone_id}"),        
+        keys.append(f"height_{zone.zone_id}"),
         keys.append(f"fov80_{zone.zone_id}"),
     elif isinstance(zone, CalcVol):
         keys.append(f"z1_{zone.zone_id}")
@@ -90,7 +90,7 @@ def initialize_zone(zone):
         zone.x_spacing,
         zone.y_spacing,
         zone.offset,
-        zone.enable,
+        zone.enabled,
     ]
     if isinstance(zone, CalcPlane):
         vals.append(zone.height)
@@ -115,12 +115,12 @@ def update_zone_name(zone):
 
 def update_lamp_visibility(lamp):
     """update whether lamp shows in plot or not from widget"""
-    lamp.enable = st.session_state[f"enable_{lamp.lamp_id}"]
-    
+    lamp.enabled = st.session_state[f"enabled_{lamp.lamp_id}"]
+
 
 def update_zone_visibility(zone):
     """update whether calculation zone shows up in plot or not from widget"""
-    zone.enable = st.session_state[f"enable_{zone.zone_id}"]
+    zone.enabled = st.session_state[f"enabled_{zone.zone_id}"]
 
 
 def update_plane_dimensions(zone):
@@ -225,7 +225,7 @@ def remove_zone(zone):
         f"x_spacing_{zone.zone_id}",
         f"y_spacing_{zone.zone_id}",
         f"offset_{zone.zone_id}",
-        f"enable_{zone.zone_id}",
+        f"enabled_{zone.zone_id}",
     ]
     if isinstance(zone, CalcPlane):
         keys.append(f"height_{zone.zone_id}")
@@ -239,7 +239,8 @@ def remove_zone(zone):
 def remove_keys(keys):
     """remove parameters from widget"""
     for key in keys:
-        del st.session_state[key]
+        if key in st.session_state:
+            del st.session_state[key]
 
 
 def add_keys(keys, vals):

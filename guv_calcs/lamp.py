@@ -31,11 +31,11 @@ class Lamp:
         aimz=None,
         intensity_units=None,
         radiation_type=None,
-        enable=None,
+        enabled=None,
     ):
         self.lamp_id = lamp_id
         self.name = lamp_id if name is None else name
-        self.enable = True if enable is None else enable
+        self.enabled = True if enabled is None else enabled
         # position
         self.x = 0.0 if x is None else x
         self.y = 0.0 if y is None else y
@@ -47,7 +47,7 @@ class Lamp:
         self.aimy = self.y if aimy is None else aimy
         self.aimz = 0 if aimz is None else aimz
         self.aim(self.aimx, self.aimy, self.aimz)  # updates heading and bank
-        
+
         # misc
         self.intensity_units = "mW/Sr" if intensity_units is None else intensity_units
         self.radiation_type = radiation_type
@@ -56,7 +56,7 @@ class Lamp:
         self.filename = filename
         self.filedata = filedata
         self._check_filename()
-                
+
         # filename is just a label, filedata controls everything.
         if self.filedata is not None:
             self._load()
@@ -70,7 +70,7 @@ class Lamp:
         """
         FILE_IS_PATH = False
         # if filename is string, check if it's a path
-        if isinstance(self.filename, (str,pathlib.PosixPath)):
+        if isinstance(self.filename, (str, pathlib.PosixPath)):
             if Path(self.filename).is_file():
                 FILE_IS_PATH = True
         # if filename is a path and exists, it will replace filedata, but only if filedata wasn't specified to begin with
@@ -107,7 +107,6 @@ class Lamp:
         self.keywords = self.lampdict["keywords"]
         if "_RADIATIONTYPE" in self.keywords.keys():
             self.radiation_type = self.keywords["_RADIATIONTYPE"]
-        
 
     def _orient(self):
         """
@@ -159,7 +158,7 @@ class Lamp:
 
     def reload(self, filename=None, filedata=None):
         """replace the ies file without erasing any position/rotation/aiming information"""
-        
+
         self.filename = filename
         self.filedata = filedata
         # if filename is a path, filedata is filename
@@ -168,7 +167,7 @@ class Lamp:
         if self.filedata is not None:
             self._load()
             self._orient()
-        else: 
+        else:
             self.lampdict = None
             self.valdict = None
             self.thetas = None

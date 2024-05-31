@@ -4,8 +4,14 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 from guv_calcs.lamp import Lamp
-from guv_calcs.calc_zone import CalcPlane, CalcVol
-from ._widget import initialize_lamp, initialize_zone, clear_lamp_cache,clear_zone_cache
+from guv_calcs.calc_zone import CalcPlane, CalcVol, CalcZone
+from ._widget import (
+    initialize_lamp,
+    initialize_zone,
+    clear_lamp_cache,
+    clear_zone_cache,
+)
+
 
 def get_disinfection_table(fluence, room):
 
@@ -13,30 +19,40 @@ def get_disinfection_table(fluence, room):
 
     wavelength = 222
 
-    fname = Path('./data/disinfection_table.csv')
+    fname = Path("./data/disinfection_table.csv")
     df = pd.read_csv(fname)
-    df = df[df['Medium']=='Aerosol']
-    df = df[df['wavelength [nm]']==wavelength]
-    keys = ['Species','Medium (specific)','k [cm2/mJ]','Ref','Full Citation']
+    df = df[df["Medium"] == "Aerosol"]
+    df = df[df["wavelength [nm]"] == wavelength]
+    keys = ["Species", "Medium (specific)", "k [cm2/mJ]", "Ref", "Full Citation"]
 
-    df = df[keys].fillna(' ')
+    df = df[keys].fillna(" ")
 
-    units = 'meters'
-    volume = x*y*z
-    if units == 'meters':
-       volume = volume / (0.3048**3)
-        
-    df['eACH-UV'] = (df['k [cm2/mJ]']*fluence*3.6).round(2)
-    df['CADR-UV [cfm]'] = (df['eACH-UV'] * volume / 60).round(2)
-    df['CADR-UV [lps]'] = (df['CADR-UV [cfm]']*0.47195).round(2)
-    num_papers = len(df['Ref'].unique())
-    df['Ref'] = np.linspace(1,num_papers+2,num_papers+2).astype(int)
-    df = df.rename(columns={'Medium (specific)':'Medium',
-                           'Ref':'Reference'})
-    references = df['Full Citation']
+    volume = room.get_volume()
 
-    newkeys = ['Species','Medium','k [cm2/mJ]','eACH-UV','CADR-UV [cfm]','CADR-UV [lps]','Reference']
+    # convert to cubic feet for cfm
+    if room.units == "meters":
+        volume = volume / (0.3048 ** 3)
+
+    df["eACH-UV"] = (df["k [cm2/mJ]"] * fluence * 3.6).round(2)
+    df["CADR-UV [cfm]"] = (df["eACH-UV"] * volume / 60).round(2)
+    df["CADR-UV [lps]"] = (df["CADR-UV [cfm]"] * 0.47195).round(2)
+    num_papers = len(df["Ref"].unique())
+    df["Ref"] = np.linspace(1, num_papers + 2, num_papers + 2).astype(int)
+    df = df.rename(columns={"Medium (specific)": "Medium", "Ref": "Reference"})
+    references = df["Full Citation"]
+
+    newkeys = [
+        "Species",
+        "Medium",
+        "k [cm2/mJ]",
+        "eACH-UV",
+        "CADR-UV [cfm]",
+        "CADR-UV [lps]",
+        "Reference",
+    ]
     df = df[newkeys]
+    return df, references
+
 
 def add_new_lamp(room):
     # initialize lamp
@@ -46,7 +62,6 @@ def add_new_lamp(room):
     new_lamp_id = f"Lamp{new_lamp_idx}"
     new_lamp = Lamp(lamp_id=new_lamp_id, x=xpos, y=ypos, z=room.z)
     # add to session and to room
-    # st.session_state.lamps.append(new_lamp)
     room.add_lamp(new_lamp)
     initialize_lamp(new_lamp)
     # Automatically select for editing
@@ -55,15 +70,14 @@ def add_new_lamp(room):
     clear_zone_cache(room)
     st.rerun()
 
+
 def add_new_zone(room):
     # initialize calculation zone
     new_zone_idx = len(room.calc_zones) + 1
     new_zone_id = f"CalcZone{new_zone_idx}"
     # this zone object contains nothing but the name and ID and will be
     # replaced by a CalcPlane or CalcVol object
-    new_zone = CalcZone(
-        zone_id=new_zone_id, visible=False
-    )
+    new_zone = CalcZone(zone_id=new_zone_id, visible=False)
     # add to room
     room.add_calc_zone(new_zone)
     # select for editing
@@ -171,6 +185,16 @@ def _place_points(grid_size, num_points):
             grid[best_point] = 1  # Marking the grid cell as occupied
     return points
 
+
+def make_file_list():
+    """generate current list of lampfile options, both locally uploaded and from assays.osluv.org"""
+    SELECT_LOCAL = "Select local file..."
+    vendorfiles = list(st.session_state.vendored_lamps.keys())
+    uploadfiles = list(st.session_state.uploaded_files.keys())
+    options = [None] + vendorfiles + uploadfiles + [SELECT_LOCAL]
+    st.session_state.lampfile_options = options
+
+
 def get_local_ies_files():
     """placeholder until I get to grabbing the ies files off the website"""
     root = Path("./data/ies_files")
@@ -178,14 +202,15 @@ def get_local_ies_files():
     ies_files = [x for x in p if x.is_file() and x.suffix == ".ies"]
     return ies_files
 
+
 def get_ies_files():
     """retrive ies files from osluv website"""
-    BASE_URL = 'https://assay.osluv.org/static/assay/'
+    BASE_URL = "https://assay.osluv.org/static/assay/"
 
-    index_data = requests.get(f'{BASE_URL}/index.json').json()
+    index_data = requests.get(f"{BASE_URL}/index.json").json()
 
     output = {}
     for guid, data in index_data.items():
-        output[data['reporting_name']] =  f'{BASE_URL}/{data["slug"]}.ies'
+        output[data["reporting_name"]] = f'{BASE_URL}/{data["slug"]}.ies'
 
     return output
