@@ -677,7 +677,7 @@ with st.sidebar:
             st.rerun()
     elif st.session_state.editing == "results":
         st.header("Results")
-        
+
         # do some checks first. do we actually have any lamps?
         if not room.lamps:
             st.warning(

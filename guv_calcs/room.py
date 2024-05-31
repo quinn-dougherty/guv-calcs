@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay
 import plotly.graph_objs as go
 from guv_calcs.calc_zone import CalcZone, CalcPlane, CalcVol
-from guv_calcs.lamp import Lamp
 from .trigonometry import to_polar
 
 
@@ -95,10 +94,10 @@ class Room:
                 msg = f"{obj_name} exceeds room boundaries!"
                 warnings.warn(msg, stacklevel=2)
         return msg
-        
+
     def check_lamp_position(self, lamp):
-        return self._check_position(lamp.position,lamp.name)
-        
+        return self._check_position(lamp.position, lamp.name)
+
     def check_zone_position(self, calc_zone):
         if isinstance(calc_zone, CalcPlane):
             dimensions = [calc_zone.x2, calc_zone.y2]
@@ -111,12 +110,11 @@ class Room:
 
     def check_positions(self):
         msgs = []
-        for lamp_id,lamp in self.lamps.items():
-            msgs.append(check_lamp_position(lamp))
+        for lamp_id, lamp in self.lamps.items():
+            msgs.append(self.check_lamp_position(lamp))
         for zone_id, zone in self.calc_zones.items():
-            msgs.append(check_zone_position(calc_zone))
+            msgs.append(self.check_zone_position(zone))
         return msgs
-        
 
     def add_lamp(self, lamp):
         """
