@@ -45,7 +45,7 @@ class Lamp:
         self.angle = 0.0 if angle is None else angle
         self.aimx = self.x if aimx is None else aimx
         self.aimy = self.y if aimy is None else aimy
-        self.aimz = 0 if aimz is None else aimz
+        self.aimz = -1.0 if aimz is None else aimz
         self.aim(self.aimx, self.aimy, self.aimz)  # updates heading and bank
 
         # misc
@@ -157,7 +157,7 @@ class Lamp:
         return self.total_optical_power
 
     def reload(self, filename=None, filedata=None):
-        """replace the ies file without erasing any position/rotation/aiming information"""
+        """replace the ies file without erasing any position/rotation/eing information"""
 
         self.filename = filename
         self.filedata = filedata
@@ -232,7 +232,7 @@ class Lamp:
         distinct from rotation; applies to a tilted lamp. to rotate a lamp along its axis,
         use the `rotate` method
         """
-        orientation = (orientation + 360) % 360
+        # orientation = (orientation + 360) % 360
         self.heading = orientation
         self._recalculate_aim_point(dimensions=dimensions, distance=distance)
 
@@ -241,7 +241,8 @@ class Lamp:
         set tilt/bank
         alternative to setting aim point with `aim`
         """
-        self.bank = (tilt + 360) % 360
+        # tilt = (tilt + 360) % 360
+        self.bank = tilt
         self._recalculate_aim_point(dimensions=dimensions, distance=distance)
 
     def aim(self, x=None, y=None, z=None):

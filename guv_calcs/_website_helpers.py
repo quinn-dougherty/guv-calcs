@@ -12,6 +12,8 @@ from ._widget import (
     clear_zone_cache,
 )
 
+ss = st.session_state
+
 
 def get_disinfection_table(fluence, room):
 
@@ -54,6 +56,50 @@ def get_disinfection_table(fluence, room):
     return df, references
 
 
+def print_standard_zones(room):
+    """
+    display results of special calc zones
+
+    TODO: dropdown menu of which standard to check against
+    """
+    st.subheader("Efficacy", divider="grey")
+    fluence = room.calc_zones["WholeRoomFluence"]
+    if fluence.values is not None:
+        avg_fluence = round(fluence.values.mean(), 3)
+        fluence_str = ":blue[" + str(avg_fluence) + "] μW/cm2"
+    else:
+        fluence_str = None
+    st.write("Average fluence: ", fluence_str)
+
+    st.subheader("Photobiological Safety", divider="grey")
+    skin = room.calc_zones["SkinLimits"]
+    eye = room.calc_zones["EyeLimits"]
+    if skin.values is not None:
+        skin_max = round(skin.values.max(), 3)
+        if skin_max > 479:
+            color = "red"
+        else:
+            color = "blue"
+        skin_str = ":" + color + "[" + str(skin_max) + "] " + skin.units
+    else:
+        skin_str = None
+    if eye.values is not None:
+        eye_max = round(eye.values.max(), 3)
+        if eye_max > 161:
+            color = "red"
+        else:
+            color = "blue"
+        eye_str = ":" + color + "[" + str(eye_max) + "] " + eye.units
+    else:
+        eye_str = None
+    st.write("Max Skin Dose (8 Hours): ", skin_str)
+    kwargs = {"transparent": "True"}
+    st.pyplot(skin.plot_plane(), **kwargs)
+
+    st.write("Max Eye Dose (8 Hours): ", eye_str)
+    st.pyplot(eye.plot_plane(), **kwargs)
+
+
 def add_new_lamp(room):
     # initialize lamp
     new_lamp_idx = len(room.lamps) + 1
@@ -65,8 +111,8 @@ def add_new_lamp(room):
     room.add_lamp(new_lamp)
     initialize_lamp(new_lamp)
     # Automatically select for editing
-    st.session_state.editing = "lamps"
-    st.session_state.selected_lamp_id = new_lamp.lamp_id
+    ss.editing = "lamps"
+    ss.selected_lamp_id = new_lamp.lamp_id
     clear_zone_cache(room)
     st.rerun()
 
@@ -81,8 +127,8 @@ def add_new_zone(room):
     # add to room
     room.add_calc_zone(new_zone)
     # select for editing
-    st.session_state.editing = "zones"
-    st.session_state.selected_zone_id = new_zone_id
+    ss.editing = "zones"
+    ss.selected_zone_id = new_zone_id
     clear_lamp_cache(room)
     st.rerun()
 
@@ -189,10 +235,10 @@ def _place_points(grid_size, num_points):
 def make_file_list():
     """generate current list of lampfile options, both locally uploaded and from assays.osluv.org"""
     SELECT_LOCAL = "Select local file..."
-    vendorfiles = list(st.session_state.vendored_lamps.keys())
-    uploadfiles = list(st.session_state.uploaded_files.keys())
+    vendorfiles = list(ss.vendored_lamps.keys())
+    uploadfiles = list(ss.uploaded_files.keys())
     options = [None] + vendorfiles + uploadfiles + [SELECT_LOCAL]
-    st.session_state.lampfile_options = options
+    ss.lampfile_options = options
 
 
 def get_local_ies_files():

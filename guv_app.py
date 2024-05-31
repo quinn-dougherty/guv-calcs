@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import matplotlib.pyplot as plt
 import plotly.graph_objs as go
 from guv_calcs.room import Room
 from guv_calcs.calc_zone import CalcPlane, CalcVol
@@ -9,8 +10,9 @@ from guv_calcs._website_helpers import (
     get_ies_files,
     get_local_ies_files,
     add_standard_zones,
-    get_disinfection_table,
+    # get_disinfection_table,
     make_file_list,
+    print_standard_zones,
 )
 from guv_calcs._widget import (
     initialize_lamp,
@@ -32,7 +34,9 @@ from guv_calcs._widget import (
     update_room,
     initialize_room,
 )
+import warnings
 
+warnings.filterwarnings("ignore")
 # layout / page setup
 st.set_page_config(
     page_title="GUV Calcs",
@@ -43,39 +47,40 @@ st.set_option("deprecation.showPyplotGlobalUse", False)  # silence this warning
 st.write(
     "<style>div.block-container{padding-top:2rem;}</style>", unsafe_allow_html=True
 )
+ss = st.session_state
 
 SELECT_LOCAL = "Select local file..."
 SPECIAL_ZONES = ["WholeRoomFluence", "SkinLimits", "EyeLimits"]
 
 # Check and initialize session state variables
-if "room" not in st.session_state:
-    st.session_state.room = Room()
-    st.session_state.room = add_standard_zones(st.session_state.room)
-room = st.session_state.room
+if "room" not in ss:
+    ss.room = Room()
+    ss.room = add_standard_zones(ss.room)
+room = ss.room
 
-if "editing" not in st.session_state:
-    st.session_state.editing = None  # determines what displays in the sidebar
+if "editing" not in ss:
+    ss.editing = None  # determines what displays in the sidebar
 
-if "selected_lamp_id" not in st.session_state:
-    st.session_state.selected_lamp_id = None  # use None when no lamp is selected
+if "selected_lamp_id" not in ss:
+    ss.selected_lamp_id = None  # use None when no lamp is selected
 
-if "selected_zone_id" not in st.session_state:
-    st.session_state.selected_zone_id = None  # use None when no lamp is selected
+if "selected_zone_id" not in ss:
+    ss.selected_zone_id = None  # use None when no lamp is selected
 
-if "lampfile_options" not in st.session_state:
+if "lampfile_options" not in ss:
     ies_files = get_local_ies_files()  # local files for testing
     vendored_lamps = get_ies_files()  # files from assays.osluv.org
-    st.session_state.vendored_lamps = vendored_lamps
+    ss.vendored_lamps = vendored_lamps
     options = [None] + list(vendored_lamps.keys()) + [SELECT_LOCAL]
-    st.session_state.lampfile_options = options
+    ss.lampfile_options = options
 
-if "uploaded_files" not in st.session_state:
-    st.session_state.uploaded_files = {}
+if "uploaded_files" not in ss:
+    ss.uploaded_files = {}
 
-if "fig" not in st.session_state:
-    st.session_state.fig = go.Figure()
+if "fig" not in ss:
+    ss.fig = go.Figure()
     # Adding an empty scatter3d trace
-    st.session_state.fig.add_trace(
+    ss.fig.add_trace(
         go.Scatter3d(
             x=[0],  # No data points yet
             y=[0],
@@ -85,7 +90,9 @@ if "fig" not in st.session_state:
             customdata=["placeholder"],
         )
     )
-fig = st.session_state.fig
+    ss.eyefig = plt.figure()
+    ss.skinfig = plt.figure()
+fig = ss.fig
 
 
 # Set up overall layout
@@ -93,12 +100,9 @@ left_pane, right_pane = st.columns([4, 1])
 
 with st.sidebar:
     # Lamp editing sidebar
-    if (
-        st.session_state.editing == "lamps"
-        and st.session_state.selected_lamp_id is not None
-    ):
+    if ss.editing == "lamps" and ss.selected_lamp_id is not None:
         st.subheader("Edit Luminaire")
-        selected_lamp = room.lamps[st.session_state.selected_lamp_id]
+        selected_lamp = room.lamps[ss.selected_lamp_id]
 
         # name
         st.text_input(
@@ -109,10 +113,10 @@ with st.sidebar:
         )
 
         # File input
-        fname_idx = st.session_state.lampfile_options.index(selected_lamp.filename)
+        fname_idx = ss.lampfile_options.index(selected_lamp.filename)
         fname = st.selectbox(
             "Select lamp",
-            st.session_state.lampfile_options,
+            ss.lampfile_options,
             index=fname_idx,
             key=f"file_{selected_lamp.lamp_id}",
         )
@@ -126,7 +130,7 @@ with st.sidebar:
                 fdata = uploaded_file.read()
                 fname = uploaded_file.name
                 # add the uploaded file to the session state and upload
-                st.session_state.uploaded_files[fname] = fdata
+                ss.uploaded_files[fname] = fdata
                 make_file_list()
             else:
                 fdata = None
@@ -136,15 +140,14 @@ with st.sidebar:
             # only reload if different from before
             if fname != selected_lamp.filename:
                 try:
-                    lampdata = st.session_state.vendored_lamps[fname]
+                    lampdata = ss.vendored_lamps[fname]
                     fdata = requests.get(lampdata).content
                 except KeyError:
-                    fdata = st.session_state.uploaded_files[fname]
+                    fdata = ss.uploaded_files[fname]
 
         # now both fname and fdata are set. the lamp object handles it if they are None.
         if fname != selected_lamp.filename and fdata != selected_lamp.filedata:
             selected_lamp.reload(filename=fname, filedata=fdata)
-            st.rerun()
 
         # plot if there is data to plot with
         if selected_lamp.filedata is not None:
@@ -264,8 +267,8 @@ with st.sidebar:
         close_button = col8.button("Close", use_container_width=True)
 
         if close_button:  # maybe replace with an enable/disable button?
-            st.session_state.editing = None
-            st.session_state.selected_lamp_id = None
+            ss.editing = None
+            ss.selected_lamp_id = None
             if selected_lamp.filename is None:
                 room.remove_lamp(selected_lamp.lamp_id)
                 remove_lamp(selected_lamp)
@@ -273,21 +276,18 @@ with st.sidebar:
         if del_button:
             room.remove_lamp(selected_lamp.lamp_id)
             remove_lamp(selected_lamp)
-            st.session_state.editing = None
-            st.session_state.selected_lamp_id = None
+            ss.editing = None
+            ss.selected_lamp_id = None
             st.rerun()
     # calc zone editing sidebar
-    elif (
-        st.session_state.editing in ["zones", "planes", "volumes"]
-        and st.session_state.selected_zone_id
-    ):
+    elif ss.editing in ["zones", "planes", "volumes"] and ss.selected_zone_id:
         st.subheader("Edit Calculation Zone")
-        if st.session_state.selected_zone_id in SPECIAL_ZONES:
+        if ss.selected_zone_id in SPECIAL_ZONES:
             DISABLED = True
         else:
             DISABLED = False
 
-        if st.session_state.editing == "zones":
+        if ss.editing == "zones":
             cola, colb = st.columns([3, 1])
             calc_types = ["Plane", "Volume"]
             zone_type = cola.selectbox("Select calculation type", options=calc_types)
@@ -298,22 +298,22 @@ with st.sidebar:
                 if zone_type == "Plane":
                     idx = len([v for v in calc_ids if "Plane" in v]) + 1
                     new_zone = CalcPlane(
-                        zone_id=st.session_state.selected_zone_id,
+                        zone_id=ss.selected_zone_id,
                         name="CalcPlane" + str(idx),
                     )
-                    st.session_state.editing = "planes"
+                    ss.editing = "planes"
                 elif zone_type == "Volume":
                     idx = len([v for v in calc_ids if "Vol" in v]) + 1
                     new_zone = CalcVol(
-                        zone_id=st.session_state.selected_zone_id,
+                        zone_id=ss.selected_zone_id,
                         name="CalcVol" + str(idx),
                     )
-                    st.session_state.editing = "volumes"
+                    ss.editing = "volumes"
                 room.add_calc_zone(new_zone)
                 initialize_zone(new_zone)
                 st.rerun()
-        elif st.session_state.editing in ["planes", "volumes"]:
-            selected_zone = room.calc_zones[st.session_state.selected_zone_id]
+        elif ss.editing in ["planes", "volumes"]:
+            selected_zone = room.calc_zones[ss.selected_zone_id]
             st.text_input(
                 "Name",
                 key=f"name_{selected_zone.zone_id}",
@@ -322,7 +322,7 @@ with st.sidebar:
                 disabled=DISABLED,
             )
 
-        if st.session_state.editing == "planes":
+        if ss.editing == "planes":
 
             col1, col2 = st.columns([2, 1])
             # xy dimensions and height
@@ -445,7 +445,7 @@ with st.sidebar:
                 disabled=False,
             )
 
-        elif st.session_state.editing == "volumes":
+        elif ss.editing == "volumes":
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.number_input(
@@ -530,10 +530,10 @@ with st.sidebar:
                 args=[selected_zone],
                 disabled=False,
             )
-        if st.session_state.editing == "zones":
+        if ss.editing == "zones":
             del_button = st.button("Cancel", use_container_width=True, disabled=False)
             close_button = None
-        elif st.session_state.editing in ["planes", "volumes"]:
+        elif ss.editing in ["planes", "volumes"]:
 
             selected_zone.enable = st.checkbox(
                 "Enabled",
@@ -556,18 +556,18 @@ with st.sidebar:
         if close_button:  # maybe replace with an enable/disable button?
             if not isinstance(selected_zone, (CalcPlane, CalcVol)):
                 remove_zone(selected_zone)
-                room.remove_calc_zone(st.session_state.selected_zone_id)
-            st.session_state.editing = None
-            st.session_state.selected_zone_id = None
+                room.remove_calc_zone(ss.selected_zone_id)
+            ss.editing = None
+            ss.selected_zone_id = None
             st.rerun()
         if del_button:
-            room.remove_calc_zone(st.session_state.selected_zone_id)
+            room.remove_calc_zone(ss.selected_zone_id)
             remove_zone(selected_zone)
-            st.session_state.editing = None
-            st.session_state.selected_zone_id = None
+            ss.editing = None
+            ss.selected_zone_id = None
             st.rerun()
     # room editing sidebar
-    elif st.session_state.editing == "room":
+    elif ss.editing == "room":
         st.header("Edit Room")
 
         st.subheader("Dimensions")
@@ -673,40 +673,47 @@ with st.sidebar:
 
         close_button = st.button("Close", use_container_width=True)
         if close_button:
-            st.session_state.editing = None
+            ss.editing = None
             st.rerun()
-    elif st.session_state.editing == "results":
-        st.header("Results")
+    elif ss.editing == "results":
+        st.title("Results")
 
         # do some checks first. do we actually have any lamps?
+        msg = "You haven't added any luminaires yet! Try adding a luminaire by clicking the `Add Luminaire` button, and then hit `Calculate`"
         if not room.lamps:
-            st.warning(
-                "You haven't added any luminaires yet! Try adding a luminaire by clicking the `Add Luminaire` button, and then hit `Calculate`"
-            )
-        # check that all positions and
+            st.warning(msg)
+        elif all(lamp.filedata is None for lampid, lamp in room.lamps.items()):
+            st.warning(msg)
+
+        # check that all positions of lamps and calc zones are where they're supposed to be
         msgs = room.check_positions()
         for msg in msgs:
             if msg is not None:
                 st.warning(msg, icon="⚠️")
 
-        for zone_id, zone in room.calc_zones.items():
-            vals = zone.values
-            if vals is not None:
-                st.subheader(zone.name, ":")
-                st.write("Average:", round(vals.mean(), 3))
-                st.write("Min:", round(vals.min(), 3))
-                st.write("Max:", round(vals.max(), 3))
+        print_standard_zones(room)
+
+        # Display all other results
+        if any(key not in SPECIAL_ZONES for key in room.calc_zones.keys()):
+            st.subheader("User Defined Calculation Zones")
+            for zone_id, zone in room.calc_zones.items():
+                vals = zone.values
+                if vals is not None:
+                    st.subheader(zone.name, ":")
+                    st.write("Average:", round(vals.mean(), 3))
+                    st.write("Min:", round(vals.min(), 3))
+                    st.write("Max:", round(vals.max(), 3))
 
         st.write("")
         st.write("")
         st.write("")
         close_button = st.button("Close", use_container_width=True)
         if close_button:
-            st.session_state.editing = None
+            ss.editing = None
             st.rerun()
     else:
-        st.header("Welcome to GUV-Calcs!")
-        st.subheader(
+        st.title("Welcome to GUV-Calcs!")
+        st.header(
             "A free and open source simulation tool for germicidal UV applications"
         )
         st.write(
@@ -718,7 +725,7 @@ with st.sidebar:
         )
 
         if show_results:
-            st.session_state.editing = "results"
+            ss.editing = "results"
             clear_lamp_cache(room)
             clear_zone_cache(room)
             st.rerun()
@@ -734,7 +741,7 @@ with st.sidebar:
         # add_new_zone(room)
         # if calculate:
         # room.calculate()
-        # st.session_state.editing = "results"
+        # ss.editing = "results"
         # # clear out any other selected objects and remove ones that haven't been fully initialized
         # clear_lamp_cache(room)
         # clear_zone_cache(room)
@@ -749,18 +756,18 @@ with right_pane:
     lamp_names = {None: None}
     for lamp_id, lamp in room.lamps.items():
         lamp_names[lamp.name] = lamp_id
-    lamp_sel_idx = list(lamp_names.values()).index(st.session_state.selected_lamp_id)
+    lamp_sel_idx = list(lamp_names.values()).index(ss.selected_lamp_id)
     selected_lamp_name = st.selectbox(
         "Select luminaire", options=list(lamp_names), index=lamp_sel_idx
     )
     selected_lamp_id = lamp_names[selected_lamp_name]
-    if st.session_state.selected_lamp_id != selected_lamp_id:
+    if ss.selected_lamp_id != selected_lamp_id:
         # if different, update and rerun
-        st.session_state.selected_lamp_id = selected_lamp_id
-        if st.session_state.selected_lamp_id is not None:
+        ss.selected_lamp_id = selected_lamp_id
+        if ss.selected_lamp_id is not None:
             # if lamp is selected, open editing pane
-            st.session_state.editing = "lamps"
-            selected_lamp = room.lamps[st.session_state.selected_lamp_id]
+            ss.editing = "lamps"
+            selected_lamp = room.lamps[ss.selected_lamp_id]
             # initialize widgets in editing pane
             initialize_lamp(selected_lamp)
             # clear widgets of anything to do with zone editing if it's currently loaded
@@ -773,23 +780,23 @@ with right_pane:
     zone_names = {None: None}
     for zone_id, zone in room.calc_zones.items():
         zone_names[zone.name] = zone_id
-    zone_sel_idx = list(zone_names.values()).index(st.session_state.selected_zone_id)
+    zone_sel_idx = list(zone_names.values()).index(ss.selected_zone_id)
     selected_zone_name = st.selectbox(
         "Select calculation zone", options=list(zone_names), index=zone_sel_idx
     )
     selected_zone_id = zone_names[selected_zone_name]
-    if st.session_state.selected_zone_id != selected_zone_id:
-        st.session_state.selected_zone_id = selected_zone_id
-        if st.session_state.selected_zone_id is not None:
-            selected_zone = room.calc_zones[st.session_state.selected_zone_id]
+    if ss.selected_zone_id != selected_zone_id:
+        ss.selected_zone_id = selected_zone_id
+        if ss.selected_zone_id is not None:
+            selected_zone = room.calc_zones[ss.selected_zone_id]
             if isinstance(selected_zone, CalcPlane):
-                st.session_state.editing = "planes"
+                ss.editing = "planes"
                 initialize_zone(selected_zone)
             elif isinstance(selected_zone, CalcVol):
-                st.session_state.editing = "volumes"
+                ss.editing = "volumes"
                 initialize_zone(selected_zone)
             else:
-                st.session_state.editing = "zones"
+                ss.editing = "zones"
             clear_lamp_cache(room)
         st.rerun()
     add_calc_zone = st.button("Add Calculation Zone", use_container_width=True)
@@ -799,14 +806,14 @@ with right_pane:
 
     if calculate:
         room.calculate()
-        st.session_state.editing = "results"
+        ss.editing = "results"
         # clear out any other selected objects and remove ones that haven't been fully initialized
         clear_lamp_cache(room)
         clear_zone_cache(room)
         st.rerun()
 
     if edit_room:
-        st.session_state.editing = "room"
+        ss.editing = "room"
         initialize_room(room)
         clear_lamp_cache(room)
         clear_zone_cache(room)
@@ -819,19 +826,19 @@ with right_pane:
         add_new_zone(room)
 
     # if show_results:
-    # st.session_state.editing = "results"
+    # ss.editing = "results"
     # clear_lamp_cache(room)
     # clear_zone_cache(room)
     # st.rerun()
 
 # plot
 with left_pane:
-    # fig, ax = room.plot(select_id=st.session_state.selected_lamp_id)
+    # fig, ax = room.plot(select_id=ss.selected_lamp_id)
     # st.pyplot(fig,use_container_width=True)
-    if st.session_state.selected_lamp_id:
-        select_id = st.session_state.selected_lamp_id
-    elif st.session_state.selected_zone_id:
-        select_id = st.session_state.selected_zone_id
+    if ss.selected_lamp_id:
+        select_id = ss.selected_lamp_id
+    elif ss.selected_zone_id:
+        select_id = ss.selected_zone_id
     else:
         select_id = None
     fig = room.plotly(fig=fig, select_id=select_id)

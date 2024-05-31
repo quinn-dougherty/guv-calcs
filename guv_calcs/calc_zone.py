@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from ies_utils import get_intensity_vectorized
 from .trigonometry import attitude, to_polar
 
@@ -152,9 +153,16 @@ class CalcZone(object):
                     total_values += values / 10  # convert from mW/Sr to uW/cm2
                 else:
                     raise KeyError("Units not recognized")
-        total_values = total_values.reshape(
-            self.num_points
-        )  # reshape to correct dimensions
+
+        # I have no earthly idea why it is necessary to do it this way
+        if len(self.num_points) == 3:
+            total_values = total_values.reshape(
+                (self.num_points[1], self.num_points[0], self.num_points[2])
+            )
+        elif len(self.num_points) == 2:
+            total_values = total_values.reshape(
+                (self.num_points[1], self.num_points[0])
+            )
         total_values = np.ma.masked_invalid(
             total_values
         )  # mask any nans near light source
@@ -330,3 +338,26 @@ class CalcPlane(CalcZone):
         xy_coords = np.array([np.array((x0, y0)) for x0, y0 in zip(X, Y)])
         zs = np.ones(xy_coords.shape[0]) * self.height
         self.coords = np.stack([xy_coords.T[0], xy_coords.T[1], zs]).T
+
+    def plot_plane(self, fig=None, vmin=None, vmax=None, title=None):
+        """Plot the image of the radiation pattern"""
+        if fig is None:
+            fig, ax = plt.subplots()
+        title = "" if title is None else title
+        if self.values is not None:
+            vmin = self.values.min() if vmin is None else vmin
+            vmax = self.values.max() if vmax is None else vmax
+            extent = [self.y1, self.y2, self.x1, self.x2]
+            # ratio = (self.y2 - self.y1) / (self.x2 - self.x1)
+            # if ratio < 1:
+            # orientation, location = "horizontal", "top"
+            # else:
+            # orientation, location = "vertical", "right"
+            img = ax.imshow(self.values.T, extent=extent, vmin=vmin, vmax=vmax)
+            cbar = fig.colorbar(
+                img,
+                pad=0.03,  # orientation=orientation, location=location
+            )
+            ax.set_title(title)
+            cbar.set_label(self.units, loc="center")
+        return fig
