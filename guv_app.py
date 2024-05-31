@@ -1,12 +1,8 @@
 import streamlit as st
 import requests
-import numpy as np
-import matplotlib.pyplot as plt
-from pathlib import Path
 import plotly.graph_objs as go
 from guv_calcs.room import Room
-from guv_calcs.lamp import Lamp
-from guv_calcs.calc_zone import CalcZone, CalcPlane, CalcVol
+from guv_calcs.calc_zone import CalcPlane, CalcVol
 from guv_calcs._website_helpers import (
     add_new_lamp,
     add_new_zone,
@@ -14,6 +10,7 @@ from guv_calcs._website_helpers import (
     get_local_ies_files,
     add_standard_zones,
     get_disinfection_table,
+    make_file_list,
 )
 from guv_calcs._widget import (
     initialize_lamp,
@@ -32,6 +29,8 @@ from guv_calcs._widget import (
     update_vol_dimensions,
     clear_lamp_cache,
     clear_zone_cache,
+    update_room,
+    initialize_room,
 )
 
 # layout / page setup
@@ -46,8 +45,7 @@ st.write(
 )
 
 SELECT_LOCAL = "Select local file..."
-ies_files = get_local_ies_files()
-vendored_lamps = get_ies_files()
+SPECIAL_ZONES = ["WholeRoomFluence", "SkinLimits", "EyeLimits"]
 
 # Check and initialize session state variables
 if "room" not in st.session_state:
@@ -65,7 +63,9 @@ if "selected_zone_id" not in st.session_state:
     st.session_state.selected_zone_id = None  # use None when no lamp is selected
 
 if "lampfile_options" not in st.session_state:
-     # (name, URL)
+    ies_files = get_local_ies_files()  # local files for testing
+    vendored_lamps = get_ies_files()  # files from assays.osluv.org
+    st.session_state.vendored_lamps = vendored_lamps
     options = [None] + list(vendored_lamps.keys()) + [SELECT_LOCAL]
     st.session_state.lampfile_options = options
 
@@ -82,7 +82,7 @@ if "fig" not in st.session_state:
             z=[0],
             opacity=0,
             showlegend=False,
-            customdata=["placeholder"]
+            customdata=["placeholder"],
         )
     )
 fig = st.session_state.fig
@@ -111,9 +111,12 @@ with st.sidebar:
         # File input
         fname_idx = st.session_state.lampfile_options.index(selected_lamp.filename)
         fname = st.selectbox(
-            "Select lamp", st.session_state.lampfile_options, index=fname_idx,key=f"file_{selected_lamp.lamp_id}"
+            "Select lamp",
+            st.session_state.lampfile_options,
+            index=fname_idx,
+            key=f"file_{selected_lamp.lamp_id}",
         )
-        
+
         # determine fdata from fname
         if fname == SELECT_LOCAL:
             uploaded_file = st.file_uploader(
@@ -122,12 +125,9 @@ with st.sidebar:
             if uploaded_file is not None:
                 fdata = uploaded_file.read()
                 fname = uploaded_file.name
-                # add the uploaded file to the session state and upload  
+                # add the uploaded file to the session state and upload
                 st.session_state.uploaded_files[fname] = fdata
-                vendorfiles = list(vendored_lamps.keys())
-                uploadfiles = list(st.session_state.uploaded_files.keys())
-                options = [None] + vendorfiles + uploadfiles + [SELECT_LOCAL]
-                st.session_state.lampfile_options = options
+                make_file_list()
             else:
                 fdata = None
         elif fname is None:
@@ -136,10 +136,11 @@ with st.sidebar:
             # only reload if different from before
             if fname != selected_lamp.filename:
                 try:
-                    fdata = requests.get(vendored_lamps[fname]).content
+                    lampdata = st.session_state.vendored_lamps[fname]
+                    fdata = requests.get(lampdata).content
                 except KeyError:
                     fdata = st.session_state.uploaded_files[fname]
-        
+
         # now both fname and fdata are set. the lamp object handles it if they are None.
         if fname != selected_lamp.filename and fdata != selected_lamp.filedata:
             selected_lamp.reload(filename=fname, filedata=fdata)
@@ -152,18 +153,17 @@ with st.sidebar:
 
         ########################################################
         ### Somewhere in here there should be spectra stuff!
-        
+
         # if SELECT_LOCAL and selected_lamp.spectra is None:
-            # # button appears prompting user to upload spectra
-            # st.button("Upload spectra")
-            # uploaded_spectra = st.file_uploader(
-                # "Upload spectra CSV", key=f"spectra_upload_{selected_lamp.lamp_id}"
-            # )
-            # if uploaded_spectra is not None:
-                # load_spectra(selected_lamp)
-            # else:
-                # st.write("In order for GUV photobiological safety calculations to be accurate, a spectra is required. Please upload a .csv file with exactly 1 header row, where the first column is Wavelength, and the second column is intensity. :red[If a spectra is not provided, photobiological safety calculations will be inaccurate.]")
-            
+        # # button appears prompting user to upload spectra
+        # st.button("Upload spectra")
+        # uploaded_spectra = st.file_uploader(
+        # "Upload spectra CSV", key=f"spectra_upload_{selected_lamp.lamp_id}"
+        # )
+        # if uploaded_spectra is not None:
+        # load_spectra(selected_lamp)
+        # else:
+        # st.write("In order for GUV photobiological safety calculations to be accurate, a spectra is required. Please upload a .csv file with exactly 1 header row, where the first column is Wavelength, and the second column is intensity. :red[If a spectra is not provided, photobiological safety calculations will be inaccurate.]")
 
         # Position inputs
         col1, col2, col3 = st.columns(3)
@@ -252,14 +252,13 @@ with st.sidebar:
             )
 
         selected_lamp.enable = st.checkbox(
-            "Enable",
+            "Enabled",
             on_change=update_lamp_visibility,
-            value=selected_lamp.enable,
+            # value=selected_lamp.enable,
             args=[selected_lamp],
             key=f"enabled_{selected_lamp.lamp_id}",
         )
 
-        
         del_button = col7.button(
             "Delete Lamp", type="primary", use_container_width=True
         )
@@ -280,11 +279,15 @@ with st.sidebar:
             st.rerun()
     # calc zone editing sidebar
     elif (
-        st.session_state.editing
-        in ["zones", "planes", "volumes"]
+        st.session_state.editing in ["zones", "planes", "volumes"]
         and st.session_state.selected_zone_id
     ):
         st.subheader("Edit Calculation Zone")
+        if st.session_state.selected_zone_id in SPECIAL_ZONES:
+            DISABLED = True
+        else:
+            DISABLED = False
+
         if st.session_state.editing == "zones":
             cola, colb = st.columns([3, 1])
             calc_types = ["Plane", "Volume"]
@@ -292,22 +295,24 @@ with st.sidebar:
             colb.write("")
             colb.write("")
             if colb.button("Go"):
+                calc_ids = room.calc_zones.keys()
                 if zone_type == "Plane":
-                    idx = len([val for val in room.calc_zones.keys() if "Plane" in val]) + 1
+                    idx = len([v for v in calc_ids if "Plane" in v]) + 1
                     new_zone = CalcPlane(
                         zone_id=st.session_state.selected_zone_id,
                         name="CalcPlane" + str(idx),
                     )
                     st.session_state.editing = "planes"
                 elif zone_type == "Volume":
-                    idx = len([val for val in room.calc_zones.keys() if "Vol" in val]) + 1
+                    idx = len([v for v in calc_ids if "Vol" in v]) + 1
                     new_zone = CalcVol(
-                        zone_id=st.session_state.selected_zone_id, name="CalcVol" + str(idx)
+                        zone_id=st.session_state.selected_zone_id,
+                        name="CalcVol" + str(idx),
                     )
                     st.session_state.editing = "volumes"
                 room.add_calc_zone(new_zone)
                 initialize_zone(new_zone)
-                st.rerun()            
+                st.rerun()
         elif st.session_state.editing in ["planes", "volumes"]:
             selected_zone = room.calc_zones[st.session_state.selected_zone_id]
             st.text_input(
@@ -315,6 +320,7 @@ with st.sidebar:
                 key=f"name_{selected_zone.zone_id}",
                 on_change=update_zone_name,
                 args=[selected_zone],
+                disabled=DISABLED,
             )
 
         if st.session_state.editing == "planes":
@@ -327,6 +333,7 @@ with st.sidebar:
                 key=f"height_{selected_zone.zone_id}",
                 on_change=update_plane_dimensions,
                 args=[selected_zone],
+                disabled=DISABLED,
             )
             col2.write("")
             col2.write("")
@@ -339,6 +346,7 @@ with st.sidebar:
                     key=f"x1_{selected_zone.zone_id}",
                     on_change=update_plane_dimensions,
                     args=[selected_zone],
+                    disabled=DISABLED,
                 )
                 st.number_input(
                     "X2",
@@ -346,6 +354,7 @@ with st.sidebar:
                     key=f"x2_{selected_zone.zone_id}",
                     on_change=update_plane_dimensions,
                     args=[selected_zone],
+                    disabled=DISABLED,
                 )
                 st.number_input(
                     "X spacing",
@@ -353,6 +362,7 @@ with st.sidebar:
                     key=f"x_spacing_{selected_zone.zone_id}",
                     on_change=update_plane_dimensions,
                     args=[selected_zone],
+                    disabled=False,
                 )
             with col3:
                 st.number_input(
@@ -361,6 +371,7 @@ with st.sidebar:
                     key=f"y1_{selected_zone.zone_id}",
                     on_change=update_plane_dimensions,
                     args=[selected_zone],
+                    disabled=DISABLED,
                 )
                 st.number_input(
                     "Y2",
@@ -368,6 +379,7 @@ with st.sidebar:
                     key=f"y2_{selected_zone.zone_id}",
                     on_change=update_plane_dimensions,
                     args=[selected_zone],
+                    disabled=DISABLED,
                 )
                 st.number_input(
                     "Y spacing",
@@ -375,31 +387,52 @@ with st.sidebar:
                     key=f"y_spacing_{selected_zone.zone_id}",
                     on_change=update_plane_dimensions,
                     args=[selected_zone],
+                    disabled=False,
                 )
+
+            # Set calculation type (vertical / horizontal / all angles)
             options = ["All angles", "Horizontal irradiance", "Vertical irradiance"]
-            calc_type = st.selectbox("Calculation type", options, index=0)
-            if calc_type == "Horizontal irradiance":
+            if not selected_zone.vert and not selected_zone.horiz:
+                calc_type_index = 0
+            if selected_zone.horiz and not selected_zone.vert:
+                calc_type_index = 1
+            if not selected_zone.horiz and selected_zone.vert:
+                calc_type_index = 2
+            calc_type = st.selectbox(
+                "Calculation type", options, index=calc_type_index, disabled=DISABLED
+            )
+            if calc_type == "All angles":
+                selected_zone.horiz = False
                 selected_zone.vert = False
+            elif calc_type == "Horizontal irradiance":
                 selected_zone.horiz = True
-            elif calc_type == "Vertical irradiance":
-                selected_zone.vert = True
-                selected_zone.horiz = False
-            elif calc_type == "All angles":
                 selected_zone.vert = False
+            elif calc_type == "Vertical irradiance":
                 selected_zone.horiz = False
+                selected_zone.vert = True
 
-            selected_zone.fov80 = st.checkbox("Field of View 80°",
-                                    key=f"fov80_{selected_zone.zone_id}")
+            # Toggle 80 degree field of view
+            selected_zone.fov80 = st.checkbox(
+                "Field of View 80°",
+                key=f"fov80_{selected_zone.zone_id}",
+                disabled=DISABLED,
+            )
 
+            # Set dose vs irradiance
             value_options = ["Irradiance (uW/cm2)", "Dose (mJ/cm2)"]
             value_index = 1 if selected_zone.dose else 0
             value_type = st.selectbox(
-                "Value display type", options=value_options, index=value_index
+                "Value display type",
+                options=value_options,
+                index=value_index,
+                disabled=DISABLED,
             )
             if value_type == "Dose (mJ/cm2)":
                 selected_zone.set_value_type(dose=True)
                 dose_time = st.number_input(
-                    "Exposure time (hours)", value=selected_zone.hours
+                    "Exposure time (hours)",
+                    value=selected_zone.hours,
+                    disabled=DISABLED,
                 )
                 selected_zone.set_dose_time(dose_time)
             elif value_type == "Irradiance (uW/cm2)":
@@ -410,6 +443,7 @@ with st.sidebar:
                 key=f"offset_{selected_zone.zone_id}",
                 on_change=update_plane_dimensions,
                 args=[selected_zone],
+                disabled=False,
             )
 
         elif st.session_state.editing == "volumes":
@@ -421,6 +455,7 @@ with st.sidebar:
                     key=f"x1_{selected_zone.zone_id}",
                     on_change=update_vol_dimensions,
                     args=[selected_zone],
+                    disabled=DISABLED,
                 )
                 st.number_input(
                     "X2",
@@ -428,6 +463,7 @@ with st.sidebar:
                     key=f"x2_{selected_zone.zone_id}",
                     on_change=update_vol_dimensions,
                     args=[selected_zone],
+                    disabled=DISABLED,
                 )
                 st.number_input(
                     "X spacing",
@@ -435,6 +471,7 @@ with st.sidebar:
                     key=f"x_spacing_{selected_zone.zone_id}",
                     on_change=update_vol_dimensions,
                     args=[selected_zone],
+                    disabled=False,
                 )
             with col2:
                 st.number_input(
@@ -443,6 +480,7 @@ with st.sidebar:
                     key=f"y1_{selected_zone.zone_id}",
                     on_change=update_vol_dimensions,
                     args=[selected_zone],
+                    disabled=DISABLED,
                 )
                 st.number_input(
                     "Y2",
@@ -450,6 +488,7 @@ with st.sidebar:
                     key=f"y2_{selected_zone.zone_id}",
                     on_change=update_vol_dimensions,
                     args=[selected_zone],
+                    disabled=DISABLED,
                 )
                 st.number_input(
                     "Y spacing",
@@ -457,6 +496,7 @@ with st.sidebar:
                     key=f"y_spacing_{selected_zone.zone_id}",
                     on_change=update_vol_dimensions,
                     args=[selected_zone],
+                    disabled=False,
                 )
             with col3:
                 st.number_input(
@@ -465,6 +505,7 @@ with st.sidebar:
                     key=f"z1_{selected_zone.zone_id}",
                     on_change=update_vol_dimensions,
                     args=[selected_zone],
+                    disabled=DISABLED,
                 )
                 st.number_input(
                     "Z2",
@@ -472,6 +513,7 @@ with st.sidebar:
                     key=f"z2_{selected_zone.zone_id}",
                     on_change=update_vol_dimensions,
                     args=[selected_zone],
+                    disabled=DISABLED,
                 )
                 st.number_input(
                     "Z spacing",
@@ -479,6 +521,7 @@ with st.sidebar:
                     key=f"z_spacing_{selected_zone.zone_id}",
                     on_change=update_vol_dimensions,
                     args=[selected_zone],
+                    disabled=False,
                 )
 
             st.checkbox(
@@ -486,25 +529,33 @@ with st.sidebar:
                 key=f"offset_{selected_zone.zone_id}",
                 on_change=update_vol_dimensions,
                 args=[selected_zone],
+                disabled=False,
             )
         if st.session_state.editing == "zones":
-            del_button = st.button("Cancel", use_container_width=True)
+            del_button = st.button("Cancel", use_container_width=True, disabled=False)
             close_button = None
         elif st.session_state.editing in ["planes", "volumes"]:
 
             selected_zone.enable = st.checkbox(
-                "Enable",
-                value=selected_zone.enable,
+                "Enabled",
+                # value=selected_zone.enable,
                 on_change=update_zone_visibility,
                 args=[selected_zone],
-                key=f"enable_{selected_zone.zone_id}",
+                key=f"enabled_{selected_zone.zone_id}",
             )
             col7, col8 = st.columns(2)
-            del_button = col7.button("Delete", type="primary", use_container_width=True)
-            close_button = col8.button("Close", use_container_width=True)
+            del_button = col7.button(
+                "Delete",
+                type="primary",
+                use_container_width=True,
+                disabled=DISABLED,
+            )
+            close_button = col8.button(
+                "Close", use_container_width=True, disabled=False
+            )
 
         if close_button:  # maybe replace with an enable/disable button?
-            if isinstance(selected_zone, CalcZone):
+            if not isinstance(selected_zone, (CalcPlane, CalcVol)):
                 remove_zone(selected_zone)
                 room.remove_calc_zone(st.session_state.selected_zone_id)
             st.session_state.editing = None
@@ -518,22 +569,108 @@ with st.sidebar:
             st.rerun()
     # room editing sidebar
     elif st.session_state.editing == "room":
-        st.subheader("Edit Room")
-        # set room dimensions and units
+        st.header("Edit Room")
+
+        st.subheader("Dimensions")
         col_a, col_b, col_c = st.columns(3)
-        units = st.selectbox("Room units", ["meters", "feet"], index=0)
 
-        x = col_a.number_input("Room length (x)", value=room.x)
-        y = col_b.number_input("Room width (y)", value=room.y)
-        z = col_c.number_input("Room height (z)", value=room.z)
+        col_a.number_input(
+            "Room length (x)",
+            key="room_x",
+            on_change=update_room,
+            args=[room],
+        )
+        col_b.number_input(
+            "Room width (y)",
+            key="room_y",
+            on_change=update_room,
+            args=[room],
+        )
+        col_c.number_input(
+            "Room height (z)",
+            key="room_z",
+            on_change=update_room,
+            args=[room],
+        )
+        st.subheader("Units")
+        st.write("Coming soon")
 
-        dimensions = np.array((x, y, z))
-        if units != room.units:
-            room.set_units(units)
-            st.rerun()
-        if (dimensions != room.dimensions).any():
-            room.set_dimensions(dimensions)
-            st.rerun()
+        unitindex = 0 if room.units == "meters" else 1
+        units = st.selectbox(
+            "Room units",
+            ["meters", "feet"],
+            index=unitindex,
+            key="room_units",
+            on_change=update_room,
+            disabled=True,
+        )
+
+        st.subheader("Reflectance")
+        st.write("Coming soon")
+        col1, col2, col3 = st.columns(3)
+        col1.number_input(
+            "Ceiling",
+            min_value=0,
+            max_value=1,
+            key="reflectance_ceiling",
+            on_change=update_room,
+            args=[room],
+            disabled=True,
+        )
+        col2.number_input(
+            "North Wall",
+            min_value=0,
+            max_value=1,
+            key="reflectance_north",
+            on_change=update_room,
+            args=[room],
+            disabled=True,
+        )
+        col3.number_input(
+            "East Wall",
+            min_value=0,
+            max_value=1,
+            key="reflectance_east",
+            on_change=update_room,
+            args=[room],
+            disabled=True,
+        )
+        col1.number_input(
+            "South Wall",
+            min_value=0,
+            max_value=1,
+            key="reflectance_south",
+            on_change=update_room,
+            args=[room],
+            disabled=True,
+        )
+        col2.number_input(
+            "West Wall",
+            min_value=0,
+            max_value=1,
+            key="reflectance_west",
+            on_change=update_room,
+            args=[room],
+            disabled=True,
+        )
+        col3.number_input(
+            "Floor",
+            min_value=0,
+            max_value=1,
+            key="reflectance_floor",
+            on_change=update_room,
+            args=[room],
+            disabled=True,
+        )
+
+        st.subheader("Indoor Chemistry")
+        st.write("Coming soon")
+        st.number_input(
+            "Ozone Decay Constant",
+            min_value=0,
+            key="ozone_decay_constant",
+            disabled=True,
+        )
 
         close_button = st.button("Close", use_container_width=True)
         if close_button:
@@ -541,14 +678,17 @@ with st.sidebar:
             st.rerun()
     elif st.session_state.editing == "results":
         st.header("Results")
-        if not room.calc_zones:
-            st.write("You haven't added any calculation zones yet! Try adding a calculation zone by clicking the `Add calculation zone` button.")
-        else:
-            if all(zone.values is None for zone_id, zone in room.calc_zones.items()):
-                if not room.lamps:
-                    st.write("You haven't added any luminaires yet! Try adding a luminaire by clicking the `Add Luminaire` button, and then hit `Calculate`") 
-                else:
-                    st.write("You've added luminaires and calculation zones - now just hit the red `Calculate` button to view the results.")
+        
+        # do some checks first
+        if not room.lamps:
+            st.warning(
+                "You haven't added any luminaires yet! Try adding a luminaire by clicking the `Add Luminaire` button, and then hit `Calculate`"
+            )
+        msgs = room.check_positions()
+        for msg in msgs:
+            if msg is not None:
+                st.warning(msg, icon="⚠️")
+
         for zone_id, zone in room.calc_zones.items():
             vals = zone.values
             if vals is not None:
@@ -566,36 +706,40 @@ with st.sidebar:
             st.rerun()
     else:
         st.header("Welcome to GUV-Calcs!")
-        st.subheader("A free and open source simulation tool for germicidal UV applications")
-        st.write("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.")
-        
-        show_results = st.button("Show results",use_container_width=True,key="results_tab")
-        
+        st.subheader(
+            "A free and open source simulation tool for germicidal UV applications"
+        )
+        st.write(
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
+        )
+
+        show_results = st.button(
+            "Show results", use_container_width=True, key="results_tab"
+        )
+
         if show_results:
             st.session_state.editing = "results"
             clear_lamp_cache(room)
             clear_zone_cache(room)
             st.rerun()
-        
+
         # col1,col2 = st.columns(2)
         # add_lamp = col1.button("Add lamp",use_container_width=True,key='addlamp_tab')
         # add_calc_zone = col2.button("Add calc zone",use_container_width=True,key="addzone_tab")
         # calculate = col1.button("Calculate!",type="primary",use_container_width=True,key="calculate_tab")
         # show_results = col2.button("Show results",use_container_width=True,key="results_tab")
         # if add_lamp:
-            # add_new_lamp(room)
+        # add_new_lamp(room)
         # if add_calc_zone:
-            # add_new_zone(room)
+        # add_new_zone(room)
         # if calculate:
-            # room.calculate()
-            # st.session_state.editing = "results"
-            # # clear out any other selected objects and remove ones that haven't been fully initialized
-            # clear_lamp_cache(room)
-            # clear_zone_cache(room)
-            # st.rerun()
+        # room.calculate()
+        # st.session_state.editing = "results"
+        # # clear out any other selected objects and remove ones that haven't been fully initialized
+        # clear_lamp_cache(room)
+        # clear_zone_cache(room)
+        # st.rerun()
 
-
-        
 
 with right_pane:
     calculate = st.button("Calculate!", type="primary", use_container_width=True)
@@ -663,6 +807,7 @@ with right_pane:
 
     if edit_room:
         st.session_state.editing = "room"
+        initialize_room(room)
         clear_lamp_cache(room)
         clear_zone_cache(room)
         st.rerun()
@@ -674,10 +819,10 @@ with right_pane:
         add_new_zone(room)
 
     # if show_results:
-        # st.session_state.editing = "results"
-        # clear_lamp_cache(room)
-        # clear_zone_cache(room)
-        # st.rerun()
+    # st.session_state.editing = "results"
+    # clear_lamp_cache(room)
+    # clear_zone_cache(room)
+    # st.rerun()
 
 # plot
 with left_pane:

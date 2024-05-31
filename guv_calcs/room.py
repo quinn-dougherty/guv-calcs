@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay
 import plotly.graph_objs as go
 from guv_calcs.calc_zone import CalcZone, CalcPlane, CalcVol
+from guv_calcs.lamp import Lamp
 from .trigonometry import to_polar
 
 
@@ -16,33 +17,45 @@ class Room:
     characteristics.
     """
 
-    def __init__(self, dimensions=None, units=None):
-        self.units = None
-        self.dimensions = None
-        self.x = None
-        self.y = None
-        self.z = None
-        self.volume = None
+    def __init__(
+        self,
+        units=None,
+        x=None,
+        y=None,
+        z=None,
+        reflectance_ceiling=None,
+        reflectance_north=None,
+        reflectance_east=None,
+        reflectance_south=None,
+        reflectance_west=None,
+        reflectance_floor=None,
+        ozone_decay_constant=None,
+    ):
 
-        default_units = "meters" if units is None else units.lower()
-        self.set_units(default_units)
-
+        self.units = "meters" if units is None else units.lower()
+        self.set_units(self.units)  # just checks that unit entry is valid
         default_dimensions = (
             [6.0, 4.0, 2.7] if self.units == "meters" else [20.0, 13.0, 9.0]
         )
-        default_dimensions = default_dimensions if dimensions is None else dimensions
-        self.set_dimensions(default_dimensions)
+        self.x = default_dimensions[0] if x is None else x
+        self.y = default_dimensions[1] if y is None else y
+        self.z = default_dimensions[2] if z is None else z
+        self.set_dimensions()
+
+        self.reflectance_ceiling = (
+            0 if reflectance_ceiling is None else reflectance_ceiling
+        )
+        self.reflectance_north = 0 if reflectance_north is None else reflectance_north
+        self.reflectance_east = 0 if reflectance_east is None else reflectance_east
+        self.reflectance_south = 0 if reflectance_south is None else reflectance_south
+        self.reflectance_west = 0 if reflectance_west is None else reflectance_west
+        self.reflectance_floor = 0 if reflectance_floor is None else reflectance_floor
+        self.ozone_decay_constant = (
+            0 if ozone_decay_constant is None else ozone_decay_constant
+        )
 
         self.lamps = {}
         self.calc_zones = {}
-
-    def _check_position(self, dimensions):
-        """
-        Internal method to check if an object's dimensions exceed the room's boundaries.
-        """
-        for coord, roomcoord in zip(dimensions, self.dimensions):
-            if coord > roomcoord:
-                warnings.warn("Object exceeds room boundaries!", stacklevel=2)
 
     def set_units(self, units):
         """set room units"""
@@ -50,12 +63,13 @@ class Room:
             raise KeyError("Valid units are `meters` or `feet`")
         self.units = units
 
-    def set_dimensions(self, dimensions):
+    def set_dimensions(self, x=None, y=None, z=None):
         """set room dimensions"""
-        if len(dimensions) != 3:
-            raise ValueError("Room requires exactly three dimensions.")
-        self.dimensions = np.array(dimensions)
-        self.x, self.y, self.z = self.dimensions
+        self.x = self.x if x is None else x
+        self.y = self.y if y is None else y
+        self.z = self.z if z is None else z
+        self.dimensions = (self.x, self.y, self.z)
+        self.volume = self.x * self.y * self.z
 
     def get_units(self):
         """return room units"""
@@ -63,6 +77,7 @@ class Room:
 
     def get_dimensions(self):
         """return room dimensions"""
+        self.dimensions = (self.x, self.y, self.z)
         return self.dimensions
 
     def get_volume(self):
@@ -70,11 +85,44 @@ class Room:
         self.volume = self.x * self.y * self.z
         return self.volume
 
+    def _check_position(self, dimensions, obj_name):
+        """
+        Method to check if an object's dimensions exceed the room's boundaries.
+        """
+        msg = None
+        for coord, roomcoord in zip(dimensions, self.dimensions):
+            if coord > roomcoord:
+                msg = f"{obj_name} exceeds room boundaries!"
+                warnings.warn(msg, stacklevel=2)
+        return msg
+        
+    def check_lamp_position(self, lamp):
+        return self._check_position(lamp.position,lamp.name)
+        
+    def check_zone_position(self, calc_zone):
+        if isinstance(calc_zone, CalcPlane):
+            dimensions = [calc_zone.x2, calc_zone.y2]
+        elif isinstance(calc_zone, CalcVol):
+            dimensions = [calc_zone.x2, calc_zone.y2, calc_zone.z2]
+        elif isinstance(calc_zone, CalcZone):
+            # this is a hack; a generic CalcZone is just a placeholder
+            dimensions = self.dimensions
+        return self._check_position(dimensions, calc_zone.name)
+
+    def check_positions(self):
+        msgs = []
+        for lamp_id,lamp in self.lamps:
+            msgs.append(check_lamp_position(lamp))
+        for zone_id, zone in self.calc_zones:
+            msgs.append(check_zone_position(calc_zone))
+        return msgs
+        
+
     def add_lamp(self, lamp):
         """
         Adds a lamp to the room if it fits within the room's boundaries.
         """
-        self._check_position(lamp.position)
+        self.check_lamp_position(lamp)
         self.lamps[lamp.lamp_id] = lamp
 
     def remove_lamp(self, lamp_id):
@@ -85,13 +133,7 @@ class Room:
         """
         Adds a calculation zone to the room if it fits within the room's boundaries.
         """
-        if isinstance(calc_zone, CalcPlane):
-            dimensions = [calc_zone.x2, calc_zone.y2]
-        elif isinstance(calc_zone, CalcVol):
-            dimensions = [calc_zone.x2, calc_zone.y2, calc_zone.z2]
-        elif isinstance(calc_zone, CalcZone):
-            dimensions = self.dimensions
-        self._check_position(dimensions)
+        self.check_zone_position(calc_zone)
         self.calc_zones[calc_zone.zone_id] = calc_zone
 
     def remove_calc_zone(self, zone_id):

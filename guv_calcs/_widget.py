@@ -2,6 +2,29 @@ import streamlit as st
 from guv_calcs.calc_zone import CalcPlane, CalcVol
 
 
+def update_room(room):
+    """update the room dimensions and the special calc zones that live in it"""
+    room.x = st.session_state["room_x"]
+    room.y = st.session_state["room_y"]
+    room.z = st.session_state["room_z"]
+    room.set_dimensions()
+
+    room.calc_zones["WholeRoomFluence"].set_dimensions(
+        x2=room.x,
+        y2=room.y,
+        z2=room.z,
+    )
+    room.calc_zones["SkinLimits"].set_dimensions(
+        x2=room.x,
+        y2=room.y,
+    )
+    room.calc_zones["EyeLimits"].set_dimensions(
+        x2=room.x,
+        y2=room.y,
+    )
+    st.session_state.room = room
+
+
 def clear_lamp_cache(room):
     """
     remove any lamps from the room and the widgets that don't have an
@@ -26,6 +49,34 @@ def clear_zone_cache(room):
             remove_zone(selected_zone)
             room.remove_calc_zone(st.session_state.selected_zone_id)
     st.session_state.selected_zone_id = None
+
+
+def initialize_room(room):
+    keys = [
+        "room_x",
+        "room_y",
+        "room_z",
+        "reflectance_ceiling",
+        "reflectance_north",
+        "reflectance_east",
+        "reflectance_south",
+        "reflectance_west",
+        "reflectance_floor",
+        "ozone_decay_constant",
+    ]
+    vals = [
+        room.x,
+        room.y,
+        room.z,
+        room.reflectance_ceiling,
+        room.reflectance_north,
+        room.reflectance_east,
+        room.reflectance_south,
+        room.reflectance_west,
+        room.reflectance_floor,
+        room.ozone_decay_constant,
+    ]
+    add_keys(keys, vals)
 
 
 def initialize_lamp(lamp):
@@ -56,7 +107,6 @@ def initialize_lamp(lamp):
         lamp.bank,
         lamp.enabled,
     ]
-    print(lamp.enabled)
     add_keys(keys, vals)
 
 
