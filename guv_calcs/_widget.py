@@ -110,8 +110,6 @@ def initialize_lamp(lamp):
         lamp.enabled,
     ]
     add_keys(keys, vals)
-    # print("Initialized:", lamp.enabled)
-    # print("Widget:", ss[f"enabled_{lamp.lamp_id}"])
 
 
 def initialize_zone(zone):

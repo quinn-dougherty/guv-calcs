@@ -40,12 +40,15 @@ def get_disinfection_table(fluence, room):
     df["CADR-UV [lps]"] = (df["CADR-UV [cfm]"] * 0.47195).round(2)
     num_papers = len(df["Ref"].unique())
     df["Ref"] = np.linspace(1, num_papers + 2, num_papers + 2).astype(int)
-    df = df.rename(columns={"Medium (specific)": "Medium", "Ref": "Reference"})
-    references = df["Full Citation"]
+    df = df.rename(
+        columns={"Medium (specific)": "Medium", "Full Citation": "Reference"}
+    )
+    # references = df["Full Citation"].tolist()
+    # for i, ref in enumerate(references):
 
     newkeys = [
         "Species",
-        "Medium",
+        # "Medium",
         "k [cm2/mJ]",
         "eACH-UV",
         "CADR-UV [cfm]",
@@ -53,7 +56,7 @@ def get_disinfection_table(fluence, room):
         "Reference",
     ]
     df = df[newkeys]
-    return df, references
+    return df
 
 
 def print_standard_zones(room):
@@ -70,6 +73,10 @@ def print_standard_zones(room):
     else:
         fluence_str = None
     st.write("Average fluence: ", fluence_str)
+
+    df = get_disinfection_table(avg_fluence, room)
+
+    st.dataframe(df, hide_index=True)
 
     st.subheader("Photobiological Safety", divider="grey")
     skin = room.calc_zones["SkinLimits"]
@@ -99,6 +106,9 @@ def print_standard_zones(room):
     st.write("Max Eye Dose (8 Hours): ", eye_str)
     st.pyplot(eye.plot_plane(), **kwargs)
 
+    # st.subheader("References", divider="grey")
+    # st.write(references)
+
 
 def add_new_lamp(room):
     # initialize lamp
@@ -123,7 +133,7 @@ def add_new_zone(room):
     new_zone_id = f"CalcZone{new_zone_idx}"
     # this zone object contains nothing but the name and ID and will be
     # replaced by a CalcPlane or CalcVol object
-    new_zone = CalcZone(zone_id=new_zone_id, visible=False)
+    new_zone = CalcZone(zone_id=new_zone_id, enabled=False)
     # add to room
     room.add_calc_zone(new_zone)
     # select for editing

@@ -298,12 +298,14 @@ class CalcPlane(CalcZone):
         self._update()
 
     def set_height(self, height):
+        """set height of calculation plane. currently we only support vertical planes"""
         if type(height) not in [float, int]:
             raise TypeError("Height must be numeric")
         self.height = height
         self._update()
 
     def set_dimensions(self, x1=None, x2=None, y1=None, y2=None):
+        """set the dimensions and update the coordinate points"""
         self.x1 = self.x1 if x1 is None else x1
         self.x2 = self.x2 if x2 is None else x2
         self.y1 = self.y1 if y1 is None else y1
@@ -311,6 +313,7 @@ class CalcPlane(CalcZone):
         self._update()
 
     def set_spacing(self, x_spacing=None, y_spacing=None):
+        """set the fineness of the grid spacing and update the coordinate points"""
         self.x_spacing = self.x_spacing if x_spacing is None else x_spacing
         self.y_spacing = self.y_spacing if y_spacing is None else y_spacing
         self._update()
