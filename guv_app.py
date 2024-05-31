@@ -39,7 +39,7 @@ import warnings
 warnings.filterwarnings("ignore")
 # layout / page setup
 st.set_page_config(
-    page_title="GUV Calcs",
+    page_title="Illuminate-GUV",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -63,11 +63,11 @@ if "lampfile_options" not in ss:
 if "room" not in ss:
     ss.room = Room()
     ss.room = add_standard_zones(ss.room)
-    
+
     preview_lamp = st.query_params.get("preview_lamp")
     if preview_lamp:
         lamp_id = add_new_lamp(ss.room, interactive=False)
-        lamp = ss.room.lamps[f'Lamp{lamp_id}']
+        lamp = ss.room.lamps[f"Lamp{lamp_id}"]
         fdata = requests.get(ss.vendored_lamps[preview_lamp]).content
         lamp.reload(filename=preview_lamp, filedata=fdata)
         ss.room.calculate()
@@ -723,12 +723,47 @@ with st.sidebar:
             ss.editing = None
             st.rerun()
     else:
-        st.title("Welcome to GUV-Calcs!")
+        st.title("Welcome to Illuminate-GUV!")
         st.header(
             "A free and open source simulation tool for germicidal UV applications"
         )
+        st.subheader("Getting Started", divider="grey")
         st.write(
-            "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
+            """To run your first simulation, simply click on the `Add Luminaire` 
+            button on the right panel, select a photometric file from the dropdown menu, 
+            and click the red `Calculate` button to immediately see results."""
+        )
+
+        st.subheader("Luminaires", divider="grey")
+
+        st.write(
+            """For more complex simulations, you can configure the position and orientation of the luminaire,
+            or add more luminaires. You can also upload your own photometric file. Note 
+            that if a luminaire is placed outside the room boundaries, it will not appear in the plot, but will 
+            still participate in calculations, but not if you uncheck the box labeled `Enabled`."""
+        )
+        st.subheader("Calculation Zones", divider="grey")
+        st.write(
+            """Illuminate-GUV comes pre-loaded with three key calculation zones important for 
+            assessing the functioning of GUV systems. One is for assessing system efficacy - average 
+            fluence in the room. The other two are for assessing photobiological safety - the horizontal 
+            irradiance taken at 1.9 meters from the floor over an 8 hour period determines allowable skin 
+            exposure, while vertical irradiance at the same height with an 80 degree field of view in 
+            the horizontal plane determines allowable eye exposure."""
+        )
+        st.write(
+            """You can also define your own calculation zones, whether a plane or a
+            volume. Currently, only planes normal to the floor are supported. These calculation 
+            zones will have their statistics displayed in the Results page alongside the built-in
+            calculation zones."""
+        )
+        st.subheader("Interpreting the Results", divider="grey")
+        st.write("Coming soon")
+
+        st.subheader("Plotting Interaction", divider="grey")
+        st.write(
+            """Click and drag anywhere in the plot to change the view mode. To remove a luminaire or calculation zone from the plot, click on its entry in the legend. 
+                Note that invisible luminaires and calculation zones still participate in calculations."""
         )
 
         show_results = st.button(
