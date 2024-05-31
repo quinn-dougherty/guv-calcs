@@ -1,261 +1,76 @@
 import numpy as np
-from pathlib import Path
-import streamlit as st
 import requests
-from guv_calcs.calc_zone import CalcZone, CalcPlane, CalcVol
+from pathlib import Path
+import pandas as pd
+import streamlit as st
+from guv_calcs.lamp import Lamp
+from guv_calcs.calc_zone import CalcPlane, CalcVol
+from ._widget import initialize_lamp, initialize_zone, clear_lamp_cache,clear_zone_cache
 
+def get_disinfection_table(fluence, room):
 
+    """assumes all lamps are GUV222. in the future will need something cleverer than this"""
 
+    wavelength = 222
 
-def load_spectra(lamp):
-    pass
+    fname = Path('./data/disinfection_table.csv')
+    df = pd.read_csv(fname)
+    df = df[df['Medium']=='Aerosol']
+    df = df[df['wavelength [nm]']==wavelength]
+    keys = ['Species','Medium (specific)','k [cm2/mJ]','Ref','Full Citation']
 
-def reload_lamp(lamp,fname,fdata):
-    # now both fname and fdata are set. the lamp object handles it if they are None.
-    if fname != lamp.filename and fdata != lamp.filedata:
-        lamp.reload(filename=fname, filedata=fdata)
+    df = df[keys].fillna(' ')
 
-def clear_lamp_cache(room):
-    """
-    remove any lamps from the room and the widgets that don't have an 
-    associated filename, and deselect the lamp.
-    """
-    if st.session_state.selected_lamp_id:
-        selected_lamp = room.lamps[st.session_state.selected_lamp_id]
-        if selected_lamp.filename is None:
-            remove_lamp(selected_lamp)
-            room.remove_lamp(st.session_state.selected_lamp_id)
-    st.session_state.selected_lamp_id = None
+    units = 'meters'
+    volume = x*y*z
+    if units == 'meters':
+       volume = volume / (0.3048**3)
+        
+    df['eACH-UV'] = (df['k [cm2/mJ]']*fluence*3.6).round(2)
+    df['CADR-UV [cfm]'] = (df['eACH-UV'] * volume / 60).round(2)
+    df['CADR-UV [lps]'] = (df['CADR-UV [cfm]']*0.47195).round(2)
+    num_papers = len(df['Ref'].unique())
+    df['Ref'] = np.linspace(1,num_papers+2,num_papers+2).astype(int)
+    df = df.rename(columns={'Medium (specific)':'Medium',
+                           'Ref':'Reference'})
+    references = df['Full Citation']
 
+    newkeys = ['Species','Medium','k [cm2/mJ]','eACH-UV','CADR-UV [cfm]','CADR-UV [lps]','Reference']
+    df = df[newkeys]
 
-def clear_zone_cache(room):
-    """
-    remove any calc zones from the room and the widgets that don't have an
-    associated zone type, and deselect the zone
-    """    
-    if st.session_state.selected_zone_id:
-        selected_zone = room.calc_zones[st.session_state.selected_zone_id]
-        if isinstance(selected_zone, CalcZone):
-            remove_zone(selected_zone)
-            room.remove_calc_zone(st.session_state.selected_zone_id)
-    st.session_state.selected_zone_id = None
+def add_new_lamp(room):
+    # initialize lamp
+    new_lamp_idx = len(room.lamps) + 1
+    # set initial position
+    xpos, ypos = get_lamp_position(lamp_idx=new_lamp_idx, x=room.x, y=room.y)
+    new_lamp_id = f"Lamp{new_lamp_idx}"
+    new_lamp = Lamp(lamp_id=new_lamp_id, x=xpos, y=ypos, z=room.z)
+    # add to session and to room
+    # st.session_state.lamps.append(new_lamp)
+    room.add_lamp(new_lamp)
+    initialize_lamp(new_lamp)
+    # Automatically select for editing
+    st.session_state.editing = "lamps"
+    st.session_state.selected_lamp_id = new_lamp.lamp_id
+    clear_zone_cache(room)
+    st.rerun()
 
-
-def initialize_lamp(lamp):
-    """initialize lamp editing widgets with their present values"""
-    keys = [
-        f"name_{lamp.lamp_id}",
-        f"pos_x_{lamp.lamp_id}",
-        f"pos_y_{lamp.lamp_id}",
-        f"pos_z_{lamp.lamp_id}",
-        f"aim_x_{lamp.lamp_id}",
-        f"aim_y_{lamp.lamp_id}",
-        f"aim_z_{lamp.lamp_id}",
-        f"rotation_{lamp.lamp_id}",
-        f"orientation_{lamp.lamp_id}",
-        f"tilt_{lamp.lamp_id}",
-        f"visible_{lamp.lamp_id}",
-    ]
-    vals = [
-        lamp.name,
-        lamp.x,
-        lamp.y,
-        lamp.z,
-        lamp.aimx,
-        lamp.aimy,
-        lamp.aimz,
-        lamp.angle,
-        lamp.heading,
-        lamp.bank,
-        lamp.visible,
-    ]
-    add_keys(keys, vals)
-
-
-def initialize_zone(zone):
-    """initialize zone editing widgets with their present values"""
-    keys = [
-        f"name_{zone.zone_id}",
-        f"x1_{zone.zone_id}",
-        f"y1_{zone.zone_id}",
-        f"x2_{zone.zone_id}",
-        f"y2_{zone.zone_id}",
-        f"x_spacing_{zone.zone_id}",
-        f"y_spacing_{zone.zone_id}",
-        f"offset_{zone.zone_id}",
-        f"visible_{zone.zone_id}",
-    ]
-    if isinstance(zone, CalcPlane):
-        keys.append(f"height_{zone.zone_id}"),        
-        keys.append(f"fov80_{zone.zone_id}"),
-    elif isinstance(zone, CalcVol):
-        keys.append(f"z1_{zone.zone_id}")
-        keys.append(f"z2_{zone.zone_id}")
-        keys.append(f"z_spacing_{zone.zone_id}")
-
-    vals = [
-        zone.name,
-        zone.x1,
-        zone.y1,
-        zone.x2,
-        zone.y2,
-        zone.x_spacing,
-        zone.y_spacing,
-        zone.offset,
-        zone.visible,
-    ]
-    if isinstance(zone, CalcPlane):
-        vals.append(zone.height)
-        vals.append(zone.fov80)
-    elif isinstance(zone, CalcVol):
-        vals.append(zone.z1)
-        vals.append(zone.z2)
-        vals.append(zone.z_spacing)
-
-    add_keys(keys, vals)
-
-
-def update_lamp_name(lamp):
-    """update lamp name from widget"""
-    lamp.name = st.session_state[f"name_{lamp.lamp_id}"]
-
-
-def update_zone_name(zone):
-    """update zone name from widget"""
-    zone.name = st.session_state[f"name_{zone.zone_id}"]
-
-
-def update_lamp_visibility(lamp):
-    """update whether lamp shows in plot or not from widget"""
-    lamp.visible = st.session_state[f"visible_{lamp.lamp_id}"]
-
-
-def update_zone_visibility(zone):
-    """update whether calculation zone shows up in plot or not from widget"""
-    zone.visible = st.session_state[f"visible_{zone.zone_id}"]
-
-
-def update_plane_dimensions(zone):
-    """update dimensions and spacing of calculation volume from widgets"""
-    zone.x1 = st.session_state[f"x1_{zone.zone_id}"]
-    zone.x2 = st.session_state[f"x2_{zone.zone_id}"]
-    zone.y1 = st.session_state[f"y1_{zone.zone_id}"]
-    zone.y2 = st.session_state[f"y2_{zone.zone_id}"]
-    zone.height = st.session_state[f"height_{zone.zone_id}"]
-
-    zone.x_spacing = st.session_state[f"x_spacing_{zone.zone_id}"]
-    zone.y_spacing = st.session_state[f"y_spacing_{zone.zone_id}"]
-
-    zone.offset = st.session_state[f"offset_{zone.zone_id}"]
-
-    zone._update()
-
-
-def update_vol_dimensions(zone):
-    """update dimensions and spacing of calculation volume from widgets"""
-    zone.x1 = st.session_state[f"x1_{zone.zone_id}"]
-    zone.x2 = st.session_state[f"x2_{zone.zone_id}"]
-    zone.y1 = st.session_state[f"y1_{zone.zone_id}"]
-    zone.y2 = st.session_state[f"y2_{zone.zone_id}"]
-    zone.z1 = st.session_state[f"z1_{zone.zone_id}"]
-    zone.z2 = st.session_state[f"z2_{zone.zone_id}"]
-
-    zone.x_spacing = st.session_state[f"x_spacing_{zone.zone_id}"]
-    zone.y_spacing = st.session_state[f"y_spacing_{zone.zone_id}"]
-    zone.z_spacing = st.session_state[f"z_spacing_{zone.zone_id}"]
-
-    zone.offset = st.session_state[f"offset_{zone.zone_id}"]
-
-    zone._update
-
-
-def update_lamp_position(lamp):
-    """update lamp position and aim point based on widget input"""
-    x = st.session_state[f"pos_x_{lamp.lamp_id}"]
-    y = st.session_state[f"pos_y_{lamp.lamp_id}"]
-    z = st.session_state[f"pos_z_{lamp.lamp_id}"]
-    lamp.move(x, y, z)
-    # update widgets
-    update_lamp_aim_point(lamp)
-
-
-def update_lamp_orientation(lamp):
-    """update lamp object aim point, and tilt/orientation widgets"""
-    aimx = st.session_state[f"aim_x_{lamp.lamp_id}"]
-    aimy = st.session_state[f"aim_y_{lamp.lamp_id}"]
-    aimz = st.session_state[f"aim_z_{lamp.lamp_id}"]
-    lamp.aim(aimx, aimy, aimz)
-    st.session_state[f"orientation_{lamp.lamp_id}"] = lamp.heading
-    st.session_state[f"tilt_{lamp.lamp_id}"] = lamp.bank
-
-
-def update_from_tilt(lamp, room):
-    """update tilt+aim point in lamp, and aim point widget"""
-    tilt = st.session_state[f"tilt_{lamp.lamp_id}"]
-    lamp.set_tilt(tilt, dimensions=room.dimensions)
-    update_lamp_aim_point(lamp)
-
-
-def update_from_orientation(lamp, room):
-    """update orientation+aim point in lamp, and aim point widget"""
-    orientation = st.session_state[f"orientation_{lamp.lamp_id}"]
-    lamp.set_orientation(orientation, room.dimensions)
-    update_lamp_aim_point(lamp)
-
-
-def update_lamp_aim_point(lamp):
-    """reset aim point widget if any other parameter has been altered"""
-    st.session_state[f"aim_x_{lamp.lamp_id}"] = lamp.aimx
-    st.session_state[f"aim_y_{lamp.lamp_id}"] = lamp.aimy
-    st.session_state[f"aim_z_{lamp.lamp_id}"] = lamp.aimz
-
-
-def remove_lamp(lamp):
-    """remove widget parameters if lamp has been deleted"""
-    keys = [
-        f"name_{lamp.lamp_id}",
-        f"pos_x_{lamp.lamp_id}",
-        f"pos_y_{lamp.lamp_id}",
-        f"pos_z_{lamp.lamp_id}",
-        f"aim_x_{lamp.lamp_id}",
-        f"aim_y_{lamp.lamp_id}",
-        f"aim_z_{lamp.lamp_id}",
-        f"rotation_{lamp.lamp_id}",
-        f"orientation_{lamp.lamp_id}",
-        f"tilt_{lamp.lamp_id}",
-    ]
-    remove_keys(keys)
-
-
-def remove_zone(zone):
-    """remove widget parameters if calculation zone has been deleted"""
-    if not isinstance(zone, CalcZone):
-        keys = [
-            f"name_{zone.zone_id}",
-            f"x_{zone.zone_id}",
-            f"y_{zone.zone_id}",
-            f"x_spacing_{zone.zone_id}",
-            f"y_spacing_{zone.zone_id}",
-            f"offset_{zone.zone_id}" f"visible_{zone.zone_id}",
-        ]
-        if isinstance(zone, CalcPlane):
-            keys.append(f"height_{zone.zone_id}")
-        elif isinstance(zone, CalcVol):
-            keys.append(f"zdim_{zone.zone_id}")
-            keys.append(f"zspace_{zone.zone_id}")
-        remove_keys(keys)
-
-
-def remove_keys(keys):
-    """remove parameters from widget"""
-    for key in keys:
-        del st.session_state[key]
-
-
-def add_keys(keys, vals):
-    """initialize widgets with parameters"""
-    for key, val in zip(keys, vals):
-        st.session_state[key] = val
+def add_new_zone(room):
+    # initialize calculation zone
+    new_zone_idx = len(room.calc_zones) + 1
+    new_zone_id = f"CalcZone{new_zone_idx}"
+    # this zone object contains nothing but the name and ID and will be
+    # replaced by a CalcPlane or CalcVol object
+    new_zone = CalcZone(
+        zone_id=new_zone_id, visible=False
+    )
+    # add to room
+    room.add_calc_zone(new_zone)
+    # select for editing
+    st.session_state.editing = "zones"
+    st.session_state.selected_zone_id = new_zone_id
+    clear_lamp_cache(room)
+    st.rerun()
 
 
 def add_standard_zones(room):
@@ -358,7 +173,7 @@ def _place_points(grid_size, num_points):
 
 def get_local_ies_files():
     """placeholder until I get to grabbing the ies files off the website"""
-    root = Path("./ies_files")
+    root = Path("./data/ies_files")
     p = root.glob("**/*")
     ies_files = [x for x in p if x.is_file() and x.suffix == ".ies"]
     return ies_files

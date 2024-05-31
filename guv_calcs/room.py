@@ -103,14 +103,56 @@ class Room:
         Triggers the calculation of lighting values in each calculation zone based on the current lamps in the room.
         """
         for name, zone in self.calc_zones.items():
-            zone.calculate_values(lamps=self.lamps)
+            if zone.enable:
+                zone.calculate_values(lamps=self.lamps)
 
-    def _set_visibility(self, fig, trace_id: str, val: bool):
-        """change visibility of lamp or calc zone trace"""
-        traces = [trace.name for trace in fig.data]
-        if trace_id in traces:
-            fig.data[traces.index(trace_id)].visible = val
-        return fig
+    # def _set_visibility(self, fig, trace_id, val):
+        # """change visibility of lamp or calc zone trace"""
+        # traces = [trace.name for trace in fig.data]
+        # if trace_id in traces:
+            # # fig.data[traces.index(trace_id)].visible = val
+            # fig.update_traces(visible=val,selector=({"name": trace_id}))
+            # print(val)
+        # return fig
+
+    # def _get_visibility(self, fig, trace_id):
+        # """get visibility status of a trace"""
+        # traces = [trace.name for trace in fig.data]
+        # if trace_id in traces:
+            # vis = fig.data[traces.index(trace_id)].visible
+        # else: 
+            # vis = None
+        # return vis
+
+    def _set_color(self, select_id, label, enable):
+        if not enable:
+            color = "#d1d1d1" # grey
+        elif select_id is not None and select_id == label:
+            color = "#cc61ff" # purple
+        else:
+            color = "#5e8ff7" # blue
+        return color
+
+    def _update_trace_by_id(self, fig, trace_id, **updates):
+        # Iterate through all traces
+        for trace in fig.data:
+            # Check if trace customdata matches the trace_id
+            if trace.customdata and trace.customdata[0] == trace_id:
+                # Update trace properties based on additional keyword arguments
+                for key, value in updates.items():
+                    setattr(trace, key, value)
+
+    def _remove_traces_by_ids(self, fig, active_ids):
+        # Convert fig.data, which is a tuple, to a list to allow modifications
+        traces = list(fig.data)
+        
+        # Iterate in reverse to avoid modifying the list while iterating
+        for i in reversed(range(len(traces))):
+            trace = traces[i]
+            # Check if the trace's customdata is set and its ID is not in the list of active IDs
+            if trace.customdata and trace.customdata[0] not in active_ids:
+                del traces[i]  # Remove the trace from the list
+        fig.data = traces
 
     def _plot_lamp(self, lamp, fig, select_id=None, color="#cc61ff"):
         """plot lamp as a photometric web"""
@@ -118,12 +160,8 @@ class Room:
         x, y, z = lamp.transform(lamp.photometric_coords, scale=lamp.values.max()).T
         Theta, Phi, R = to_polar(*lamp.photometric_coords.T)
         tri = Delaunay(np.column_stack((Theta.flatten(), Phi.flatten())))
-        label = lamp.lamp_id
-        if select_id is not None and select_id == label:
-            lampcolor = "#cc61ff"  #'#ff6161'
-        else:
-            lampcolor = "#5e8ff7"
-
+        lampcolor = self._set_color(select_id,label=lamp.lamp_id,enable=lamp.enable)
+        
         lamptrace = go.Mesh3d(
             x=x,
             y=y,
@@ -133,8 +171,11 @@ class Room:
             k=tri.simplices[:, 2],
             color=lampcolor,
             opacity=0.4,
-            name=label,
-            showlegend=False,
+            name=lamp.name,
+            customdata=[lamp.lamp_id],
+            legendgroup="lamps",
+            legendgrouptitle_text="Lamps",
+            showlegend=True
         )
         aimtrace = go.Scatter3d(
             x=[lamp.position[0], lamp.aim_point[0]],
@@ -142,15 +183,17 @@ class Room:
             z=[lamp.position[2], lamp.aim_point[2]],
             mode="lines",
             line=dict(color="black", width=2, dash="dash"),
-            name=label + "_aim",
+            name=lamp.name,
+            customdata=[lamp.lamp_id + "_aim"],
             showlegend=False,
         )
-        traces = [trace.name for trace in fig.data]
-        if lamptrace.name not in traces:
+        
+        traces = [trace.customdata[0] for trace in fig.data]
+        if lamptrace.customdata[0] not in traces:
             fig.add_trace(lamptrace)
             fig.add_trace(aimtrace)
         else:
-            fig.update_traces(
+            self._update_trace_by_id(fig,lamp.lamp_id, 
                 x=x,
                 y=y,
                 z=z,
@@ -158,23 +201,18 @@ class Room:
                 j=tri.simplices[:, 1],
                 k=tri.simplices[:, 2],
                 color=lampcolor,
-                selector=({"name": lamptrace.name}),
-            )
-            fig.update_traces(
+                name=lamp.name) 
+
+            self._update_trace_by_id(fig, lamp.lamp_id+'_aim', 
                 x=[lamp.position[0], lamp.aim_point[0]],
                 y=[lamp.position[1], lamp.aim_point[1]],
                 z=[lamp.position[2], lamp.aim_point[2]],
-                selector=({"name": aimtrace.name}),
             )
         return fig
 
     def _plot_plane(self, zone, fig, select_id=None):
         """plot a calculation plane"""
-        label = zone.zone_id
-        if select_id is not None and select_id == label:
-            zonecolor = "#cc61ff" # slightly pale red
-        else:
-            zonecolor = "#5e8ff7"
+        zonecolor = self._set_color(select_id,zone.zone_id,zone.enable)
         zonetrace = go.Scatter3d(
             x=zone.coords.T[0],
             y=zone.coords.T[1],
@@ -182,18 +220,21 @@ class Room:
             mode="markers",
             marker=dict(size=2, color=zonecolor),
             opacity=0.5,
-            name=label,
+            legendgroup="zones",
+            legendgrouptitle_text="Calculation Zones",
+            showlegend=True,
+            name=zone.name,
+            customdata=[zone.zone_id],
         )
         traces = [trace.name for trace in fig.data]
         if zonetrace.name not in traces:
             fig.add_trace(zonetrace)
         else:
-            fig.update_traces(
+            self._update_trace_by_id(fig, zone.zone_id,
                 x=zone.coords.T[0],
                 y=zone.coords.T[1],
                 z=zone.coords.T[2],
                 marker=dict(size=2, color=zonecolor),
-                selector=({"name": zonetrace.name}),
             )
 
         return fig
@@ -238,11 +279,7 @@ class Room:
             y_coords.extend([vertices[v1][1], vertices[v2][1], None])
             z_coords.extend([vertices[v1][2], vertices[v2][2], None])
 
-        label = zone.zone_id
-        if select_id is not None and select_id == label:
-            zonecolor = "#cc61ff" 
-        else:
-            zonecolor = "#5e8ff7"
+        zonecolor = self._set_color(select_id,label=zone.zone_id,enable=zone.enable)
         # Create a single trace for all edges
         zonetrace = go.Scatter3d(
             x=x_coords,
@@ -250,45 +287,48 @@ class Room:
             z=z_coords,
             mode="lines",
             line=dict(color=zonecolor, width=5, dash="dot"),
-            name=label,
+            legendgroup="zones",
+            legendgrouptitle_text="Calculation Zones",
+            name=zone.name,
+            customdata=[zone.zone_id],
         )
         traces = [trace.name for trace in fig.data]
         if zonetrace.name not in traces:
             fig.add_trace(zonetrace)
         else:
-            fig.update_traces(
+            self._update_trace_by_id(fig, zone.zone_id,
                 x=x_coords,
                 y=y_coords,
                 z=z_coords,
                 line=dict(color=zonecolor, width=5, dash="dot"),
-                selector=({"name": zonetrace.name}),
-            )
+                )
         return fig
 
-    def plotly(self, fig=None, select_id=None, title=""):
+    def plotly(self, fig=None, select_id=None, title="",):
         """plot all """
         if fig is None:
             fig = go.Figure()
+
+        # first delete any extraneous traces
+        lamp_ids = list(self.lamps.keys())
+        aim_ids = [lampid+'_aim' for lampid in lamp_ids]
+        zone_ids = list(self.calc_zones.keys())
+        for active_ids in [lamp_ids,aim_ids,zone_ids]:
+            self._remove_traces_by_ids(fig, active_ids)
+
         # plot lamps
         for lamp_id, lamp in self.lamps.items():
-            if lamp.filedata is not None and lamp.visible:
+            if lamp.filedata is not None:
                 fig = self._plot_lamp(lamp=lamp, fig=fig, select_id=select_id)
-                fig = self._set_visibility(fig, lamp_id, True)
-            else:
-                fig = self._set_visibility(fig, lamp_id, False)
-        # plot zones
+                traces = [trace.name for trace in fig.data]
+                # vis = self._get_visibility(fig, lamp_id)
+                # fig = self._set_visibility(fig, lamp_id+"_aim", vis)
         for zone_id, zone in self.calc_zones.items():
-            if zone.visible:
-                if isinstance(zone, CalcPlane):
-                    fig = self._plot_plane(zone=zone, fig=fig, select_id=select_id)
-                    fig = self._set_visibility(fig, zone_id, True)
-                elif isinstance(zone, CalcVol):
-                    fig = self._plot_vol(zone=zone, fig=fig, select_id=select_id)
-                    fig = self._set_visibility(fig, zone_id, True)
-            else:
-                fig = self._set_visibility(fig, zone_id, False)
+            if isinstance(zone, CalcPlane):
+                fig = self._plot_plane(zone=zone, fig=fig, select_id=select_id)
+            elif isinstance(zone, CalcVol):
+                fig = self._plot_vol(zone=zone, fig=fig, select_id=select_id)
         # set views
-
         fig.update_layout(
             scene=dict(
                 xaxis=dict(range=[0, self.x]),
@@ -300,10 +340,19 @@ class Room:
             ),
             height=750,
             autosize=False,
-            margin=go.layout.Margin(l=0, r=0, b=0, t=0, pad=0)
-        
+            margin=go.layout.Margin(l=0, r=0, b=0, t=0, pad=0),
+            legend=dict(
+                x=0,
+                y=1,
+                yanchor='top',
+                xanchor='left',
+                # orientation='h',
+                # font=dict(family="Courier", size=12, color="blue"),
+                # bgcolor="LightSteelBlue"
+            ),
         )
         fig.update_scenes(camera_projection_type="orthographic")
+        # print(dir(fig.layout.scene.camera))
         return fig
 
     def plot(

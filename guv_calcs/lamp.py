@@ -30,11 +30,12 @@ class Lamp:
         aimy=None,
         aimz=None,
         intensity_units=None,
-        visible=None,
+        radiation_type=None,
+        enable=None,
     ):
         self.lamp_id = lamp_id
         self.name = lamp_id if name is None else name
-        self.visible = True if visible is None else visible
+        self.enable = True if enable is None else enable
         # position
         self.x = 0.0 if x is None else x
         self.y = 0.0 if y is None else y
@@ -49,7 +50,8 @@ class Lamp:
         
         # misc
         self.intensity_units = "mW/Sr" if intensity_units is None else intensity_units
-        
+        self.radiation_type = radiation_type
+
         # load file and coordinates
         self.filename = filename
         self.filedata = filedata
@@ -102,6 +104,10 @@ class Lamp:
             self.lampdict["height"],
         ]
         self.input_watts = self.lampdict["input_watts"]
+        self.keywords = self.lampdict["keywords"]
+        if "_RADIATIONTYPE" in self.keywords.keys():
+            self.radiation_type = self.keywords["_RADIATIONTYPE"]
+        
 
     def _orient(self):
         """
@@ -172,6 +178,7 @@ class Lamp:
             self.units = None
             self.dimensions = None
             self.input_watts = None
+            self.keywords = None
             self.coords = None
             self.photometric_coords = None
 

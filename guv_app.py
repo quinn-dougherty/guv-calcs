@@ -8,10 +8,14 @@ from guv_calcs.room import Room
 from guv_calcs.lamp import Lamp
 from guv_calcs.calc_zone import CalcZone, CalcPlane, CalcVol
 from guv_calcs._website_helpers import (
-    get_lamp_position,
+    add_new_lamp,
+    add_new_zone,
     get_ies_files,
     get_local_ies_files,
     add_standard_zones,
+    get_disinfection_table,
+)
+from guv_calcs._widget import (
     initialize_lamp,
     initialize_zone,
     remove_lamp,
@@ -29,11 +33,6 @@ from guv_calcs._website_helpers import (
     clear_lamp_cache,
     clear_zone_cache,
 )
-
-# TODO:
-# suppress that widget warning in the terminal (eventually, or whatever)
-# figure out way to get plotly to show fullscreen
-# calc zone plotting. for fluence/volumes: draw a dashed line box. for planes: scatterplot just like acuity.
 
 # layout / page setup
 st.set_page_config(
@@ -83,6 +82,7 @@ if "fig" not in st.session_state:
             z=[0],
             opacity=0,
             showlegend=False,
+            customdata=["placeholder"]
         )
     )
 fig = st.session_state.fig
@@ -122,6 +122,7 @@ with st.sidebar:
             if uploaded_file is not None:
                 fdata = uploaded_file.read()
                 fname = uploaded_file.name
+                # add the uploaded file to the session state and upload  
                 st.session_state.uploaded_files[fname] = fdata
                 vendorfiles = list(vendored_lamps.keys())
                 uploadfiles = list(st.session_state.uploaded_files.keys())
@@ -250,13 +251,15 @@ with st.sidebar:
                 args=[selected_lamp, room],
             )
 
-        st.checkbox(
-            "Show in plot",
+        selected_lamp.enable = st.checkbox(
+            "Enable",
             on_change=update_lamp_visibility,
+            value=selected_lamp.enable,
             args=[selected_lamp],
-            key=f"visible_{selected_lamp.lamp_id}",
+            key=f"enabled_{selected_lamp.lamp_id}",
         )
 
+        
         del_button = col7.button(
             "Delete Lamp", type="primary", use_container_width=True
         )
@@ -489,11 +492,12 @@ with st.sidebar:
             close_button = None
         elif st.session_state.editing in ["planes", "volumes"]:
 
-            st.checkbox(
-                "Show in plot",
+            selected_zone.enable = st.checkbox(
+                "Enable",
+                value=selected_zone.enable,
                 on_change=update_zone_visibility,
                 args=[selected_zone],
-                key=f"visible_{selected_zone.zone_id}",
+                key=f"enable_{selected_zone.zone_id}",
             )
             col7, col8 = st.columns(2)
             del_button = col7.button("Delete", type="primary", use_container_width=True)
@@ -536,13 +540,22 @@ with st.sidebar:
             st.session_state.editing = None
             st.rerun()
     elif st.session_state.editing == "results":
-        st.subheader("Results")
+        st.header("Results")
+        if not room.calc_zones:
+            st.write("You haven't added any calculation zones yet! Try adding a calculation zone by clicking the `Add calculation zone` button.")
+        else:
+            if all(zone.values is None for zone_id, zone in room.calc_zones.items()):
+                if not room.lamps:
+                    st.write("You haven't added any luminaires yet! Try adding a luminaire by clicking the `Add Luminaire` button, and then hit `Calculate`") 
+                else:
+                    st.write("You've added luminaires and calculation zones - now just hit the red `Calculate` button to view the results.")
         for zone_id, zone in room.calc_zones.items():
             vals = zone.values
-            st.write(zone.name, ":")
-            st.write("Average:", round(vals.mean(), 3))
-            st.write("Min:", round(vals.min(), 3))
-            st.write("Max:", round(vals.max(), 3))
+            if vals is not None:
+                st.subheader(zone.name, ":")
+                st.write("Average:", round(vals.mean(), 3))
+                st.write("Min:", round(vals.min(), 3))
+                st.write("Max:", round(vals.max(), 3))
 
         st.write("")
         st.write("")
@@ -552,13 +565,41 @@ with st.sidebar:
             st.session_state.editing = None
             st.rerun()
     else:
-        st.write("")
+        st.header("Welcome to GUV-Calcs!")
+        st.subheader("A free and open source simulation tool for germicidal UV applications")
+        st.write("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.")
+        
+        show_results = st.button("Show results",use_container_width=True,key="results_tab")
+        
+        if show_results:
+            st.session_state.editing = "results"
+            clear_lamp_cache(room)
+            clear_zone_cache(room)
+            st.rerun()
+        
+        # col1,col2 = st.columns(2)
+        # add_lamp = col1.button("Add lamp",use_container_width=True,key='addlamp_tab')
+        # add_calc_zone = col2.button("Add calc zone",use_container_width=True,key="addzone_tab")
+        # calculate = col1.button("Calculate!",type="primary",use_container_width=True,key="calculate_tab")
+        # show_results = col2.button("Show results",use_container_width=True,key="results_tab")
+        # if add_lamp:
+            # add_new_lamp(room)
+        # if add_calc_zone:
+            # add_new_zone(room)
+        # if calculate:
+            # room.calculate()
+            # st.session_state.editing = "results"
+            # # clear out any other selected objects and remove ones that haven't been fully initialized
+            # clear_lamp_cache(room)
+            # clear_zone_cache(room)
+            # st.rerun()
+
+
+        
 
 with right_pane:
     calculate = st.button("Calculate!", type="primary", use_container_width=True)
-    # st.divider()
     edit_room = st.button("Edit Room", use_container_width=True)
-    # st.divider()
 
     # Dropdown menus for luminaires; map display names to IDs
     lamp_names = {None: None}
@@ -609,8 +650,8 @@ with right_pane:
         st.rerun()
     add_calc_zone = st.button("Add Calculation Zone", use_container_width=True)
 
-    st.write("")
-    show_results = st.button("Show results")
+    # st.write("")
+    # show_results = st.button("Show results")
 
     if calculate:
         room.calculate()
@@ -626,47 +667,17 @@ with right_pane:
         clear_zone_cache(room)
         st.rerun()
 
-    # Adding new lamps
     if add_lamp:
-        # initialize lamp
-        new_lamp_idx = len(room.lamps) + 1
-        # set initial position
-        xpos, ypos = get_lamp_position(lamp_idx=new_lamp_idx, x=room.x, y=room.y)
-        new_lamp_id = f"Lamp{new_lamp_idx}"
-        new_lamp = Lamp(lamp_id=new_lamp_id, x=xpos, y=ypos, z=room.z)
-        # add to session and to room
-        # st.session_state.lamps.append(new_lamp)
-        room.add_lamp(new_lamp)
-        initialize_lamp(new_lamp)
-        # Automatically select for editing
-        st.session_state.editing = "lamps"
-        st.session_state.selected_lamp_id = new_lamp.lamp_id
-        clear_zone_cache(room)
-        st.rerun()
+        add_new_lamp(room)
 
-    # Adding new calculation zones
     if add_calc_zone:
-        # initialize calculation zone
-        new_zone_idx = len(room.calc_zones) + 1
-        new_zone_id = f"CalcZone{new_zone_idx}"
-        # this zone object contains nothing but the name and ID and will be
-        # replaced by a CalcPlane or CalcVol object
-        new_zone = CalcZone(
-            zone_id=new_zone_id, visible=False
-        )
-        # add to room
-        room.add_calc_zone(new_zone)
-        # select for editing
-        st.session_state.editing = "zones"
-        st.session_state.selected_zone_id = new_zone_id
-        clear_lamp_cache(room)
-        st.rerun()
+        add_new_zone(room)
 
-    if show_results:
-        st.session_state.editing = "results"
-        clear_lamp_cache(room)
-        clear_zone_cache(room)
-        st.rerun()
+    # if show_results:
+        # st.session_state.editing = "results"
+        # clear_lamp_cache(room)
+        # clear_zone_cache(room)
+        # st.rerun()
 
 # plot
 with left_pane:
