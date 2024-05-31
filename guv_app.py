@@ -251,10 +251,9 @@ with st.sidebar:
                 args=[selected_lamp, room],
             )
 
-        selected_lamp.enable = st.checkbox(
+        selected_lamp.enabled = st.checkbox(
             "Enabled",
             on_change=update_lamp_visibility,
-            # value=selected_lamp.enable,
             args=[selected_lamp],
             key=f"enabled_{selected_lamp.lamp_id}",
         )
@@ -679,11 +678,12 @@ with st.sidebar:
     elif st.session_state.editing == "results":
         st.header("Results")
         
-        # do some checks first
+        # do some checks first. do we actually have any lamps?
         if not room.lamps:
             st.warning(
                 "You haven't added any luminaires yet! Try adding a luminaire by clicking the `Add Luminaire` button, and then hit `Calculate`"
             )
+        # check that all positions and
         msgs = room.check_positions()
         for msg in msgs:
             if msg is not None:

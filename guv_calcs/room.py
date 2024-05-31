@@ -111,9 +111,9 @@ class Room:
 
     def check_positions(self):
         msgs = []
-        for lamp_id,lamp in self.lamps:
+        for lamp_id,lamp in self.lamps.items():
             msgs.append(check_lamp_position(lamp))
-        for zone_id, zone in self.calc_zones:
+        for zone_id, zone in self.calc_zones.items():
             msgs.append(check_zone_position(calc_zone))
         return msgs
         
