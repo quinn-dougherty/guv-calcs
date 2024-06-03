@@ -51,7 +51,9 @@ if "room" not in ss:
         lamp_id = add_new_lamp(ss.room, interactive=False)
         lamp = ss.room.lamps[f"Lamp{lamp_id}"]
         fdata = requests.get(ss.vendored_lamps[preview_lamp]).content
+        spectra_data = requests.get(ss.vendored_spectra[preview_lamp]).content
         lamp.reload(filename=preview_lamp, filedata=fdata)
+        lamp.load_spectra(spectra_data)        
         ss.room.calculate()
         ss.editing = "results"
         st.rerun()
