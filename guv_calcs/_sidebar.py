@@ -51,6 +51,7 @@ def lamp_sidebar(room):
         key=f"file_{selected_lamp.lamp_id}",
     )
 
+    spectra_data = None  # TEMP
     # determine fdata from fname
     if fname == SELECT_LOCAL:
         uploaded_file = st.file_uploader(
@@ -72,17 +73,46 @@ def lamp_sidebar(room):
             try:
                 lampdata = ss.vendored_lamps[fname]
                 fdata = requests.get(lampdata).content
+                spectra_source = ss.vendored_spectra[fname]
+                spectra_data = requests.get(spectra_source).content
             except KeyError:
                 fdata = ss.uploaded_files[fname]
 
     # now both fname and fdata are set. the lamp object handles it if they are None.
     if fname != selected_lamp.filename and fdata != selected_lamp.filedata:
         selected_lamp.reload(filename=fname, filedata=fdata)
+        if spectra_data is not None:
+            selected_lamp.load_spectra(spectra_data)
 
     # plot if there is data to plot with
+    PLOT_IES, PLOT_SPECTRA = False, False
+    cols = st.columns(3)
     if selected_lamp.filedata is not None:
+        PLOT_IES = cols[0].checkbox("Show polar plot", key="show_polar", value=True)
+    if selected_lamp.spectra is not None:
+        PLOT_SPECTRA = cols[1].checkbox(
+            "Show spectra plot", key="show_spectra", value=True
+        )
+        yscale = cols[2].selectbox(
+            "Spectra y-scale",
+            options=["Spectra y-scale", "linear", "log"],
+            label_visibility="collapsed",
+        )
+        if yscale == "Spectra y-scale":
+            yscale = "linear"
+
+    if PLOT_IES and PLOT_SPECTRA:
+        cols = st.columns(2)
+        iesfig, iesax = selected_lamp.plot_ies()
+        specfig = selected_lamp.plot_spectra(title="", figsize=(5, 6), yscale=yscale)
+        cols[0].pyplot(iesfig, use_container_width=True)
+        cols[1].pyplot(specfig, use_container_width=True)
+    elif PLOT_IES and not PLOT_SPECTRA:
         iesfig, iesax = selected_lamp.plot_ies()
         st.pyplot(iesfig, use_container_width=True)
+    elif PLOT_SPECTRA and not PLOT_IES:
+        specfig = selected_lamp.plot_spectra(title="", yscale=yscale)
+        st.pyplot(specfig, use_container_width=True)
 
     ########################################################
     ### Somewhere in here there should be spectra stuff!

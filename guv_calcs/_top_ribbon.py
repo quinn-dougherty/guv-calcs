@@ -13,17 +13,15 @@ ss = st.session_state
 
 
 def top_ribbon(room):
-    
-    cols = st.columns([1,1,1.5,1,1.5,1,1])
-    
-    edit_room = cols[0].button("  Edit    Room  ", use_container_width=True)    
-    add_lamp = cols[1].button("Add Luminaire", use_container_width=True)
-    lamp_select(room, cols[2])
-    add_calc_zone = cols[3].button("Add Calc Zone", use_container_width=True)
-    zone_select(room, cols[4])
-    
-    show_results = cols[5].button(" Show Results", use_container_width=True)
-    calculate = cols[6].button("   Calculate! ", type="primary", use_container_width=True)
+
+    c = st.columns([1, 1, 1.5, 1, 1.5, 1, 1])
+    edit_room = c[0].button("Edit Room  ", use_container_width=True)
+    add_lamp = c[1].button("Add Luminaire", use_container_width=True)
+    lamp_select(room, c[2])
+    add_calc_zone = c[3].button("Add Calc Zone", use_container_width=True)
+    zone_select(room, c[4])
+    show_results = c[5].button("Show Results", use_container_width=True)
+    calc = c[6].button("Calculate!", type="primary", use_container_width=True)
 
     st.divider()
     if calculate:

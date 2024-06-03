@@ -24,7 +24,7 @@ class Lamp:
     filename: Path, str, or None
         If None or not pathlike, `filedata` must not be None
     filedata: Path or bytes or None
-        Set by `filename` if filename is pathlike. 
+        Set by `filename` if filename is pathlike.
     x, y, z: floats
         Sets initial position of lamp in cartesian space
     angle: float
@@ -33,15 +33,15 @@ class Lamp:
         Sets initial aim point of lamp in cartesian space.
     spectra_source: Path or bytes or None
         Data source for spectra
-    spectra: arraylike 
-        arraylike of shape (2,N) where N = the number of (wavelength, relative intensity) pairs 
+    spectra: arraylike
+        arraylike of shape (2,N) where N = the number of (wavelength, relative intensity) pairs
         that define the lamp's spectra. Set by `spectra_source` if provided, otherwise None, or may be set directly.
     intensity_units: str
         generally assumed to be `mW/Sr`. Future features will support other units, like uW/cm2
     radiation_type: str
         set from ies file keywords. Currently, only UVC222 is supported for GUV features.
     enabled: bool
-        determines if lamp participates in calculations      
+        determines if lamp participates in calculations
     """
 
     def __init__(
@@ -75,7 +75,7 @@ class Lamp:
         self.angle = 0.0 if angle is None else angle
         self.aimx = self.x if aimx is None else aimx
         self.aimy = self.y if aimy is None else aimy
-        self.aimz = self.z-1.0 if aimz is None else aimz
+        self.aimz = self.z - 1.0 if aimz is None else aimz
         self.aim(self.aimx, self.aimy, self.aimz)  # updates heading and bank
 
         # misc
@@ -103,27 +103,27 @@ class Lamp:
         """load spectral data from source"""
 
         # load csv data from either path or bytes
-        
-        if isinstance(self.spectra_source, (str,pathlib.PosixPath)):
+
+        if isinstance(self.spectra_source, (str, pathlib.PosixPath)):
             filepath = Path(self.spectra_source)
             filetype = filepath.suffix.lower()
-            if filetype !=".csv":
+            if filetype != ".csv":
                 raise Exception("Currently, only .csv files are supported")
-            csv_data = open(self.spectra_source, mode='r', newline='')
+            csv_data = open(self.spectra_source, mode="r", newline="")
         elif isinstance(self.spectra_source, bytes):
             # Convert bytes to a string using StringIO to simulate a file
-            csv_data = io.StringIO(self.spectra_source.decode('utf-8'))
+            csv_data = StringIO(self.spectra_source.decode("utf-8"))
         else:
             raise TypeError(f"File type {type(self.spectra_source)} not valid")
 
         # read each line
         spectra = []
-        for i,row in enumerate(csv.reader(csv_data, delimiter=",")):
+        for i, row in enumerate(csv.reader(csv_data, delimiter=",")):
             try:
-                wavelength,intensity = map(float,row)
-                spectra.append((wavelength,intensity))
+                wavelength, intensity = map(float, row)
+                spectra.append((wavelength, intensity))
             except ValueError:
-                if i == 0: #probably a header    
+                if i == 0:  # probably a header
                     continue
                 else:
                     warnings.warn(f"Skipping invalid datarow: {row}")
@@ -131,12 +131,11 @@ class Lamp:
 
     def load_spectra(self, spectra_soure):
         """
-        external method to set self.spectra_source and invoke internal method 
+        external method to set self.spectra_source and invoke internal method
         _load_spectra to read the source into self.spectra
         """
         self.spectra_source = spectra_soure
         self._load_spectra()
-        
 
     def _check_filename(self):
         """
@@ -340,7 +339,9 @@ class Lamp:
         fig, ax = plot_ies(fdata=self.valdict, title=title)
         return fig, ax
 
-    def plot_spectra(self,title=None,fig=None,ax=None, figsize=(6.4,4.8),yscale='linear'):
+    def plot_spectra(
+        self, title=None, fig=None, ax=None, figsize=(6.4, 4.8), yscale="linear"
+    ):
         """
         plot the spectra of the lamp
 
@@ -350,21 +351,21 @@ class Lamp:
         # in case spectra has not been set
         if self.spectra is None:
             return None
-        
+
         if fig is None:
             fig, ax = plt.subplots(figsize=figsize)
 
         x = self.spectra[0]
         y = self.spectra[1]
-        ax.plot(x,y)
-        ax.grid(True, which="both", ls="--", c='gray', alpha=0.3)
-        ax.set_xlabel('Wavelength [nm]')
-        ax.set_ylabel('Relative intensity [%]')
+        ax.plot(x, y)
+        ax.grid(True, which="both", ls="--", c="gray", alpha=0.3)
+        ax.set_xlabel("Wavelength [nm]")
+        ax.set_ylabel("Relative intensity [%]")
         ax.set_yscale(yscale)
 
         title = self.name if title is None else title
         ax.set_title(title)
-        
+        return fig
 
     def plot_3d(
         self,
@@ -389,7 +390,7 @@ class Lamp:
                 *np.array((self.aim_point, self.position)).T,
                 linestyle="--",
                 color="black",
-                alpha=0.7
+                alpha=0.7,
             )
         ax.set_title(title)
         ax.view_init(azim=azim, elev=elev)
@@ -423,7 +424,7 @@ class Lamp:
                 *np.array((self.aim_point, self.position)).T,
                 linestyle="--",
                 color="black",
-                alpha=0.7
+                alpha=0.7,
             )
         ax.set_title(title)
         if xlim is not None:

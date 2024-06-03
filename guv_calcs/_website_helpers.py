@@ -272,12 +272,16 @@ def get_local_ies_files():
 
 def get_ies_files():
     """retrive ies files from osluv website"""
-    BASE_URL = "https://assay.osluv.org/static/assay/"
+    BASE_URL = "https://assay.osluv.org/static/assay"
 
     index_data = requests.get(f"{BASE_URL}/index.json").json()
 
-    output = {}
-    for guid, data in index_data.items():
-        output[data["reporting_name"]] = f'{BASE_URL}/{data["slug"]}.ies'
+    ies_files = {}
+    spectra = {}
 
-    return output
+    for guid, data in index_data.items():
+        filename = data["slug"]
+        ies_files[data["reporting_name"]] = f"{BASE_URL}/{filename}.ies"
+        spectra[data["reporting_name"]] = f"{BASE_URL}/{filename}-spectrum.csv"
+
+    return ies_files, spectra

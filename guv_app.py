@@ -35,8 +35,8 @@ SPECIAL_ZONES = ["WholeRoomFluence", "SkinLimits", "EyeLimits"]
 
 if "lampfile_options" not in ss:
     ies_files = get_local_ies_files()  # local files for testing
-    vendored_lamps = get_ies_files()  # files from assays.osluv.org
-    ss.vendored_lamps = vendored_lamps
+    vendored_lamps, vendored_spectra = get_ies_files()  # files from assays.osluv.org
+    ss.vendored_lamps, ss.vendored_spectra = vendored_lamps, vendored_spectra
     options = [None] + list(vendored_lamps.keys()) + [SELECT_LOCAL]
     ss.lampfile_options = options
 
@@ -84,6 +84,7 @@ if "fig" not in ss:
     )
     ss.eyefig = plt.figure()
     ss.skinfig = plt.figure()
+    # ss.spectrafig, ss.spectraax = plt.subplots()
 fig = ss.fig
 
 
