@@ -26,22 +26,13 @@ from guv_calcs._widget import (
 )
 
 SELECT_LOCAL = "Select local file..."
+WEIGHTS_URL = "data/UV Spectral Weighting Curves.csv"
 SPECIAL_ZONES = ["WholeRoomFluence", "SkinLimits", "EyeLimits"]
 ss = st.session_state
 
 
-def lamp_sidebar(room):
-    st.subheader("Edit Luminaire")
-    selected_lamp = room.lamps[ss.selected_lamp_id]
-
-    # name
-    st.text_input(
-        "Name",
-        key=f"name_{selected_lamp.lamp_id}",
-        on_change=update_lamp_name,
-        args=[selected_lamp],
-    )
-
+def lamp_file_options(selected_lamp):
+    """widgets and plots to do with lamp file sources"""
     # File input
     fname_idx = ss.lampfile_options.index(selected_lamp.filename)
     fname = st.selectbox(
@@ -83,13 +74,14 @@ def lamp_sidebar(room):
         selected_lamp.reload(filename=fname, filedata=fdata)
         if spectra_data is not None:
             selected_lamp.load_spectra(spectra_data)
+            selected_lamp.load_weighted_spectra(WEIGHTS_URL)
 
     # plot if there is data to plot with
     PLOT_IES, PLOT_SPECTRA = False, False
     cols = st.columns(3)
     if selected_lamp.filedata is not None:
         PLOT_IES = cols[0].checkbox("Show polar plot", key="show_polar", value=True)
-    if selected_lamp.spectra is not None:
+    if selected_lamp.spectra is not None and len(selected_lamp.spectra)>0:
         PLOT_SPECTRA = cols[1].checkbox(
             "Show spectra plot", key="show_spectra", value=True
         )
@@ -102,9 +94,9 @@ def lamp_sidebar(room):
             yscale = "linear"
 
     if PLOT_IES and PLOT_SPECTRA:
-        cols = st.columns(2)
         iesfig, iesax = selected_lamp.plot_ies()
         specfig = selected_lamp.plot_spectra(title="", figsize=(5, 6), yscale=yscale)
+        cols = st.columns(2)
         cols[0].pyplot(iesfig, use_container_width=True)
         cols[1].pyplot(specfig, use_container_width=True)
     elif PLOT_IES and not PLOT_SPECTRA:
@@ -127,6 +119,22 @@ def lamp_sidebar(room):
     # load_spectra(selected_lamp)
     # else:
     # st.write("In order for GUV photobiological safety calculations to be accurate, a spectra is required. Please upload a .csv file with exactly 1 header row, where the first column is Wavelength, and the second column is intensity. :red[If a spectra is not provided, photobiological safety calculations will be inaccurate.]")
+
+
+def lamp_sidebar(room):
+    st.subheader("Edit Luminaire")
+    selected_lamp = room.lamps[ss.selected_lamp_id]
+
+    # name
+    st.text_input(
+        "Name",
+        key=f"name_{selected_lamp.lamp_id}",
+        on_change=update_lamp_name,
+        args=[selected_lamp],
+    )
+
+    # file input
+    lamp_file_options(selected_lamp)
 
     # Position inputs
     col1, col2, col3 = st.columns(3)

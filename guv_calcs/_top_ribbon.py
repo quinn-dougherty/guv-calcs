@@ -24,7 +24,7 @@ def top_ribbon(room):
     calc = c[6].button("Calculate!", type="primary", use_container_width=True)
 
     st.divider()
-    if calculate:
+    if calc:
         room.calculate()
         ss.editing = "results"
         # clear out any other selected objects and remove ones that haven't been fully initialized

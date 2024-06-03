@@ -33,9 +33,17 @@ class Lamp:
         Sets initial aim point of lamp in cartesian space.
     spectra_source: Path or bytes or None
         Data source for spectra
-    spectra: arraylike
-        arraylike of shape (2,N) where N = the number of (wavelength, relative intensity) pairs
-        that define the lamp's spectra. Set by `spectra_source` if provided, otherwise None, or may be set directly.
+    spectra_weight_source: Path or bytes or None
+        Data source for spectral weighting
+    spectra: dict
+        Dictionary where keys are labels and values are arraylikes of shape (2,N) where N = the number of
+        (wavelength, relative intensity) pairs that define the lamp's spectra. Set by `spectra_source` if provided,
+        otherwise None, or may be passed directly. An unweighted spectra will have the key 'Unweighted'. If an unlabeled
+        arraylike is passed, it will be assumed to be unweighted and weighted spectra will be calculated on that basis, if
+        a `spectral_weight_source` was passed.
+    spectral_weightings: dict
+        Dictionary where keys are labels for a particular spectral weighting, and values are arraylikes of shape (2,N)
+        where N = the number of (wavelength, relative intensity) pairs.
     intensity_units: str
         generally assumed to be `mW/Sr`. Future features will support other units, like uW/cm2
     radiation_type: str
@@ -58,6 +66,7 @@ class Lamp:
         aimy=None,
         aimz=None,
         spectra_source=None,
+        spectral_weight_source=None,
         spectra=None,
         intensity_units=None,
         radiation_type=None,
@@ -84,10 +93,15 @@ class Lamp:
         self.radiation_type = radiation_type
 
         # spectra
-        self.spectra = spectra
+        self.spectra = {} if spectra is None else spectra
         self.spectra_source = spectra_source
         if self.spectra_source is not None:
             self._load_spectra()
+        self.spectral_weight_source = spectral_weight_source
+        self.spectral_weightings = {}
+        if self.spectral_weight_source is not None:
+            self._load_weighted_spectra()
+            self._update_spectra()
 
         # load file and coordinates
         self.filename = filename
@@ -99,26 +113,28 @@ class Lamp:
             self._load()
             self._orient()
 
-    def _load_spectra(self):
-        """load spectral data from source"""
-
-        # load csv data from either path or bytes
-
-        if isinstance(self.spectra_source, (str, pathlib.PosixPath)):
-            filepath = Path(self.spectra_source)
+    def _load_csv(self, datasource):
+        """load csv data from either path or bytes"""
+        if isinstance(datasource, (str, pathlib.PosixPath)):
+            filepath = Path(datasource)
             filetype = filepath.suffix.lower()
             if filetype != ".csv":
-                raise Exception("Currently, only .csv files are supported")
-            csv_data = open(self.spectra_source, mode="r", newline="")
-        elif isinstance(self.spectra_source, bytes):
+                raise TypeError("Currently, only .csv files are supported")
+            csv_data = open(datasource, mode="r", newline="")
+        elif isinstance(datasource, bytes):
             # Convert bytes to a string using StringIO to simulate a file
-            csv_data = StringIO(self.spectra_source.decode("utf-8"))
+            csv_data = StringIO(datasource.decode("utf-8"))
         else:
-            raise TypeError(f"File type {type(self.spectra_source)} not valid")
+            raise TypeError(f"File type {type(datasource)} not valid")
+        return csv_data
 
+    def _load_spectra(self):
+        """load spectral data from source"""
+        csv_data = self._load_csv(self.spectra_source)
+        reader = csv.reader(csv_data, delimiter=",")
         # read each line
         spectra = []
-        for i, row in enumerate(csv.reader(csv_data, delimiter=",")):
+        for i, row in enumerate(reader):
             try:
                 wavelength, intensity = map(float, row)
                 spectra.append((wavelength, intensity))
@@ -127,7 +143,7 @@ class Lamp:
                     continue
                 else:
                     warnings.warn(f"Skipping invalid datarow: {row}")
-        self.spectra = np.array(spectra).T
+        self.spectra["Unweighted"] = np.array(spectra).T
 
     def load_spectra(self, spectra_soure):
         """
@@ -136,6 +152,48 @@ class Lamp:
         """
         self.spectra_source = spectra_soure
         self._load_spectra()
+
+    def _load_spectral_weightings(self):
+        """load weightings"""
+        csv_data = self._load_csv(self.spectral_weight_source)
+        reader = csv.reader(csv_data, delimiter=",")
+        headers = next(reader, None)  # get headers
+
+        data = {}
+        for header in headers:
+            data[header] = []
+        for row in reader:
+            for header, value in zip(headers, row):
+                data[header].append(float(value))
+
+        # update self.spectra
+        wavelengths = data[headers[0]]
+        for i, (key, val) in enumerate(data.items()):
+            if i == 0:
+                continue
+            else:
+                values = np.array(val)
+                self.spectral_weightings[key] = np.stack((wavelengths, values)).T
+
+    def _update_spectra(self):
+        """
+        weight the unweighted spectra by all potential spectral weightings and add to
+        the self.spectra dict
+        """
+        wavelengths = self.spectra["Unweighted"][0]
+        intensities = self.spectra["Unweighted"][1]
+        for key, val in self.spectral_weightings.items():
+            weights = np.interp(wavelengths, val[0], val[1])
+            self.spectra[key] = np.stack((wavelengths, intensities * weights))
+
+    def load_weighted_spectra(self, spectral_weight_source):
+        """
+        external method to set self.spectral_weight_source and invoke internal method
+        _load_weighted_spectra to read the weightings and update self.spectra
+        """
+        self.spectral_weight_source = spectral_weight_source
+        self._load_spectral_weightings()
+        self._update_spectra()
 
     def _check_filename(self):
         """
@@ -343,29 +401,26 @@ class Lamp:
         self, title=None, fig=None, ax=None, figsize=(6.4, 4.8), yscale="linear"
     ):
         """
-        plot the spectra of the lamp
+        plot the spectra of the lamp. at minimum, the unweighted spectra, possibly all
+        weighted spectra as well.
 
         `yscale` is generally either "linear" or "log", but any matplotlib scale is permitted
         """
 
-        # in case spectra has not been set
-        if self.spectra is None:
-            return None
-
         if fig is None:
             fig, ax = plt.subplots(figsize=figsize)
 
-        x = self.spectra[0]
-        y = self.spectra[1]
-        ax.plot(x, y)
-        ax.grid(True, which="both", ls="--", c="gray", alpha=0.3)
-        ax.set_xlabel("Wavelength [nm]")
-        ax.set_ylabel("Relative intensity [%]")
-        ax.set_yscale(yscale)
+        if self.spectra is not None:
+            for key, val in self.spectra.items():
+                ax.plot(val[0], val[1], label=key)
+            ax.legend()
+            ax.grid(True, which="both", ls="--", c="gray", alpha=0.3)
+            ax.set_xlabel("Wavelength [nm]")
+            ax.set_ylabel("Relative intensity [%]")
+            ax.set_yscale(yscale)
 
-        title = self.name if title is None else title
-        ax.set_title(title)
-        return fig
+            title = self.name if title is None else title
+            ax.set_title(title)
 
     def plot_3d(
         self,
