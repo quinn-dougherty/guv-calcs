@@ -257,6 +257,7 @@ def zone_sidebar(room):
         DISABLED = True
     else:
         DISABLED = False
+    selected_zone = room.calc_zones[ss.selected_zone_id]
 
     if ss.editing == "zones":
         cola, colb = st.columns([3, 1])
@@ -264,7 +265,7 @@ def zone_sidebar(room):
         zone_type = cola.selectbox("Select calculation type", options=calc_types)
         colb.write("")
         colb.write("")
-        if colb.button("Go"):
+        if colb.button("Go",use_container_width="True"):
             calc_ids = room.calc_zones.keys()
             if zone_type == "Plane":
                 idx = len([v for v in calc_ids if "Plane" in v]) + 1
@@ -506,7 +507,6 @@ def zone_sidebar(room):
         del_button = st.button("Cancel", use_container_width=True, disabled=False)
         close_button = None
     elif ss.editing in ["planes", "volumes"]:
-
         selected_zone.enable = st.checkbox(
             "Enabled",
             # value=selected_zone.enable,
@@ -531,8 +531,8 @@ def zone_sidebar(room):
         ss.selected_zone_id = None
         st.rerun()
     if del_button:
-        room.remove_calc_zone(ss.selected_zone_id)
         remove_zone(selected_zone)
+        room.remove_calc_zone(ss.selected_zone_id)
         ss.editing = None
         ss.selected_zone_id = None
         st.rerun()

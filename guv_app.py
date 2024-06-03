@@ -89,8 +89,12 @@ if "fig" not in ss:
 fig = ss.fig
 
 
-# Set up overall layout
-left_pane, right_pane = st.columns([1.5, 3])
+top_ribbon(room)
+
+if ss.editing == "results":
+    left_pane, right_pane = st.columns([3,1.5])
+else:
+    left_pane, right_pane = st.columns([1.5, 3])
 
 with left_pane:
     # Lamp editing sidebar
@@ -110,7 +114,7 @@ with left_pane:
 # plot
 with right_pane:
 
-    top_ribbon(room)
+    
 
     if ss.selected_lamp_id:
         select_id = ss.selected_lamp_id

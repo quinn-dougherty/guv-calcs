@@ -22,6 +22,7 @@ class Room:
         x=None,
         y=None,
         z=None,
+        standard=None,
         reflectance_ceiling=None,
         reflectance_north=None,
         reflectance_east=None,
@@ -40,6 +41,8 @@ class Room:
         self.y = default_dimensions[1] if y is None else y
         self.z = default_dimensions[2] if z is None else z
         self.set_dimensions()
+        
+        self.standard = standard
 
         self.reflectance_ceiling = (
             0 if reflectance_ceiling is None else reflectance_ceiling
