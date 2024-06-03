@@ -1,4 +1,6 @@
 from pathlib import Path
+import csv
+from io import StringIO
 import pathlib
 import warnings
 import numpy as np
@@ -13,6 +15,33 @@ class Lamp:
     Represents a lamp with properties defined by a photometric data file.
     This class handles the loading of IES photometric data, orienting the lamp in 3D space,
     and provides methods for moving, rotating, and aiming the lamp
+
+    Parameters:
+    lamp_id: str
+        A unique identifier for the lamp. Only required parameter.
+    name: str
+        Non-unique display name for the lamp
+    filename: Path, str, or None
+        If None or not pathlike, `filedata` must not be None
+    filedata: Path or bytes or None
+        Set by `filename` if filename is pathlike. 
+    x, y, z: floats
+        Sets initial position of lamp in cartesian space
+    angle: float
+        Sets lamps initial rotation on its own axis.
+    aimx, aimy, aimz: floats
+        Sets initial aim point of lamp in cartesian space.
+    spectra_source: Path or bytes or None
+        Data source for spectra
+    spectra: arraylike 
+        arraylike of shape (2,N) where N = the number of (wavelength, relative intensity) pairs 
+        that define the lamp's spectra. Set by `spectra_source` if provided, otherwise None, or may be set directly.
+    intensity_units: str
+        generally assumed to be `mW/Sr`. Future features will support other units, like uW/cm2
+    radiation_type: str
+        set from ies file keywords. Currently, only UVC222 is supported for GUV features.
+    enabled: bool
+        determines if lamp participates in calculations      
     """
 
     def __init__(
@@ -25,10 +54,11 @@ class Lamp:
         y=None,
         z=None,
         angle=None,
-        aim_point=None,
         aimx=None,
         aimy=None,
         aimz=None,
+        spectra_source=None,
+        spectra=None,
         intensity_units=None,
         radiation_type=None,
         enabled=None,
@@ -45,12 +75,19 @@ class Lamp:
         self.angle = 0.0 if angle is None else angle
         self.aimx = self.x if aimx is None else aimx
         self.aimy = self.y if aimy is None else aimy
-        self.aimz = -1.0 if aimz is None else aimz
+        self.aimz = self.z-1.0 if aimz is None else aimz
         self.aim(self.aimx, self.aimy, self.aimz)  # updates heading and bank
 
         # misc
+        # self.spectra = spectra # this should be a dict with keys `Wavelength (nm)` and `Relative Intensity (%)`
         self.intensity_units = "mW/Sr" if intensity_units is None else intensity_units
         self.radiation_type = radiation_type
+
+        # spectra
+        self.spectra = spectra
+        self.spectra_source = spectra_source
+        if self.spectra_source is not None:
+            self._load_spectra()
 
         # load file and coordinates
         self.filename = filename
@@ -61,6 +98,45 @@ class Lamp:
         if self.filedata is not None:
             self._load()
             self._orient()
+
+    def _load_spectra(self):
+        """load spectral data from source"""
+
+        # load csv data from either path or bytes
+        
+        if isinstance(self.spectra_source, (str,pathlib.PosixPath)):
+            filepath = Path(self.spectra_source)
+            filetype = filepath.suffix.lower()
+            if filetype !=".csv":
+                raise Exception("Currently, only .csv files are supported")
+            csv_data = open(self.spectra_source, mode='r', newline='')
+        elif isinstance(self.spectra_source, bytes):
+            # Convert bytes to a string using StringIO to simulate a file
+            csv_data = io.StringIO(self.spectra_source.decode('utf-8'))
+        else:
+            raise TypeError(f"File type {type(self.spectra_source)} not valid")
+
+        # read each line
+        spectra = []
+        for i,row in enumerate(csv.reader(csv_data, delimiter=",")):
+            try:
+                wavelength,intensity = map(float,row)
+                spectra.append((wavelength,intensity))
+            except ValueError:
+                if i == 0: #probably a header    
+                    continue
+                else:
+                    warnings.warn(f"Skipping invalid datarow: {row}")
+        self.spectra = np.array(spectra).T
+
+    def load_spectra(self, spectra_soure):
+        """
+        external method to set self.spectra_source and invoke internal method 
+        _load_spectra to read the source into self.spectra
+        """
+        self.spectra_source = spectra_soure
+        self._load_spectra()
+        
 
     def _check_filename(self):
         """
@@ -263,6 +339,32 @@ class Lamp:
         """standard polar plot of an ies file"""
         fig, ax = plot_ies(fdata=self.valdict, title=title)
         return fig, ax
+
+    def plot_spectra(self,title=None,fig=None,ax=None, figsize=(6.4,4.8),yscale='linear'):
+        """
+        plot the spectra of the lamp
+
+        `yscale` is generally either "linear" or "log", but any matplotlib scale is permitted
+        """
+
+        # in case spectra has not been set
+        if self.spectra is None:
+            return None
+        
+        if fig is None:
+            fig, ax = plt.subplots(figsize=figsize)
+
+        x = self.spectra[0]
+        y = self.spectra[1]
+        ax.plot(x,y)
+        ax.grid(True, which="both", ls="--", c='gray', alpha=0.3)
+        ax.set_xlabel('Wavelength [nm]')
+        ax.set_ylabel('Relative intensity [%]')
+        ax.set_yscale(yscale)
+
+        title = self.name if title is None else title
+        ax.set_title(title)
+        
 
     def plot_3d(
         self,
