@@ -1,7 +1,34 @@
 import streamlit as st
+import requests
+import matplotlib.pyplot as plt
 from guv_calcs.calc_zone import CalcPlane, CalcVol
 
 ss = st.session_state
+
+SELECT_LOCAL = "Select local file..."
+
+
+def update_lamp_filename(lamp):
+    """update lamp filename from widget"""
+    fname = ss[f"file_{lamp.lamp_id}"]
+    spectra_data = None
+    fdata = None
+    if fname != SELECT_LOCAL:
+        if fname in ss.vendored_spectra.keys():
+            # files from osluv server
+            lampdata = ss.vendored_lamps[fname]
+            fdata = requests.get(lampdata).content
+            spectra_source = ss.vendored_spectra[fname]
+            spectra_data = requests.get(spectra_source).content
+        elif fname in ss.uploaded_files.keys():
+            # previously uploaded files
+            fdata = ss.uploaded_files[fname]
+
+    lamp.reload(filename=fname, filedata=fdata)
+    lamp.load_spectra(spectra_data)
+    if len(lamp.spectra) > 0:
+        fig, ax = plt.subplots()
+        ss.spectrafig = lamp.plot_spectra(fig=fig, title="")
 
 
 def update_room(room):
@@ -84,6 +111,7 @@ def initialize_room(room):
 def initialize_lamp(lamp):
     """initialize lamp editing widgets with their present values"""
     keys = [
+        # f"file_{lamp.lamp_id}",
         f"name_{lamp.lamp_id}",
         f"pos_x_{lamp.lamp_id}",
         f"pos_y_{lamp.lamp_id}",
@@ -97,6 +125,7 @@ def initialize_lamp(lamp):
         f"enabled_{lamp.lamp_id}",
     ]
     vals = [
+        # lamp.filename,
         lamp.name,
         lamp.x,
         lamp.y,

@@ -39,6 +39,7 @@ if "lampfile_options" not in ss:
     ss.vendored_lamps, ss.vendored_spectra = vendored_lamps, vendored_spectra
     options = [None] + list(vendored_lamps.keys()) + [SELECT_LOCAL]
     ss.lampfile_options = options
+    ss.spectra_options = []
 
 # Check and initialize session state variables
 if "room" not in ss:
@@ -84,7 +85,7 @@ if "fig" not in ss:
     )
     ss.eyefig = plt.figure()
     ss.skinfig = plt.figure()
-    # ss.spectrafig, ss.spectraax = plt.subplots()
+    ss.spectrafig, _ = plt.subplots()
 fig = ss.fig
 
 

@@ -6,13 +6,14 @@ import streamlit as st
 from guv_calcs.lamp import Lamp
 from guv_calcs.calc_zone import CalcPlane, CalcVol, CalcZone
 from ._widget import (
-    initialize_lamp,
-    initialize_zone,
+    # initialize_lamp,
+    # initialize_zone,
     clear_lamp_cache,
     clear_zone_cache,
 )
 
 ss = st.session_state
+WEIGHTS_URL = "data/UV Spectral Weighting Curves.csv"
 
 
 def get_disinfection_table(fluence, room):
@@ -124,10 +125,16 @@ def add_new_lamp(room, interactive=True):
     # set initial position
     xpos, ypos = get_lamp_position(lamp_idx=new_lamp_idx, x=room.x, y=room.y)
     new_lamp_id = f"Lamp{new_lamp_idx}"
-    new_lamp = Lamp(lamp_id=new_lamp_id, x=xpos, y=ypos, z=room.z)
+    new_lamp = Lamp(
+        lamp_id=new_lamp_id,
+        x=xpos,
+        y=ypos,
+        z=room.z,
+        spectral_weight_source=WEIGHTS_URL,
+    )
     # add to session and to room
     room.add_lamp(new_lamp)
-    initialize_lamp(new_lamp)
+    # initialize_lamp(new_lamp)
     # Automatically select for editing
     ss.editing = "lamps"
     ss.selected_lamp_id = new_lamp.lamp_id
@@ -200,7 +207,7 @@ def add_standard_zones(room):
     )
     for zone in [fluence, skinzone, eyezone]:
         room.add_calc_zone(zone)
-        initialize_zone(zone)
+        # initialize_zone(zone)
     return room
 
 

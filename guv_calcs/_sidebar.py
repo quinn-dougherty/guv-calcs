@@ -1,5 +1,5 @@
 import streamlit as st
-import requests
+import matplotlib.pyplot as plt
 from guv_calcs.calc_zone import CalcPlane, CalcVol
 
 from guv_calcs._website_helpers import (
@@ -7,9 +7,11 @@ from guv_calcs._website_helpers import (
     print_standard_zones,
 )
 from guv_calcs._widget import (
+    initialize_lamp,
     initialize_zone,
     remove_lamp,
     remove_zone,
+    update_lamp_filename,
     update_lamp_name,
     update_zone_name,
     update_lamp_position,
@@ -35,16 +37,21 @@ def lamp_file_options(selected_lamp):
     """widgets and plots to do with lamp file sources"""
     # File input
     fname_idx = ss.lampfile_options.index(selected_lamp.filename)
-    fname = st.selectbox(
+    st.selectbox(
         "Select lamp",
         ss.lampfile_options,
         index=fname_idx,
+        on_change=update_lamp_filename,
+        args=[selected_lamp],
         key=f"file_{selected_lamp.lamp_id}",
     )
+    # if anything but select_local has been selected, lamp should have reloaded
+    fname = selected_lamp.filename
 
-    spectra_data = None  # TEMP
     # determine fdata from fname
-    if fname == SELECT_LOCAL:
+    fdata = None
+    spectra_data = None  # TEMP
+    if selected_lamp.filename == SELECT_LOCAL:
         uploaded_file = st.file_uploader(
             "Upload a file", type="ies", key=f"upload_{selected_lamp.lamp_id}"
         )
@@ -54,76 +61,73 @@ def lamp_file_options(selected_lamp):
             # add the uploaded file to the session state and upload
             ss.uploaded_files[fname] = fdata
             make_file_list()
-        else:
-            fdata = None
-    elif fname is None:
-        fdata = None
-    else:
-        # only reload if different from before
-        if fname != selected_lamp.filename:
-            try:
-                lampdata = ss.vendored_lamps[fname]
-                fdata = requests.get(lampdata).content
-                spectra_source = ss.vendored_spectra[fname]
-                spectra_data = requests.get(spectra_source).content
-            except KeyError:
-                fdata = ss.uploaded_files[fname]
+            # load into lamp object
+            selected_lamp.reload(filename=fname, filedata=fdata)
+            # st.rerun here?
+            st.rerun()
 
-    # now both fname and fdata are set. the lamp object handles it if they are None.
-    if fname != selected_lamp.filename and fdata != selected_lamp.filedata:
-        selected_lamp.reload(filename=fname, filedata=fdata)
-        if spectra_data is not None:
+    if selected_lamp.filename in ss.uploaded_files and len(selected_lamp.spectra) == 0:
+
+        st.write(
+            """In order for GUV photobiological safety calculations to be
+             accurate, a spectra is required. Please upload a .csv file with 
+             exactly 1 header row, where the first column is wavelengths, and the 
+             second column is relative intensities. :red[If a spectra is not provided, 
+             photobiological safety calculations will be inaccurate.]"""
+        )
+        uploaded_spectra = st.file_uploader(
+            "Upload spectra CSV",
+            type="csv",
+            key=f"spectra_upload_{selected_lamp.lamp_id}",
+        )
+        if uploaded_spectra is not None:
+            spectra_data = uploaded_spectra.read()
             selected_lamp.load_spectra(spectra_data)
-            selected_lamp.load_weighted_spectra(WEIGHTS_URL)
+            fig, ax = plt.subplots()
+            ss.spectrafig = selected_lamp.plot_spectra(fig=fig, title="")
+            st.rerun()
 
     # plot if there is data to plot with
     PLOT_IES, PLOT_SPECTRA = False, False
     cols = st.columns(3)
     if selected_lamp.filedata is not None:
         PLOT_IES = cols[0].checkbox("Show polar plot", key="show_polar", value=True)
-    if selected_lamp.spectra is not None and len(selected_lamp.spectra)>0:
+    if len(selected_lamp.spectra) > 0:
         PLOT_SPECTRA = cols[1].checkbox(
             "Show spectra plot", key="show_spectra", value=True
         )
         yscale = cols[2].selectbox(
             "Spectra y-scale",
-            options=["Spectra y-scale", "linear", "log"],
+            options=["linear", "log"],
             label_visibility="collapsed",
+            key="spectra_yscale",
         )
-        if yscale == "Spectra y-scale":
-            yscale = "linear"
+        if yscale is None:
+            yscale = "linear"  # kludgey default value setting
 
     if PLOT_IES and PLOT_SPECTRA:
+        # plot both charts side by side
         iesfig, iesax = selected_lamp.plot_ies()
-        specfig = selected_lamp.plot_spectra(title="", figsize=(5, 6), yscale=yscale)
+        ss.spectrafig.set_size_inches(5, 6, forward=True)
+        ss.spectrafig.axes[0].set_yscale(yscale)
         cols = st.columns(2)
+        cols[1].pyplot(ss.spectrafig, use_container_width=True)
         cols[0].pyplot(iesfig, use_container_width=True)
-        cols[1].pyplot(specfig, use_container_width=True)
     elif PLOT_IES and not PLOT_SPECTRA:
+        # just display the ies file plot
         iesfig, iesax = selected_lamp.plot_ies()
         st.pyplot(iesfig, use_container_width=True)
     elif PLOT_SPECTRA and not PLOT_IES:
-        specfig = selected_lamp.plot_spectra(title="", yscale=yscale)
-        st.pyplot(specfig, use_container_width=True)
-
-    ########################################################
-    ### Somewhere in here there should be spectra stuff!
-
-    # if SELECT_LOCAL and selected_lamp.spectra is None:
-    # # button appears prompting user to upload spectra
-    # st.button("Upload spectra")
-    # uploaded_spectra = st.file_uploader(
-    # "Upload spectra CSV", key=f"spectra_upload_{selected_lamp.lamp_id}"
-    # )
-    # if uploaded_spectra is not None:
-    # load_spectra(selected_lamp)
-    # else:
-    # st.write("In order for GUV photobiological safety calculations to be accurate, a spectra is required. Please upload a .csv file with exactly 1 header row, where the first column is Wavelength, and the second column is intensity. :red[If a spectra is not provided, photobiological safety calculations will be inaccurate.]")
+        # display just the spectra
+        ss.spectrafig.set_size_inches(6.4, 4.8, forward=True)
+        ss.spectrafig.axes[0].set_yscale(yscale)
+        st.pyplot(ss.spectrafig, use_container_width=True)
 
 
 def lamp_sidebar(room):
     st.subheader("Edit Luminaire")
     selected_lamp = room.lamps[ss.selected_lamp_id]
+    initialize_lamp(selected_lamp)
 
     # name
     st.text_input(
@@ -277,10 +281,11 @@ def zone_sidebar(room):
                 )
                 ss.editing = "volumes"
             room.add_calc_zone(new_zone)
-            initialize_zone(new_zone)
+
             st.rerun()
     elif ss.editing in ["planes", "volumes"]:
         selected_zone = room.calc_zones[ss.selected_zone_id]
+        initialize_zone(selected_zone)
         st.text_input(
             "Name",
             key=f"name_{selected_zone.zone_id}",

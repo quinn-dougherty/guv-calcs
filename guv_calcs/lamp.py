@@ -92,15 +92,16 @@ class Lamp:
         self.intensity_units = "mW/Sr" if intensity_units is None else intensity_units
         self.radiation_type = radiation_type
 
-        # spectra
+        # spectral weightings
+        self.spectral_weight_source = spectral_weight_source
+        self.spectral_weightings = {}
+        if self.spectral_weight_source is not None:
+            self._load_spectral_weightings()
+        # spectra - unweighted and weighted
         self.spectra = {} if spectra is None else spectra
         self.spectra_source = spectra_source
         if self.spectra_source is not None:
             self._load_spectra()
-        self.spectral_weight_source = spectral_weight_source
-        self.spectral_weightings = {}
-        if self.spectral_weight_source is not None:
-            self._load_weighted_spectra()
             self._update_spectra()
 
         # load file and coordinates
@@ -145,13 +146,21 @@ class Lamp:
                     warnings.warn(f"Skipping invalid datarow: {row}")
         self.spectra["Unweighted"] = np.array(spectra).T
 
-    def load_spectra(self, spectra_soure):
+    def load_spectra(self, spectra_source):
         """
         external method to set self.spectra_source and invoke internal method
-        _load_spectra to read the source into self.spectra
+        _load_spectra to read the source into self.spectra.
+        If weightings are present, update weighted spectra also
+        If spectra_source is none, self.spectra will reset to empty
         """
-        self.spectra_source = spectra_soure
-        self._load_spectra()
+        self.spectra_source = spectra_source
+        if self.spectra_source is None:
+            self.spectra = {}  # reset to empty
+        else:
+            self._load_spectra()
+            if self.spectral_weight_source is not None:
+                self._load_spectral_weightings()
+                self._update_spectra()
 
     def _load_spectral_weightings(self):
         """load weightings"""
@@ -180,11 +189,12 @@ class Lamp:
         weight the unweighted spectra by all potential spectral weightings and add to
         the self.spectra dict
         """
-        wavelengths = self.spectra["Unweighted"][0]
-        intensities = self.spectra["Unweighted"][1]
-        for key, val in self.spectral_weightings.items():
-            weights = np.interp(wavelengths, val[0], val[1])
-            self.spectra[key] = np.stack((wavelengths, intensities * weights))
+        if self.spectra is not None:
+            wavelengths = self.spectra["Unweighted"][0]
+            intensities = self.spectra["Unweighted"][1]
+            for key, val in self.spectral_weightings.items():
+                weights = np.interp(wavelengths, val[0], val[1])
+                self.spectra[key] = np.stack((wavelengths, intensities * weights))
 
     def load_weighted_spectra(self, spectral_weight_source):
         """
@@ -313,6 +323,7 @@ class Lamp:
             self.keywords = None
             self.coords = None
             self.photometric_coords = None
+            self.spectra = {}
 
     def transform(self, coords, scale=1):
         """
@@ -397,9 +408,7 @@ class Lamp:
         fig, ax = plot_ies(fdata=self.valdict, title=title)
         return fig, ax
 
-    def plot_spectra(
-        self, title=None, fig=None, ax=None, figsize=(6.4, 4.8), yscale="linear"
-    ):
+    def plot_spectra(self, title=None, fig=None, figsize=(6.4, 4.8), yscale="linear"):
         """
         plot the spectra of the lamp. at minimum, the unweighted spectra, possibly all
         weighted spectra as well.
@@ -408,7 +417,9 @@ class Lamp:
         """
 
         if fig is None:
-            fig, ax = plt.subplots(figsize=figsize)
+            fig, ax = plt.subplots()
+        else:
+            ax = fig.axes[0]
 
         if self.spectra is not None:
             for key, val in self.spectra.items():
@@ -421,6 +432,7 @@ class Lamp:
 
             title = self.name if title is None else title
             ax.set_title(title)
+        return fig
 
     def plot_3d(
         self,
