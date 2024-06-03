@@ -74,40 +74,48 @@ def print_standard_zones(room):
         fluence_str = None
     st.write("Average fluence: ", fluence_str)
 
-    df = get_disinfection_table(avg_fluence, room)
-
-    st.dataframe(df, hide_index=True)
+    if fluence.values is not None:
+        df = get_disinfection_table(avg_fluence, room)
+        st.dataframe(df, hide_index=True)
 
     st.subheader("Photobiological Safety", divider="grey")
+    skin_limit, eye_limit = get_limits()
     skin = room.calc_zones["SkinLimits"]
     eye = room.calc_zones["EyeLimits"]
     if skin.values is not None:
         skin_max = round(skin.values.max(), 3)
-        if skin_max > 479:
-            color = "red"
-        else:
-            color = "blue"
+        color = "red" if skin_max > skin_limit else "blue"
         skin_str = ":" + color + "[" + str(skin_max) + "] " + skin.units
     else:
         skin_str = None
     if eye.values is not None:
         eye_max = round(eye.values.max(), 3)
-        if eye_max > 161:
-            color = "red"
-        else:
-            color = "blue"
+        color = "red" if eye_max > eye_limit else "blue"
         eye_str = ":" + color + "[" + str(eye_max) + "] " + eye.units
     else:
         eye_str = None
     st.write("Max Skin Dose (8 Hours): ", skin_str)
-    kwargs = {"transparent": "True"}
-    st.pyplot(skin.plot_plane(), **kwargs)
+
+    if skin.values is not None:
+        st.pyplot(skin.plot_plane(), **{"transparent": "True"})
 
     st.write("Max Eye Dose (8 Hours): ", eye_str)
-    st.pyplot(eye.plot_plane(), **kwargs)
+    if eye.values is not None:
+        st.pyplot(eye.plot_plane(), **{"transparent": "True"})
 
     # st.subheader("References", divider="grey")
     # st.write(references)
+
+
+def get_limits():
+    """
+    return the eye and skin limits in mJ/cm2/8 hours
+    currently a placeholder for future feature when user-defined standard
+    selection determines the limits
+    """
+    skin_limit = 479
+    eye_limit = 161
+    return skin_limit, eye_limit
 
 
 def add_new_lamp(room, interactive=True):
