@@ -47,19 +47,20 @@ def print_standard_zones(room):
     st.write(f"Estimated increase in indoor ozone: {ozone_str}")
 
     st.subheader("Photobiological Safety", divider="grey")
-
-    hours_to_tlv, hours_skin, hours_eye = get_hours_to_tlv_room(room)
-    SKIN_EXCEEDED = True if hours_skin < 8 else False
-    EYE_EXCEEDED = True if hours_eye < 8 else False
-
-    if hours_to_tlv > 8:
-        hour_str = ":blue[Indefinite]"
-    else:
-        hour_str = f":red[{round(hours_to_tlv,2)}]"
-    st.write(f"Hours before Threshold Limit Value is reached: **{hour_str}**")
-
     skin = room.calc_zones["SkinLimits"]
     eye = room.calc_zones["EyeLimits"]
+
+    if skin.values is not None and eye.values is not None:
+        hours_to_tlv, hours_skin, hours_eye = get_hours_to_tlv_room(room)
+        SKIN_EXCEEDED = True if hours_skin < 8 else False
+        EYE_EXCEEDED = True if hours_eye < 8 else False
+
+        if hours_to_tlv > 8:
+            hour_str = ":blue[Indefinite]"
+        else:
+            hour_str = f":red[{round(hours_to_tlv,2)}]"
+        st.write(f"Hours before Threshold Limit Value is reached: **{hour_str}**")
+
     if skin.values is not None:
         skin_max = round(skin.values.max(), 3)
         color = "red" if SKIN_EXCEEDED else "blue"
@@ -298,10 +299,7 @@ def get_disinfection_table(fluence, room):
         "Reference",
     ]
     df = df[newkeys]
-    
-    # remove by order of the emperor these three rows which contain what has been deemed Bad Data
-    df = df.drop(index=[506,549,550])
-    
+
     return df
 
 

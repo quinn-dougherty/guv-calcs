@@ -675,7 +675,11 @@ def room_sidebar(room):
 
 def results_sidebar(room):
     """display results in the customizable panel"""
-    st.title("Results")
+    cols = st.columns([4, 1])
+    cols[0].title("Results")
+    cols[1].write("")
+    cols[1].write("")
+    close_button = cols[1].button("Close", use_container_width=True)
 
     # do some checks first. do we actually have any lamps?
     msg = "You haven't added any luminaires yet! Try adding a luminaire by clicking the `Add Luminaire` button, and then hit `Calculate`"
@@ -706,7 +710,7 @@ def results_sidebar(room):
     st.write("")
     st.write("")
     st.write("")
-    close_button = st.button("Close", use_container_width=True)
+
     if close_button:
         ss.editing = None
         st.rerun()
