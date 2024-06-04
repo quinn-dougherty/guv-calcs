@@ -42,7 +42,9 @@ class Room:
         self.z = default_dimensions[2] if z is None else z
         self.set_dimensions()
 
-        self.standard = standard
+        self.standard = (
+            "ANSI IES RP 27.1-22 (America)" if standard is None else standard
+        )
 
         self.reflectance_ceiling = (
             0 if reflectance_ceiling is None else reflectance_ceiling

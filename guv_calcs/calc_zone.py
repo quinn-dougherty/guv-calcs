@@ -143,6 +143,7 @@ class CalcZone(object):
                 ).T
                 Theta, Phi, R = to_polar(*rel_coords.T)
                 values = get_intensity_vectorized(Theta, Phi, lamp.interpdict) / R ** 2
+
                 if self.fov80:
                     values[Theta0 < 50] = 0
                 if self.vert:
@@ -153,6 +154,9 @@ class CalcZone(object):
                     total_values += values / 10  # convert from mW/Sr to uW/cm2
                 else:
                     raise KeyError("Units not recognized")
+
+                # save the max value to the lamp object
+                lamp.max_irradiances[self.zone_id] = values.max()
 
         # I have no earthly idea why it is necessary to do it this way
         if len(self.num_points) == 3:

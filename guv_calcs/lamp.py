@@ -88,9 +88,9 @@ class Lamp:
         self.aim(self.aimx, self.aimy, self.aimz)  # updates heading and bank
 
         # misc
-        # self.spectra = spectra # this should be a dict with keys `Wavelength (nm)` and `Relative Intensity (%)`
         self.intensity_units = "mW/Sr" if intensity_units is None else intensity_units
         self.radiation_type = radiation_type
+        self.max_irradiances = {}  # calc zone values will be stored here
 
         # spectral weightings
         self.spectral_weight_source = spectral_weight_source

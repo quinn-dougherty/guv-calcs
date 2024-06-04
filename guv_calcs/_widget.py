@@ -54,6 +54,10 @@ def update_room(room):
     ss.room = room
 
 
+def update_room_standard(room):
+    room.standard = ss["room_standard"]
+
+
 def clear_lamp_cache(room):
     """
     remove any lamps from the room and the widgets that don't have an

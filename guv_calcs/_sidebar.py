@@ -26,6 +26,7 @@ from guv_calcs._widget import (
     clear_lamp_cache,
     clear_zone_cache,
     update_room,
+    update_room_standard,
 )
 
 SELECT_LOCAL = "Select local file..."
@@ -566,6 +567,19 @@ def room_sidebar(room):
         on_change=update_room,
         args=[room],
     )
+
+    st.subheader("Standards")
+    standards = ["ANSI IES RP 27.1-22 (America)", "IEC 62471-6:2022 (International)"]
+
+    st.selectbox(
+        "Select photobiological safety standard",
+        options=standards,
+        index=standards.index(room.standard),
+        on_change=update_room_standard,
+        args=[room],
+        key=room.standard,
+    )
+
     st.subheader("Units")
     st.write("Coming soon")
 
