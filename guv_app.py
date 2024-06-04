@@ -33,31 +33,6 @@ ss = st.session_state
 SELECT_LOCAL = "Select local file..."
 SPECIAL_ZONES = ["WholeRoomFluence", "SkinLimits", "EyeLimits"]
 
-if "lampfile_options" not in ss:
-    ies_files = get_local_ies_files()  # local files for testing
-    vendored_lamps, vendored_spectra = get_ies_files()  # files from assays.osluv.org
-    ss.vendored_lamps, ss.vendored_spectra = vendored_lamps, vendored_spectra
-    options = [None] + list(vendored_lamps.keys()) + [SELECT_LOCAL]
-    ss.lampfile_options = options
-    ss.spectra_options = []
-
-# Check and initialize session state variables
-if "room" not in ss:
-    ss.room = Room()
-    ss.room = add_standard_zones(ss.room)
-
-    preview_lamp = st.query_params.get("preview_lamp")
-    if preview_lamp:
-        lamp_id = add_new_lamp(ss.room, name= preview_lamp, interactive=False)
-        lamp = ss.room.lamps[lamp_id]
-        fdata = requests.get(ss.vendored_lamps[preview_lamp]).content
-        spectra_data = requests.get(ss.vendored_spectra[preview_lamp]).content
-        lamp.reload(filename=preview_lamp, filedata=fdata)
-        lamp.load_spectra(spectra_data)
-        ss.room.calculate()
-        ss.editing = "results"
-
-room = ss.room
 
 if "editing" not in ss:
     ss.editing = None  # determines what displays in the sidebar
@@ -90,6 +65,38 @@ if "fig" not in ss:
 fig = ss.fig
 
 
+if "lampfile_options" not in ss:
+    ies_files = get_local_ies_files()  # local files for testing
+    vendored_lamps, vendored_spectra = get_ies_files()  # files from assays.osluv.org
+    ss.vendored_lamps, ss.vendored_spectra = vendored_lamps, vendored_spectra
+    options = [None] + list(vendored_lamps.keys()) + [SELECT_LOCAL]
+    ss.lampfile_options = options
+    ss.spectra_options = []
+
+# Check and initialize session state variables
+if "room" not in ss:
+    ss.room = Room()
+    ss.room = add_standard_zones(ss.room)
+
+    preview_lamp = st.query_params.get("preview_lamp")
+    if preview_lamp:
+        lamp_id = add_new_lamp(ss.room, name=preview_lamp, interactive=False)
+        lamp = ss.room.lamps[lamp_id]
+        # load ies data
+        fdata = requests.get(ss.vendored_lamps[preview_lamp]).content
+        lamp.reload(filename=preview_lamp, filedata=fdata)
+        # load spectra
+        spectra_data = requests.get(ss.vendored_spectra[preview_lamp]).content
+        lamp.load_spectra(spectra_data)
+        fig, ax = plt.subplots()
+        ss.spectrafig = lamp.plot_spectra(fig=fig, title="")
+        
+        
+        ss.room.calculate()
+        ss.editing = "results"
+        st.rerun()
+
+room = ss.room
 top_ribbon(room)
 
 if ss.editing == "results":

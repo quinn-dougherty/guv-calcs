@@ -132,9 +132,7 @@ def add_new_lamp(room, name=None, interactive=True):
     new_lamp_idx = len(room.lamps) + 1
     # set initial position
     name = new_lamp_idx if name is None else name
-    xpos, ypos = get_lamp_position(lamp_idx=new_lamp_idx, 
-                                    x=room.x, 
-                                    y=room.y)
+    xpos, ypos = get_lamp_position(lamp_idx=new_lamp_idx, x=room.x, y=room.y)
     new_lamp_id = f"Lamp{new_lamp_idx}"
     new_lamp = Lamp(
         lamp_id=new_lamp_id,
@@ -145,7 +143,7 @@ def add_new_lamp(room, name=None, interactive=True):
         spectral_weight_source=WEIGHTS_URL,
     )
     # add to session and to room
-    room.add_lamp(new_lamp)    
+    room.add_lamp(new_lamp)
     if interactive:
         # select for editing
         ss.editing = "lamps"

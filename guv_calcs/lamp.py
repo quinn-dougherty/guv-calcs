@@ -189,7 +189,7 @@ class Lamp:
         weight the unweighted spectra by all potential spectral weightings and add to
         the self.spectra dict
         """
-        
+
         if self.spectra is not None:
             wavelengths = self.spectra["Unweighted"][0]
             intensities = self.spectra["Unweighted"][1]
@@ -428,9 +428,9 @@ class Lamp:
         else:
             ax = fig.axes[0]
 
-        if self.spectra is not None:
+        if len(self.spectra)>0:
             for key, val in self.spectra.items():
-                linestyle = '-' if key == 'Unweighted' else '--'
+                linestyle = "-" if key == "Unweighted" else "--"
                 ax.plot(val[0], val[1], label=key, linestyle=linestyle)
             ax.legend()
             ax.grid(True, which="both", ls="--", c="gray", alpha=0.3)
