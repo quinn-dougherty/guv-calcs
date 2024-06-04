@@ -298,6 +298,10 @@ def get_disinfection_table(fluence, room):
         "Reference",
     ]
     df = df[newkeys]
+    
+    # remove by order of the emperor these three rows which contain what has been deemed Bad Data
+    df = df.drop(index=[506,549,550])
+    
     return df
 
 
