@@ -5,6 +5,7 @@ from guv_calcs.calc_zone import CalcPlane, CalcVol
 from guv_calcs._website_helpers import (
     make_file_list,
     print_standard_zones,
+    set_default_orientation,
 )
 from guv_calcs._widget import (
     initialize_lamp,
@@ -127,8 +128,10 @@ def lamp_file_options(selected_lamp):
 def lamp_sidebar(room):
     st.subheader("Edit Luminaire")
     selected_lamp = room.lamps[ss.selected_lamp_id]
-    initialize_lamp(selected_lamp)
+    # do this before initializing
+    set_default_orientation(selected_lamp, room)
 
+    initialize_lamp(selected_lamp)
     # name
     st.text_input(
         "Name",

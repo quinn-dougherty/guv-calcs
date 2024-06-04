@@ -428,7 +428,7 @@ class Lamp:
         else:
             ax = fig.axes[0]
 
-        if len(self.spectra)>0:
+        if len(self.spectra) > 0:
             for key, val in self.spectra.items():
                 linestyle = "-" if key == "Unweighted" else "--"
                 ax.plot(val[0], val[1], label=key, linestyle=linestyle)

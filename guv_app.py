@@ -16,6 +16,7 @@ from guv_calcs._website_helpers import (
     get_ies_files,
     add_standard_zones,
     add_new_lamp,
+    set_default_orientation,
 )
 
 # layout / page setup
@@ -33,7 +34,7 @@ ss = st.session_state
 SELECT_LOCAL = "Select local file..."
 SPECIAL_ZONES = ["WholeRoomFluence", "SkinLimits", "EyeLimits"]
 
-
+# Check and initialize session state variables
 if "editing" not in ss:
     ss.editing = None  # determines what displays in the sidebar
 
@@ -45,6 +46,14 @@ if "selected_zone_id" not in ss:
 
 if "uploaded_files" not in ss:
     ss.uploaded_files = {}
+
+if "lampfile_options" not in ss:
+    ies_files = get_local_ies_files()  # local files for testing
+    vendored_lamps, vendored_spectra = get_ies_files()  # files from assays.osluv.org
+    ss.vendored_lamps, ss.vendored_spectra = vendored_lamps, vendored_spectra
+    options = [None] + list(vendored_lamps.keys()) + [SELECT_LOCAL]
+    ss.lampfile_options = options
+    ss.spectra_options = []
 
 if "fig" not in ss:
     ss.fig = go.Figure()
@@ -64,16 +73,6 @@ if "fig" not in ss:
     ss.spectrafig, _ = plt.subplots()
 fig = ss.fig
 
-
-if "lampfile_options" not in ss:
-    ies_files = get_local_ies_files()  # local files for testing
-    vendored_lamps, vendored_spectra = get_ies_files()  # files from assays.osluv.org
-    ss.vendored_lamps, ss.vendored_spectra = vendored_lamps, vendored_spectra
-    options = [None] + list(vendored_lamps.keys()) + [SELECT_LOCAL]
-    ss.lampfile_options = options
-    ss.spectra_options = []
-
-# Check and initialize session state variables
 if "room" not in ss:
     ss.room = Room()
     ss.room = add_standard_zones(ss.room)
@@ -90,13 +89,15 @@ if "room" not in ss:
         lamp.load_spectra(spectra_data)
         fig, ax = plt.subplots()
         ss.spectrafig = lamp.plot_spectra(fig=fig, title="")
-        
-        
+        # orient correctly
+        set_default_orientation(lamp, ss.room)
+        # calculate and display results
         ss.room.calculate()
         ss.editing = "results"
         st.rerun()
 
 room = ss.room
+
 top_ribbon(room)
 
 if ss.editing == "results":

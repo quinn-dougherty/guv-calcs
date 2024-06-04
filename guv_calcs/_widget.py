@@ -111,7 +111,6 @@ def initialize_room(room):
 def initialize_lamp(lamp):
     """initialize lamp editing widgets with their present values"""
     keys = [
-        # f"file_{lamp.lamp_id}",
         f"name_{lamp.lamp_id}",
         f"pos_x_{lamp.lamp_id}",
         f"pos_y_{lamp.lamp_id}",
@@ -125,7 +124,6 @@ def initialize_lamp(lamp):
         f"enabled_{lamp.lamp_id}",
     ]
     vals = [
-        # lamp.filename,
         lamp.name,
         lamp.x,
         lamp.y,

@@ -5,15 +5,20 @@ import pandas as pd
 import streamlit as st
 from guv_calcs.lamp import Lamp
 from guv_calcs.calc_zone import CalcPlane, CalcVol, CalcZone
-from ._widget import (
-    # initialize_lamp,
-    # initialize_zone,
-    clear_lamp_cache,
-    clear_zone_cache,
-)
+from ._widget import clear_lamp_cache, clear_zone_cache, update_lamp_aim_point
 
 ss = st.session_state
 WEIGHTS_URL = "data/UV Spectral Weighting Curves.csv"
+SIDE_FIRING_LAMPS = ["UVPro222 B1", "UVPro222 B2"]
+
+
+def set_default_orientation(lamp, room):
+    if "default_orientation_set" not in ss:
+        # Only do this once
+        if lamp.filename in SIDE_FIRING_LAMPS:
+            lamp.set_tilt(90, dimensions=room.dimensions)
+            update_lamp_aim_point(lamp)
+        ss.default_orientation_set = True
 
 
 def get_disinfection_table(fluence, room):
@@ -128,18 +133,19 @@ def get_limits():
 
 
 def add_new_lamp(room, name=None, interactive=True):
+    """necessary logic for adding new lamp to room and to state"""
     # initialize lamp
     new_lamp_idx = len(room.lamps) + 1
     # set initial position
-    name = new_lamp_idx if name is None else name
     xpos, ypos = get_lamp_position(lamp_idx=new_lamp_idx, x=room.x, y=room.y)
     new_lamp_id = f"Lamp{new_lamp_idx}"
+    name = new_lamp_id if name is None else name
     new_lamp = Lamp(
         lamp_id=new_lamp_id,
         name=name,
         x=xpos,
         y=ypos,
-        z=room.z,
+        z=room.z - 0.1, # eventually this should be set by luminaire size
         spectral_weight_source=WEIGHTS_URL,
     )
     # add to session and to room
@@ -155,6 +161,7 @@ def add_new_lamp(room, name=None, interactive=True):
 
 
 def add_new_zone(room):
+    """necessary logic for adding new calc zone to room and to state"""
     # initialize calculation zone
     new_zone_idx = len(room.calc_zones) + 1
     new_zone_id = f"CalcZone{new_zone_idx}"
