@@ -104,6 +104,7 @@ def initialize_room(room):
         "reflectance_south",
         "reflectance_west",
         "reflectance_floor",
+        "air_changes",
         "ozone_decay_constant",
     ]
     vals = [
@@ -117,6 +118,7 @@ def initialize_room(room):
         room.reflectance_south,
         room.reflectance_west,
         room.reflectance_floor,
+        room.air_changes,
         room.ozone_decay_constant,
     ]
     add_keys(keys, vals)

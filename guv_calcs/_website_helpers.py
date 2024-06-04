@@ -31,6 +31,17 @@ def print_standard_zones(room):
         df = get_disinfection_table(avg_fluence, room)
         st.dataframe(df, hide_index=True)
 
+    st.subheader("Indoor Air Chemistry", divider="grey")
+    if fluence.values is not None:
+        ozone_ppb = calculate_ozone_increase(room)
+        ozone_color = "red" if ozone_ppb > 5 else "blue"
+        ozone_str = f":{ozone_color}[**{round(ozone_ppb,2)} ppb**]"
+    else:
+        ozone_str = "Not available"
+    st.write(f"Air changes from ventilation: **{room.air_changes}**")
+    st.write(f"Ozone decay constant: **{room.ozone_decay_constant}**")
+    st.write(f"Estimated increase in indoor ozone: {ozone_str}")
+
     st.subheader("Photobiological Safety", divider="grey")
 
     hours_to_tlv, hours_skin, hours_eye = get_hours_to_tlv_room(room)
@@ -79,6 +90,20 @@ def print_standard_zones(room):
             st.pyplot(eye.plot_plane(), **{"transparent": "True"})
         else:
             st.write("(Not available)")
+
+
+def calculate_ozone_increase(room):
+    """
+    ozone generation constant is currently hardcoded to 10 for GUV222
+    this should really be based on spectra instead
+    but this is a relatively not very big deal, because
+    """
+    avg_fluence = room.calc_zones["WholeRoomFluence"].values.mean()
+    ozone_gen = 10  # hardcoded for now, eventually should be based on spectra bu
+    ach = room.air_changes
+    ozone_decay = room.ozone_decay_constant
+    ozone_increase = avg_fluence * ozone_gen / (ach + ozone_decay)
+    return ozone_increase
 
 
 def get_hours_to_tlv_room(room):
@@ -255,13 +280,9 @@ def get_disinfection_table(fluence, room):
     df["eACH-UV"] = (df["k [cm2/mJ]"] * fluence * 3.6).round(2)
     df["CADR-UV [cfm]"] = (df["eACH-UV"] * volume / 60).round(2)
     df["CADR-UV [lps]"] = (df["CADR-UV [cfm]"] * 0.47195).round(2)
-    # num_papers = len(df["Ref"].unique())
-    # df["Ref"] = np.linspace(1, num_papers + 2, num_papers + 2).astype(int)
     df = df.rename(
         columns={"Medium (specific)": "Medium", "Full Citation": "Reference"}
     )
-    # references = df["Full Citation"].tolist()
-    # for i, ref in enumerate(references):
 
     newkeys = [
         "Species",

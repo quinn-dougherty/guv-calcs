@@ -29,6 +29,7 @@ class Room:
         reflectance_south=None,
         reflectance_west=None,
         reflectance_floor=None,
+        air_changes=None,
         ozone_decay_constant=None,
     ):
 
@@ -54,8 +55,9 @@ class Room:
         self.reflectance_south = 0 if reflectance_south is None else reflectance_south
         self.reflectance_west = 0 if reflectance_west is None else reflectance_west
         self.reflectance_floor = 0 if reflectance_floor is None else reflectance_floor
+        self.air_changes = 1.0 if air_changes is None else air_changes
         self.ozone_decay_constant = (
-            0 if ozone_decay_constant is None else ozone_decay_constant
+            2.7 if ozone_decay_constant is None else ozone_decay_constant
         )
 
         self.lamps = {}

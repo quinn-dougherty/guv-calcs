@@ -546,7 +546,7 @@ def room_sidebar(room):
     """display room editing panel in sidebar"""
     st.header("Edit Room")
 
-    st.subheader("Dimensions")
+    st.subheader("Dimensions", divider="grey")
     col_a, col_b, col_c = st.columns(3)
 
     col_a.number_input(
@@ -568,7 +568,7 @@ def room_sidebar(room):
         args=[room],
     )
 
-    st.subheader("Standards")
+    st.subheader("Standards", divider="grey")
     standards = [
         "ANSI IES RP 27.1-22 (America) - UL8802",
         "ANSI IES RP 27.1-22 (America)",
@@ -584,7 +584,23 @@ def room_sidebar(room):
         key="room_standard",
     )
 
-    st.subheader("Units")
+    st.subheader("Indoor Chemistry", divider="grey")
+    # st.write("Coming soon")
+    cols = st.columns(2)
+    room.air_changes = cols[0].number_input(
+        "Air changes per hour from ventilation",
+        min_value=0.0,
+        step=0.1,
+        key="air_changes",
+    )
+    room.ozone_decay_constant = cols[1].number_input(
+        "Ozone decay constant",
+        min_value=0.0,
+        step=0.1,
+        key="ozone_decay_constant",
+    )
+
+    st.subheader("Units", divider="grey")
     st.write("Coming soon")
 
     unitindex = 0 if room.units == "meters" else 1
@@ -597,7 +613,7 @@ def room_sidebar(room):
         disabled=True,
     )
 
-    st.subheader("Reflectance")
+    st.subheader("Reflectance", divider="grey")
     st.write("Coming soon")
     col1, col2, col3 = st.columns(3)
     col1.number_input(
@@ -652,15 +668,6 @@ def room_sidebar(room):
         key="reflectance_floor",
         on_change=update_room,
         args=[room],
-        disabled=True,
-    )
-
-    st.subheader("Indoor Chemistry")
-    st.write("Coming soon")
-    st.number_input(
-        "Ozone Decay Constant",
-        min_value=0,
-        key="ozone_decay_constant",
         disabled=True,
     )
 
