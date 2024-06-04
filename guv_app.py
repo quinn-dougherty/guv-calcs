@@ -48,15 +48,14 @@ if "room" not in ss:
 
     preview_lamp = st.query_params.get("preview_lamp")
     if preview_lamp:
-        lamp_id = add_new_lamp(ss.room, interactive=False)
-        lamp = ss.room.lamps[f"Lamp{lamp_id}"]
+        lamp_id = add_new_lamp(ss.room, name= preview_lamp, interactive=False)
+        lamp = ss.room.lamps[lamp_id]
         fdata = requests.get(ss.vendored_lamps[preview_lamp]).content
         spectra_data = requests.get(ss.vendored_spectra[preview_lamp]).content
         lamp.reload(filename=preview_lamp, filedata=fdata)
-        lamp.load_spectra(spectra_data)        
+        lamp.load_spectra(spectra_data)
         ss.room.calculate()
         ss.editing = "results"
-        st.rerun()
 
 room = ss.room
 
@@ -94,7 +93,7 @@ fig = ss.fig
 top_ribbon(room)
 
 if ss.editing == "results":
-    left_pane, right_pane = st.columns([3,1.5])
+    left_pane, right_pane = st.columns([3, 1.5])
 else:
     left_pane, right_pane = st.columns([1.5, 3])
 
@@ -127,6 +126,5 @@ with right_pane:
     fig.layout.scene.aspectratio.x *= ar_scale
     fig.layout.scene.aspectratio.y *= ar_scale
     fig.layout.scene.aspectratio.z *= ar_scale
-
 
     st.plotly_chart(fig, use_container_width=True, height=750)

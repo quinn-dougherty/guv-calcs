@@ -61,11 +61,17 @@ def lamp_select(room, col=None):
 
     if col is None:
         selected_lamp_name = st.selectbox(
-            "Select luminaire to edit", options=list(lamp_names), index=lamp_sel_idx, label_visibility="collapsed",
+            "Select luminaire to edit",
+            options=list(lamp_names),
+            index=lamp_sel_idx,
+            label_visibility="collapsed",
         )
     else:
         selected_lamp_name = col.selectbox(
-            "Select luminaire to edit", options=list(lamp_names), index=lamp_sel_idx, label_visibility="collapsed",
+            "Select luminaire to edit",
+            options=list(lamp_names),
+            index=lamp_sel_idx,
+            label_visibility="collapsed",
         )
     selected_lamp_id = lamp_names[selected_lamp_name]
     if ss.selected_lamp_id != selected_lamp_id:
@@ -90,11 +96,17 @@ def zone_select(room, col=None):
     zone_sel_idx = list(zone_names.values()).index(ss.selected_zone_id)
     if col is None:
         selected_zone_name = st.selectbox(
-            "Select calculation zone to edit", options=list(zone_names), index=zone_sel_idx, label_visibility="collapsed",
+            "Select calculation zone to edit",
+            options=list(zone_names),
+            index=zone_sel_idx,
+            label_visibility="collapsed",
         )
     else:
         selected_zone_name = col.selectbox(
-            "Select calculation zone to edit", options=list(zone_names), index=zone_sel_idx, label_visibility="collapsed",
+            "Select calculation zone to edit",
+            options=list(zone_names),
+            index=zone_sel_idx,
+            label_visibility="collapsed",
         )
     selected_zone_id = zone_names[selected_zone_name]
     if ss.selected_zone_id != selected_zone_id:

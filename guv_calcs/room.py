@@ -41,7 +41,7 @@ class Room:
         self.y = default_dimensions[1] if y is None else y
         self.z = default_dimensions[2] if z is None else z
         self.set_dimensions()
-        
+
         self.standard = standard
 
         self.reflectance_ceiling = (
