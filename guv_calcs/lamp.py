@@ -182,19 +182,26 @@ class Lamp:
                 continue
             else:
                 values = np.array(val)
-                self.spectral_weightings[key] = np.stack((wavelengths, values)).T
+                self.spectral_weightings[key] = np.stack((wavelengths, values))
 
     def _update_spectra(self):
         """
         weight the unweighted spectra by all potential spectral weightings and add to
         the self.spectra dict
         """
+        
         if self.spectra is not None:
             wavelengths = self.spectra["Unweighted"][0]
             intensities = self.spectra["Unweighted"][1]
+            maxval = max(intensities)
             for key, val in self.spectral_weightings.items():
+                # update weights to match the spectral wavelengths we've got
                 weights = np.interp(wavelengths, val[0], val[1])
-                self.spectra[key] = np.stack((wavelengths, intensities * weights))
+                self.spectral_weightings[key] = np.stack((wavelengths, weights))
+                # weight spectra
+                weighted_intensity = intensities * weights
+                ratio = maxval / max(weighted_intensity)
+                self.spectra[key] = np.stack((wavelengths, weighted_intensity * ratio))
 
     def load_weighted_spectra(self, spectral_weight_source):
         """
@@ -423,7 +430,8 @@ class Lamp:
 
         if self.spectra is not None:
             for key, val in self.spectra.items():
-                ax.plot(val[0], val[1], label=key)
+                linestyle = '-' if key == 'Unweighted' else '--'
+                ax.plot(val[0], val[1], label=key, linestyle=linestyle)
             ax.legend()
             ax.grid(True, which="both", ls="--", c="gray", alpha=0.3)
             ax.set_xlabel("Wavelength [nm]")
