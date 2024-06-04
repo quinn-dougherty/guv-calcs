@@ -22,8 +22,6 @@ from guv_calcs._widget import (
     update_vol_dimensions,
     update_lamp_visibility,
     update_zone_visibility,
-    clear_lamp_cache,
-    clear_zone_cache,
     update_room,
     update_room_standard,
 )
@@ -720,52 +718,96 @@ def default_sidebar(room):
     st.header("A free and open source simulation tool for germicidal UV applications")
     st.subheader("Getting Started", divider="grey")
     st.write(
-        """To run your first simulation, simply click on the `Add Luminaire` 
+        """
+        To run your first simulation, simply click on the `Add Luminaire` 
         button on the right panel, select a photometric file from the dropdown menu, 
-        and click the red `Calculate` button to immediately see results."""
+        and click the red `Calculate` button to immediately see results.
+        """
     )
 
-    st.subheader("Luminaires", divider="grey")
+    st.subheader("Interpreting the Results", divider="grey")
     st.write(
-        """For more complex simulations, you can configure the position and orientation of the luminaire,
-        or add more luminaires. You can also upload your own photometric file. Note 
-        that if a luminaire is placed outside the room boundaries, it will not appear in the plot, but will 
-        still participate in calculations, but not if you uncheck the box labeled `Enabled`."""
+        """
+        After adding a luminaire and clicking `Calculate`, the Results page will show several outputs:
+        
+        - **Efficacy:** GUV system efficacy is .*Note that k values for aerosolized pathogens have high uncertainty associated with them, and these values should be understood as possible ranges.*
+        - **Ozone increase:** Given an assumed air change rate from ventilation and an ozone decay rate typical for indoor environments, the anticipated total increase in ozone in parts per billion.
+        - **Photobiological safety:** Spectrally-weighted calculations for eye and skin safety, per the selected standard. If either limit is exceeded, a dimming requirement is reported. By default, the standard selected is ANSI IES RP 27.1-22, which uses the post-2022 ACGIH Threshold Limit Values (TLVs) with height set by UL8802 at 1.9 meters.
+        """
     )
-    st.subheader("Calculation Zones", divider="grey")
+
+    st.subheader("Editing the Room", divider="grey")
     st.write(
-        """Illuminate-GUV comes pre-loaded with three key calculation zones important for 
-        assessing the functioning of GUV systems. One is for assessing system efficacy - average 
-        fluence in the room. The other two are for assessing photobiological safety - the horizontal 
-        irradiance taken at 1.9 meters from the floor over an 8 hour period determines allowable skin 
-        exposure, while vertical irradiance at the same height with an 80 degree field of view in 
-        the horizontal plane determines allowable eye exposure."""
+        """
+        In the `Edit Room` menu, you can change the size of the room, the air changes from ventilation and ozone decay
+        rate, as well as the photobiological safety standard to calculate for. Updating these options will update the 
+        calculation zones, so be sure to hit `Calculate` again afterdoing so.
+        """
+    )
+
+    st.subheader("Adding and Editing Luminaires", divider="grey")
+    st.write(
+        """
+        For more complex simulations, you can configure the position and orientation of the luminaire,
+        or add more luminaires. You can also upload your own photometric file - note that if you do this, you
+        should also provide a spectrum file, or photobiological safety calculations may be inaccurate. 
+        
+        Note that if a luminaire is placed outside the room boundaries, it will not appear in the plot, 
+        but will still participate in calculations, but not if you uncheck the box labeled `Enabled`.
+        """
+    )
+    st.subheader("Adding and Editing Calculation Zones", divider="grey")
+    st.write(
+        """
+        Illuminate-GUV comes pre-loaded with three key calculation zones important for 
+        assessing the functioning of GUV systems. One is for assessing system efficacy--average 
+        fluence in the room. The other two are for assessing photobiological 
+        safety - the *spectrally weighted* horizontal irradiance taken at 1.8 or 1.9 meters 
+        from the floor over an 8 hour period determines allowable skin exposure, while 
+        *spectrally weighted* vertical irradiance at the same height with an 80 degree field 
+        of view in the horizontal plane determines allowable eye exposure. These three special
+        calculation zones are not possible to edit, except for the spacing of the grid, which 
+        may be desirable for a finer calculation. They also can't be deleted, but they can be
+        disabled.
+        """
     )
     st.write(
-        """You can also define your own calculation zones, whether a plane or a
+        """
+        You can also define your own calculation zones, whether a plane or a
         volume. Currently, only planes normal to the floor are supported. These calculation 
         zones will have their statistics displayed in the Results page alongside the built-in
-        calculation zones."""
+        calculation zones.
+        """
     )
 
     st.subheader("Plotting Interaction", divider="grey")
     st.write(
-        """Click and drag anywhere in the plot to change the view mode. To remove a luminaire or calculation zone from the plot, click on its entry in the legend. 
-            Note that invisible luminaires and calculation zones still participate in calculations."""
+        """
+        Click and drag anywhere in the plot to change the view mode. To remove a luminaire or calculation 
+        zone from the plot, click on its entry in the legend. Note that invisible luminaires and calculation 
+        zones still participate in calculations. Currently, the room plot is only for visualization, and it 
+        is not possible to select and edit objects in the room by clicking on them.
+        """
     )
 
-    st.subheader("Interpreting the Results", divider="grey")
-    st.write("Coming soon")
-
-    show_results = st.button(
-        "Show results", use_container_width=True, key="results_tab"
+    st.subheader("Features Under Development", divider="grey")
+    st.write(
+        """
+        - **Mobile view**: Clean layout configured for mobile devices\n
+        - **Exporting results**: Export the result of any calculation zone, or all calculation zones, for use with other modeling software
+        - **Generating a report**: Generate a polished safety and efficacy report of an installation with a click of a button
+        - **Copying objects**: Duplicate a luminaire or calculation zone
+        - **Interactive plotting**: Place luminaires and draw calculation zones directly onto the interactive visualization plot
+        - **Saving and load projects**: Save all the parameters of a project as a .json blob, and upload again
+        - **Locally installable app**: Run easily as a desktop app without internet access
+        - **Support for other GUV wavelengths**: Currently, only GUV222 with krypton-chloride lamps is supported. Future releases will also support GUV254        
+        - **More accurate near-field modeling**: Definitions of GUV sources that take into account emission surface geometry and near-field radiation distribution.
+        - *...and much more!*
+        """
     )
 
-    if show_results:
-        ss.editing = "results"
-        clear_lamp_cache(room)
-        clear_zone_cache(room)
-        st.rerun()
+    st.subheader("References", divider="grey")
+    st.write("*Coming soon...*")
 
     # col1,col2 = st.columns(2)
     # add_lamp = col1.button("Add lamp",use_container_width=True,key='addlamp_tab')

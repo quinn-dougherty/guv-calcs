@@ -5,7 +5,12 @@ import pandas as pd
 import streamlit as st
 from guv_calcs.lamp import Lamp
 from guv_calcs.calc_zone import CalcPlane, CalcVol, CalcZone
-from ._widget import clear_lamp_cache, clear_zone_cache, update_lamp_aim_point, update_lamp_orientation
+from ._widget import (
+    clear_lamp_cache,
+    clear_zone_cache,
+    update_lamp_aim_point,
+    update_lamp_orientation,
+)
 
 ss = st.session_state
 WEIGHTS_URL = "data/UV Spectral Weighting Curves.csv"
@@ -347,7 +352,7 @@ def add_standard_zones(room):
 
 
 def add_new_lamp(room, name=None, interactive=True, defaults={}):
-    print('add_new_lamp', name, defaults)
+    print("add_new_lamp", name, defaults)
     """necessary logic for adding new lamp to room and to state"""
     # initialize lamp
     new_lamp_idx = len(room.lamps) + 1
@@ -357,14 +362,14 @@ def add_new_lamp(room, name=None, interactive=True, defaults={}):
     new_lamp = Lamp(
         lamp_id=new_lamp_id,
         name=name,
-        x=defaults.get('x', 3 + (0.1 * (new_lamp_idx-1))),
-        y=defaults.get('y', 2),
-        z=defaults.get('z', room.z - 0.1),
+        x=defaults.get("x", 3 + (0.1 * (new_lamp_idx - 1))),
+        y=defaults.get("y", 2),
+        z=defaults.get("z", room.z - 0.1),
         spectral_weight_source=WEIGHTS_URL,
     )
-    new_lamp.set_tilt(defaults.get('tilt', 0))
-    new_lamp.set_orientation(defaults.get('orientation', 0))
-    new_lamp.rotate(defaults.get('rotation', 0))
+    new_lamp.set_tilt(defaults.get("tilt", 0))
+    new_lamp.set_orientation(defaults.get("orientation", 0))
+    new_lamp.rotate(defaults.get("rotation", 0))
     update_lamp_aim_point(new_lamp)
     update_lamp_orientation(new_lamp)
     # add to session and to room
