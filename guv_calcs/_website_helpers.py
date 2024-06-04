@@ -92,12 +92,12 @@ def get_hours_to_tlv_room(room):
     """
 
     # select standards
-    if room.standard == "ANSI IES RP 27.1-22 (America)":
+    if "ANSI IES RP 27.1-22" in room.standard:
         skin_standard = "ANSI IES RP 27.1-22 (Skin)"
         mono_skinmax = 478.4689
         eye_standard = "ANSI IES RP 27.1-22 (Eye)"
         mono_eyemax = 160.7028
-    elif room.standard == "IEC 62471-6:2022 (International)":
+    elif "IEC 62471-6:2022" in room.standard:
         skin_standard = "IEC 62471-6:2022 (Eye/Skin)"
         eye_standard = skin_standard
         mono_skinmax = 22.865

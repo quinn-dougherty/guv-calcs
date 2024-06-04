@@ -569,15 +569,19 @@ def room_sidebar(room):
     )
 
     st.subheader("Standards")
-    standards = ["ANSI IES RP 27.1-22 (America)", "IEC 62471-6:2022 (International)"]
+    standards = [
+        "ANSI IES RP 27.1-22 (America) - UL8802",
+        "ANSI IES RP 27.1-22 (America)",
+        "IEC 62471-6:2022 (International)",
+    ]
 
     st.selectbox(
         "Select photobiological safety standard",
         options=standards,
-        index=standards.index(room.standard),
+        # index=standards.index(room.standard),
         on_change=update_room_standard,
         args=[room],
-        key=room.standard,
+        key="room_standard",
     )
 
     st.subheader("Units")

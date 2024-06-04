@@ -56,6 +56,14 @@ def update_room(room):
 
 def update_room_standard(room):
     room.standard = ss["room_standard"]
+    if "UL8802" in room.standard:
+        print("bonk")
+        room.calc_zones["SkinLimits"].set_height(1.9)
+        room.calc_zones["EyeLimits"].set_height(1.9)
+    else:
+        print("nonk")
+        room.calc_zones["SkinLimits"].set_height(1.8)
+        room.calc_zones["EyeLimits"].set_height(1.8)
 
 
 def clear_lamp_cache(room):
@@ -89,6 +97,7 @@ def initialize_room(room):
         "room_x",
         "room_y",
         "room_z",
+        "room_standard",
         "reflectance_ceiling",
         "reflectance_north",
         "reflectance_east",
@@ -101,6 +110,7 @@ def initialize_room(room):
         room.x,
         room.y,
         room.z,
+        room.standard,
         room.reflectance_ceiling,
         room.reflectance_north,
         room.reflectance_east,
