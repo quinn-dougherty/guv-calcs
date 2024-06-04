@@ -39,8 +39,8 @@ def get_disinfection_table(fluence, room):
     df["eACH-UV"] = (df["k [cm2/mJ]"] * fluence * 3.6).round(2)
     df["CADR-UV [cfm]"] = (df["eACH-UV"] * volume / 60).round(2)
     df["CADR-UV [lps]"] = (df["CADR-UV [cfm]"] * 0.47195).round(2)
-    num_papers = len(df["Ref"].unique())
-    df["Ref"] = np.linspace(1, num_papers + 2, num_papers + 2).astype(int)
+    # num_papers = len(df["Ref"].unique())
+    # df["Ref"] = np.linspace(1, num_papers + 2, num_papers + 2).astype(int)
     df = df.rename(
         columns={"Medium (specific)": "Medium", "Full Citation": "Reference"}
     )
@@ -127,30 +127,33 @@ def get_limits():
     return skin_limit, eye_limit
 
 
-def add_new_lamp(room, interactive=True):
+def add_new_lamp(room, name=None, interactive=True):
     # initialize lamp
     new_lamp_idx = len(room.lamps) + 1
     # set initial position
-    xpos, ypos = get_lamp_position(lamp_idx=new_lamp_idx, x=room.x, y=room.y)
+    name = new_lamp_idx if name is None else name
+    xpos, ypos = get_lamp_position(lamp_idx=new_lamp_idx, 
+                                    x=room.x, 
+                                    y=room.y)
     new_lamp_id = f"Lamp{new_lamp_idx}"
     new_lamp = Lamp(
         lamp_id=new_lamp_id,
+        name=name,
         x=xpos,
         y=ypos,
         z=room.z,
         spectral_weight_source=WEIGHTS_URL,
     )
     # add to session and to room
-    room.add_lamp(new_lamp)
-    # initialize_lamp(new_lamp)
-    # Automatically select for editing
-    ss.editing = "lamps"
-    ss.selected_lamp_id = new_lamp.lamp_id
+    room.add_lamp(new_lamp)    
     if interactive:
+        # select for editing
+        ss.editing = "lamps"
+        ss.selected_lamp_id = new_lamp.lamp_id
         clear_zone_cache(room)
         st.rerun()
     else:
-        return new_lamp_idx
+        return new_lamp_id
 
 
 def add_new_zone(room):
