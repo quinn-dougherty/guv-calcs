@@ -353,19 +353,40 @@ def add_standard_zones(room):
     return room
 
 
+def add_new_zone(room):
+    """necessary logic for adding new calc zone to room and to state"""
+    # initialize calculation zone
+    new_zone_idx = len(room.calc_zones) + 1
+    new_zone_id = f"CalcZone{new_zone_idx}"
+    # this zone object contains nothing but the name and ID and will be
+    # replaced by a CalcPlane or CalcVol object
+    new_zone = CalcZone(zone_id=new_zone_id, enabled=False)
+    # add to room
+    room.add_calc_zone(new_zone)
+    # select for editing
+    ss.editing = "zones"
+    ss.selected_zone_id = new_zone_id
+    clear_lamp_cache(room)
+    st.rerun()
+
+
 def add_new_lamp(room, name=None, interactive=True, defaults={}):
-    print("add_new_lamp", name, defaults)
     """necessary logic for adding new lamp to room and to state"""
     # initialize lamp
     new_lamp_idx = len(room.lamps) + 1
     # set initial position
     new_lamp_id = f"Lamp{new_lamp_idx}"
     name = new_lamp_id if name is None else name
+    if interactive:
+        x, y = get_lamp_position(lamp_idx=new_lamp_idx, x=room.x, y=room.y)
+    else:
+        x = defaults.get("x", 3 + (0.1 * (new_lamp_idx - 1)))
+        y = defaults.get("y", 2)
     new_lamp = Lamp(
         lamp_id=new_lamp_id,
         name=name,
-        x=defaults.get("x", 3 + (0.1 * (new_lamp_idx - 1))),
-        y=defaults.get("y", 2),
+        x=x,
+        y=y,
         z=defaults.get("z", room.z - 0.1),
         spectral_weight_source=WEIGHTS_URL,
     )
@@ -386,21 +407,12 @@ def add_new_lamp(room, name=None, interactive=True, defaults={}):
         return new_lamp_id
 
 
-def add_new_zone(room):
-    """necessary logic for adding new calc zone to room and to state"""
-    # initialize calculation zone
-    new_zone_idx = len(room.calc_zones) + 1
-    new_zone_id = f"CalcZone{new_zone_idx}"
-    # this zone object contains nothing but the name and ID and will be
-    # replaced by a CalcPlane or CalcVol object
-    new_zone = CalcZone(zone_id=new_zone_id, enabled=False)
-    # add to room
-    room.add_calc_zone(new_zone)
-    # select for editing
-    ss.editing = "zones"
-    ss.selected_zone_id = new_zone_id
-    clear_lamp_cache(room)
-    st.rerun()
+def get_lamp_position(lamp_idx, x, y, num_divisions=100):
+    """get the default position for an additional new lamp"""
+    xp = np.linspace(0, x, num_divisions + 1)
+    yp = np.linspace(0, y, num_divisions + 1)
+    xidx, yidx = _get_idx(lamp_idx, num_divisions=num_divisions)
+    return xp[xidx], yp[yidx]
 
 
 def _get_idx(num_points, num_divisions=100):
