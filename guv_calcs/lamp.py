@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay
-from ies_utils import read_ies_data, plot_ies, total_optical_power
+from photompy import read_ies_data, plot_ies, total_optical_power
 from .trigonometry import to_cartesian, to_polar, attitude
 
 

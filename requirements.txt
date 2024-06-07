@@ -4,3 +4,4 @@ matplotlib>=3.8.4
 scipy>=1.13.0
 setuptools>=68.2.2
 streamlit>=1.34.0
+photompy>=0.0.3
