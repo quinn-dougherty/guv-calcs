@@ -3,15 +3,15 @@ import requests
 import matplotlib.pyplot as plt
 import plotly.graph_objs as go
 from guv_calcs.room import Room
-from guv_calcs._top_ribbon import top_ribbon
-from guv_calcs._sidebar import (
+from app._top_ribbon import top_ribbon
+from app._sidebar import (
     lamp_sidebar,
     zone_sidebar,
     room_sidebar,
     results_sidebar,
     default_sidebar,
 )
-from guv_calcs._website_helpers import (
+from app._website_helpers import (
     get_local_ies_files,
     get_ies_files,
     add_standard_zones,

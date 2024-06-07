@@ -2,9 +2,9 @@ import streamlit as st
 import matplotlib.pyplot as plt
 from guv_calcs.calc_zone import CalcPlane, CalcVol
 
-from guv_calcs._website_helpers import make_file_list
-from guv_calcs._results import print_standard_zones
-from guv_calcs._widget import (
+from app._website_helpers import make_file_list
+from app._results import print_standard_zones
+from app._widget import (
     initialize_lamp,
     initialize_zone,
     remove_lamp,

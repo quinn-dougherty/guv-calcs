@@ -1,7 +1,7 @@
 import streamlit as st
 from guv_calcs.calc_zone import CalcPlane, CalcVol
-from guv_calcs._website_helpers import add_new_lamp, add_new_zone
-from guv_calcs._widget import (
+from app._website_helpers import add_new_lamp, add_new_zone
+from app._widget import (
     initialize_lamp,
     initialize_zone,
     initialize_room,
