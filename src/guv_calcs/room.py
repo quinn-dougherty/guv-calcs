@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay
 import plotly.graph_objs as go
-from guv_calcs.calc_zone import CalcZone, CalcPlane, CalcVol
+from .calc_zone import CalcZone, CalcPlane, CalcVol
 from .trigonometry import to_polar
 
 

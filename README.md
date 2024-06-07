@@ -1,33 +1,36 @@
 GUV Calcs
 ======================
 
-## Installation and Usage
+A library for carrying out fluence and irradiance calculations for germicidal UV (GUV) applications.
 
-1. Clone the repo
+## Installation
 
-   ```
-   git clone https://github.com/jvbelenky/guv-calcs.git
-   ```
-   or 
-   
-   ```
-   git clone git@github.com:jvbelenky/guv-calcs.git
-   ```
-   
-2. Install requirements
+Install with pip:
 
-	```
-	pip install -r requirements.txt
-	```
+	pip install guv-calcs
 	
-3. Update the ies_utils submodule
+Alternatively, clone the repo and install locally:
 
-	```
-	./update_ies.sh
-	```
+    git clone https://github.com/jvbelenky/guv-calcs.git
+    cd guv-calcs
+    python setup.py sdist
+    pip install . 
 
-4. Run locally with streamlit 
 
-	```
-	streamlit run guv_app.py
-	```
+## Example Usage
+
+*Coming soon...*
+
+## Roadmap
+
+*Coming soon...*
+
+## License
+
+Distributed under the MIT License. See `LICENSE.txt` for more information.
+
+## Contact
+
+Vivian Belenky - j.vivian.belenky@outlook.com - [@vivian_belenky](https://twitter.com/vivian_belenky)
+
+Project Link: [https://github.com/jvbelenky/guv-calcs/](https://github.com/jvbelenky/guv-calcs/)

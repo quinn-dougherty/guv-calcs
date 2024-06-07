@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from ies_utils import get_intensity_vectorized
+from photompy import get_intensity_vectorized
 from .trigonometry import attitude, to_polar
 
 
@@ -104,10 +104,11 @@ class CalcZone(object):
             raise TypeError("Dose must be either True or False")
 
         # convert values if they need converting
-        if dose and not self.dose:
-            self.values = self.values * 3.6 * self.hours
-        elif self.dose and not dose:
-            self.values = self.values / (3.6 * self.hours)
+        if self.values is not None:
+            if dose and not self.dose:
+                self.values = self.values * 3.6 * self.hours
+            elif self.dose and not dose:
+                self.values = self.values / (3.6 * self.hours)
 
         self.dose = dose
         if self.dose:
