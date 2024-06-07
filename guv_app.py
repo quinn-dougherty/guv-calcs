@@ -146,3 +146,7 @@ with right_pane:
     fig.layout.scene.aspectratio.z *= ar_scale
 
     st.plotly_chart(fig, use_container_width=True, height=750)
+
+    st.write(
+        "Questions? Comments? Found a bug? Want a feature? Contact j.vivian.belenky@outlook.com"
+    )

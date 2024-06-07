@@ -2,10 +2,8 @@ import streamlit as st
 import matplotlib.pyplot as plt
 from guv_calcs.calc_zone import CalcPlane, CalcVol
 
-from guv_calcs._website_helpers import (
-    make_file_list,
-    print_standard_zones,
-)
+from guv_calcs._website_helpers import make_file_list
+from guv_calcs._results import print_standard_zones
 from guv_calcs._widget import (
     initialize_lamp,
     initialize_zone,
@@ -734,7 +732,7 @@ def default_sidebar(room):
         """
         After adding a luminaire and clicking `Calculate`, the Results page will show several outputs:
         
-        - **Efficacy:** GUV system efficacy is .*Note that k values for aerosolized pathogens have high uncertainty associated with them, and these values should be understood as possible ranges.*
+        - **Efficacy:** GUV system efficacy is determined approximately by the average fluence multiplied by the susceptibility value k. *Note that k values for aerosolized pathogens have high uncertainty associated with them, and these values should be understood as possible ranges.*
         - **Ozone increase:** Given an assumed air change rate from ventilation and an ozone decay rate typical for indoor environments, the anticipated total increase in ozone in parts per billion.
         - **Photobiological safety:** Spectrally-weighted calculations for eye and skin safety, per the selected standard. If either limit is exceeded, a dimming requirement is reported. By default, the standard selected is ANSI IES RP 27.1-22, which uses the post-2022 ACGIH Threshold Limit Values (TLVs) with height set by UL8802 at 1.9 meters.
         """
