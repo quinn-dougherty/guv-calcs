@@ -157,7 +157,7 @@ class CalcZone(object):
                     raise KeyError("Units not recognized")
 
                 # save the max value to the lamp object
-                lamp.max_irradiances[self.zone_id] = values.max()
+                lamp.max_irradiances[self.zone_id] = total_values.max()
 
         # I have no earthly idea why it is necessary to do it this way
         if len(self.num_points) == 3:
