@@ -1,5 +1,7 @@
 from pathlib import Path
 import csv
+import inspect
+import json
 from io import StringIO
 import pathlib
 import warnings
@@ -8,6 +10,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay
 from photompy import read_ies_data, plot_ies, total_optical_power
 from .trigonometry import to_cartesian, to_polar, attitude
+from ._helpers import NumpyEncoder, parse_json
 
 
 class Lamp:
@@ -66,10 +69,12 @@ class Lamp:
         aimy=None,
         aimz=None,
         spectra_source=None,
-        spectral_weight_source=None,
         spectra=None,
+        spectral_weight_source=None,
+        spectral_weightings=None,
         intensity_units=None,
         radiation_type=None,
+        max_irradiances=None,
         enabled=None,
     ):
         self.lamp_id = lamp_id
@@ -90,17 +95,23 @@ class Lamp:
         # misc
         self.intensity_units = "mW/Sr" if intensity_units is None else intensity_units
         self.radiation_type = radiation_type
-        self.max_irradiances = {}  # calc zone values will be stored here
+        # calc zone values will be stored here
+        self.max_irradiances = {} if max_irradiances is None else max_irradiances
 
         # spectral weightings
         self.spectral_weight_source = spectral_weight_source
-        self.spectral_weightings = {}
-        if self.spectral_weight_source is not None:
+        self.spectral_weightings = (
+            {} if spectral_weightings is None else spectral_weightings
+        )
+        if (
+            self.spectral_weight_source is not None
+            and len(self.spectral_weightings) == 0
+        ):
             self._load_spectral_weightings()
         # spectra - unweighted and weighted
         self.spectra = {} if spectra is None else spectra
         self.spectra_source = spectra_source
-        if self.spectra_source is not None:
+        if self.spectra_source is not None and len(self.spectra) == 0:
             self._load_spectra()
             self._update_spectra()
 
@@ -182,7 +193,7 @@ class Lamp:
                 continue
             else:
                 values = np.array(val)
-                self.spectral_weightings[key] = np.stack((wavelengths, values))
+                self.spectral_weightings[key] = np.stack((wavelengths, values)).tolist()
 
     def _update_spectra(self):
         """
@@ -197,11 +208,13 @@ class Lamp:
             for key, val in self.spectral_weightings.items():
                 # update weights to match the spectral wavelengths we've got
                 weights = np.interp(wavelengths, val[0], val[1])
-                self.spectral_weightings[key] = np.stack((wavelengths, weights))
+                # self.spectral_weightings[key] = np.stack((wavelengths, weights))
                 # weight spectra
                 weighted_intensity = intensities * weights
                 ratio = maxval / max(weighted_intensity)
-                self.spectra[key] = np.stack((wavelengths, weighted_intensity * ratio))
+                self.spectra[key] = np.stack(
+                    (wavelengths, weighted_intensity * ratio)
+                ).tolist()
 
     def load_weighted_spectra(self, spectral_weight_source):
         """
@@ -510,3 +523,14 @@ class Lamp:
             ax.set_zlim(zlim)
         ax.view_init(azim=azim, elev=elev)
         return fig, ax
+
+    @classmethod
+    def from_json(cls, jsondata):
+        keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
+        data = parse_json(jsondata)
+        return cls(**{k: v for k, v in data.items() if k in keys})
+
+    def to_json(self):
+        # Create a dictionary of all instance variables
+        data = {attr: getattr(self, attr) for attr in vars(self)}
+        return json.dumps(data, cls=NumpyEncoder)

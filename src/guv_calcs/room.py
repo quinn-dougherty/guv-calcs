@@ -1,10 +1,14 @@
 import warnings
+import inspect
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay
 import plotly.graph_objs as go
+from .lamp import Lamp
 from .calc_zone import CalcZone, CalcPlane, CalcVol
 from .trigonometry import to_polar
+from ._helpers import NumpyEncoder, parse_json
 
 
 class Room:
@@ -225,9 +229,9 @@ class Room:
             showlegend=True,
         )
         aimtrace = go.Scatter3d(
-            x=[lamp.position[0], lamp.aim_point[0]],
-            y=[lamp.position[1], lamp.aim_point[1]],
-            z=[lamp.position[2], lamp.aim_point[2]],
+            x=[lamp.x, lamp.aimx],
+            y=[lamp.y, lamp.aimy],
+            z=[lamp.z, lamp.aimz],
             mode="lines",
             line=dict(color="black", width=2, dash="dash"),
             name=lamp.name,
@@ -256,9 +260,9 @@ class Room:
             self._update_trace_by_id(
                 fig,
                 lamp.lamp_id + "_aim",
-                x=[lamp.position[0], lamp.aim_point[0]],
-                y=[lamp.position[1], lamp.aim_point[1]],
-                z=[lamp.position[2], lamp.aim_point[2]],
+                x=[lamp.x, lamp.aimx],
+                y=[lamp.y, lamp.aimy],
+                z=[lamp.z, lamp.aimz],
             )
         return fig
 
@@ -463,3 +467,32 @@ class Room:
                 )
 
         return fig, ax
+
+    def to_json(self, filename):
+        room_dict = self.__dict__.copy()
+        room_dict["lamps"] = {k: v.to_json() for k, v in room_dict["lamps"].items()}
+        room_dict["calc_zones"] = {
+            k: v.to_json() for k, v in room_dict["calc_zones"].items()
+        }
+        with open(filename, "w") as json_file:
+            json.dump(room_dict, json_file, indent=4, cls=NumpyEncoder)
+        return room_dict
+
+    @classmethod
+    def from_json(cls, jsondata):
+
+        room_dict = parse_json(jsondata)
+
+        roomkeys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
+        room = cls(**{k: v for k, v in room_dict.items() if k in roomkeys})
+
+        for lampid, lamp in room_dict["lamps"].items():
+            room.add_lamp(Lamp.from_json(lamp))
+
+        for zoneid, zone in room_dict["calc_zones"].items():
+            data = json.loads(zone)
+            if data["calctype"] == "Plane":
+                room.add_calc_zone(CalcPlane.from_json(zone))
+            elif data["calctype"] == "Volume":
+                room.add_calc_zone(CalcVol.from_json(zone))
+        return room

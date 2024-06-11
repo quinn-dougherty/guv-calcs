@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
     setup(
         name="guv-calcs",
         url="https://github.com/jvbelenky/guv-calcs",
-        version="0.0.4",
+        version="0.0.5",
         author="J. Vivian Belenky",
         author_email="j.vivian.belenky@outlook.com",
         description="A library for carrying out fluence and irradiance calculations for germicidal UV (GUV) applications.",

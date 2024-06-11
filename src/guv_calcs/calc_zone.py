@@ -1,7 +1,10 @@
+import inspect
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 from photompy import get_intensity_vectorized
 from .trigonometry import attitude, to_polar
+from ._helpers import NumpyEncoder, parse_json
 
 
 class CalcZone(object):
@@ -65,6 +68,7 @@ class CalcZone(object):
             self.units = "uW/cm2"
         self.hours = 8.0 if hours is None else hours  # only used if dose is true
         # these will all be calculated after spacing is set, which is set in the subclass
+        self.calctype = "Zone"
         self.x1 = None
         self.x2 = None
         self.y1 = None
@@ -82,6 +86,17 @@ class CalcZone(object):
         self.zp = None
         self.coords = None
         self.values = None
+
+    @classmethod
+    def from_json(cls, jsondata):
+        keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
+        data = parse_json(jsondata)
+        return cls(**{k: v for k, v in data.items() if k in keys})
+
+    def to_json(self):
+        # Create a dictionary of all instance variables
+        data = {attr: getattr(self, attr) for attr in vars(self)}
+        return json.dumps(data, cls=NumpyEncoder)
 
     def set_dimensions(self, dimensions):
         raise NotImplementedError
@@ -175,6 +190,7 @@ class CalcZone(object):
         # convert to dose
         if self.dose:
             self.values = self.values * 3.6 * self.hours
+
         return self.values
 
 
@@ -207,8 +223,17 @@ class CalcVol(CalcZone):
     ):
 
         super().__init__(
-            zone_id, name, offset, fov80, vert, horiz, dose, hours, enabled
+            zone_id,
+            name,
+            offset,
+            fov80,
+            vert,
+            horiz,
+            dose,
+            hours,
+            enabled,
         )
+        self.calctype = "Volume"
         self.x1 = 0 if x1 is None else x1
         self.x2 = 6 if x2 is None else x2
         self.y1 = 0 if y1 is None else y1
@@ -290,9 +315,17 @@ class CalcPlane(CalcZone):
     ):
 
         super().__init__(
-            zone_id, name, offset, fov80, vert, horiz, dose, hours, enabled
+            zone_id,
+            name,
+            offset,
+            fov80,
+            vert,
+            horiz,
+            dose,
+            hours,
+            enabled,
         )
-
+        self.calctype = "Plane"
         self.height = 1.9 if height is None else height
         self.x1 = 0 if x1 is None else x1
         self.x2 = 6 if x2 is None else x2
