@@ -24,7 +24,7 @@ install:
 	
 build:
 	rm -rf dist build */*.egg-info *.egg-info
-	python setup.py sdist bdist_wheel
+	$(PYTHON_INTERPRETER) setup.py sdist bdist_wheel
 	twine upload dist/*
 
 ## Lint using flake8 and black
@@ -40,3 +40,8 @@ clean:
 	@find . -type f -name "*~" -delete
 	@find . -type f -name "*.kate-swp" -delete
 	@echo "Done"
+
+test: install
+	$(PYTHON_INTERPRETER) tests/test.py
+	
+all: lint install test clean
