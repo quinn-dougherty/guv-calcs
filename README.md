@@ -31,6 +31,6 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 ## Contact
 
-Vivian Belenky - j.vivian.belenky@outlook.com - [@vivian_belenky](https://twitter.com/vivian_belenky)
+Vivian Belenky - jvb@osluv.org
 
 Project Link: [https://github.com/jvbelenky/guv-calcs/](https://github.com/jvbelenky/guv-calcs/)
