@@ -54,7 +54,7 @@ class Lamp:
     enabled: bool
         determines if lamp participates in calculations
     """
-
+    
     def __init__(
         self,
         lamp_id,
@@ -244,7 +244,6 @@ class Lamp:
         """
         Loads lamp data from an IES file and initializes photometric properties.
         """
-        print(self.filedata)
         self.lampdict = read_ies_data(self.filedata)
         self.valdict = self.lampdict["full_vals"]
         self.thetas = self.valdict["thetas"]
@@ -529,6 +528,11 @@ class Lamp:
     def from_json(cls, jsondata):
         keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
         data = parse_json(jsondata)
+        # convert the contents of these dicts from lists to arrays
+        special_keys = ["spectra", "spectral_weightings"]
+        for key, val in data.items():
+            if key in special_keys:
+                data[key] = {k: np.array(v) for k, v in data[key].items()}
         return cls(**{k: v for k, v in data.items() if k in keys})
 
     def to_json(self):

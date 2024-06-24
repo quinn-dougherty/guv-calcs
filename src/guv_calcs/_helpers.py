@@ -10,9 +10,8 @@ class NumpyEncoder(json.JSONEncoder):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         elif isinstance(obj, bytes):
-            return obj.decode('utf8')
+            return obj.decode("utf8")
         return json.JSONEncoder.default(self, obj)
-
 
 
 def parse_json(jsondata):

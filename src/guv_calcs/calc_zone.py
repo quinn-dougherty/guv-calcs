@@ -54,6 +54,7 @@ class CalcZone(object):
         hours=None,
         enabled=None,
         show_values=None,
+        values=None,
     ):
         self.zone_id = zone_id
         self.name = zone_id if name is None else name
@@ -83,17 +84,21 @@ class CalcZone(object):
         self.x_spacing = None
         self.y_spacing = None
         self.z_spacing = None
+
         self.num_points = None
         self.xp = None
         self.yp = None
         self.zp = None
         self.coords = None
-        self.values = None
+        self.values = values
 
     @classmethod
     def from_json(cls, jsondata):
         keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
         data = parse_json(jsondata)
+        for key, val in data.items():
+            if key == "values":
+                data[key] = np.array(val)
         return cls(**{k: v for k, v in data.items() if k in keys})
 
     def to_json(self):
@@ -224,6 +229,7 @@ class CalcVol(CalcZone):
         hours=None,
         enabled=None,
         show_values=None,
+        values=None,
     ):
 
         super().__init__(
@@ -237,6 +243,7 @@ class CalcVol(CalcZone):
             hours=hours,
             enabled=enabled,
             show_values=show_values,
+            values=values,
         )
         self.calctype = "Volume"
         self.x1 = 0 if x1 is None else x1
@@ -318,6 +325,7 @@ class CalcPlane(CalcZone):
         hours=None,
         enabled=None,
         show_values=None,
+        values=None,
     ):
 
         super().__init__(
@@ -331,6 +339,7 @@ class CalcPlane(CalcZone):
             hours=hours,
             enabled=enabled,
             show_values=show_values,
+            values=values,
         )
         self.calctype = "Plane"
         self.height = 1.9 if height is None else height
