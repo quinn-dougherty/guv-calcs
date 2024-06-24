@@ -244,6 +244,7 @@ class Lamp:
         """
         Loads lamp data from an IES file and initializes photometric properties.
         """
+        print(self.filedata)
         self.lampdict = read_ies_data(self.filedata)
         self.valdict = self.lampdict["full_vals"]
         self.thetas = self.valdict["thetas"]

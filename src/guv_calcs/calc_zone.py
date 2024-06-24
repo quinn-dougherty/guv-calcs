@@ -53,10 +53,10 @@ class CalcZone(object):
         dose=None,
         hours=None,
         enabled=None,
+        show_values=None,
     ):
         self.zone_id = zone_id
         self.name = zone_id if name is None else name
-        self.enabled = True if enabled is None else enabled
         self.offset = True if offset is None else offset
         self.fov80 = False if fov80 is None else fov80
         self.vert = False if vert is None else vert
@@ -67,6 +67,9 @@ class CalcZone(object):
         else:
             self.units = "uW/cm2"
         self.hours = 8.0 if hours is None else hours  # only used if dose is true
+        self.enabled = True if enabled is None else enabled
+        self.show_values = True if show_values is None else show_values
+
         # these will all be calculated after spacing is set, which is set in the subclass
         self.calctype = "Zone"
         self.x1 = None
@@ -220,18 +223,20 @@ class CalcVol(CalcZone):
         dose=None,
         hours=None,
         enabled=None,
+        show_values=None,
     ):
 
         super().__init__(
-            zone_id,
-            name,
-            offset,
-            fov80,
-            vert,
-            horiz,
-            dose,
-            hours,
-            enabled,
+            zone_id=zone_id,
+            name=name,
+            offset=offset,
+            fov80=fov80,
+            vert=vert,
+            horiz=horiz,
+            dose=dose,
+            hours=hours,
+            enabled=enabled,
+            show_values=show_values,
         )
         self.calctype = "Volume"
         self.x1 = 0 if x1 is None else x1
@@ -312,18 +317,20 @@ class CalcPlane(CalcZone):
         dose=None,
         hours=None,
         enabled=None,
+        show_values=None,
     ):
 
         super().__init__(
-            zone_id,
-            name,
-            offset,
-            fov80,
-            vert,
-            horiz,
-            dose,
-            hours,
-            enabled,
+            zone_id=zone_id,
+            name=name,
+            offset=offset,
+            fov80=fov80,
+            vert=vert,
+            horiz=horiz,
+            dose=dose,
+            hours=hours,
+            enabled=enabled,
+            show_values=show_values,
         )
         self.calctype = "Plane"
         self.height = 1.9 if height is None else height

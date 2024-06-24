@@ -362,6 +362,41 @@ class Room:
                 z=z_coords,
                 line=dict(color=zonecolor, width=5, dash="dot"),
             )
+        # fluence isosurface
+        if zone.values is not None and zone.show_values:
+            X, Y, Z = np.meshgrid(*zone.points)
+            x, y, z = X.flatten(), Y.flatten(), Z.flatten()
+            values = zone.values.flatten()
+            isomin = zone.values.mean() / 2
+            if zone.name + " Values" not in traces:
+                zone_value_trace = go.Isosurface(
+                    x=x,
+                    y=y,
+                    z=z,
+                    value=values,
+                    surface_count=3,
+                    isomin=isomin,
+                    opacity=0.25,
+                    showscale=False,
+                    colorbar=None,
+                    name=zone.name + " Values",
+                    customdata=[zone.zone_id + "_values"],
+                    legendgroup="zones",
+                    legendgrouptitle_text="Calculation Zones",
+                    showlegend=True,
+                )
+                fig.add_trace(zone_value_trace)
+            else:
+                self._update_trace_by_id(
+                    fig,
+                    zone.zone_id,
+                    x=x,
+                    y=y,
+                    z=z,
+                    values=values,
+                    isomin=isomin,
+                )
+
         return fig
 
     def plotly(
@@ -468,15 +503,17 @@ class Room:
 
         return fig, ax
 
-    def to_json(self, filename):
+    def to_json(self, filename=None):
         room_dict = self.__dict__.copy()
         room_dict["lamps"] = {k: v.to_json() for k, v in room_dict["lamps"].items()}
         room_dict["calc_zones"] = {
             k: v.to_json() for k, v in room_dict["calc_zones"].items()
         }
-        with open(filename, "w") as json_file:
-            json.dump(room_dict, json_file, indent=4, cls=NumpyEncoder)
-        return room_dict
+        json_obj = json.dumps(room_dict, indent=4, cls=NumpyEncoder)
+        if filename is not None:
+            with open(filename, "w") as json_file:
+                json_file.write(json_obj)
+        return json_obj
 
     @classmethod
     def from_json(cls, jsondata):

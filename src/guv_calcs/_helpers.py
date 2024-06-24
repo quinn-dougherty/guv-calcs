@@ -4,12 +4,15 @@ import numpy as np
 
 
 class NumpyEncoder(json.JSONEncoder):
-    """Custom encoder for numpy data types"""
+    """Custom encoder for numpy and bytes data types"""
 
     def default(self, obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
+        elif isinstance(obj, bytes):
+            return obj.decode('utf8')
         return json.JSONEncoder.default(self, obj)
+
 
 
 def parse_json(jsondata):
