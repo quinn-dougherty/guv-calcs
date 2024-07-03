@@ -398,7 +398,7 @@ class CalcPlane(CalcZone):
         if self.values is not None:
             vmin = self.values.min() if vmin is None else vmin
             vmax = self.values.max() if vmax is None else vmax
-            extent = [self.y1, self.y2, self.x1, self.x2]
+            extent = [self.x1, self.x2, self.y1, self.y2]
             # ratio = (self.y2 - self.y1) / (self.x2 - self.x1)
             # if ratio < 1:
             # orientation, location = "horizontal", "top"

@@ -40,7 +40,7 @@ class Room:
         self.units = "meters" if units is None else units.lower()
         self.set_units(self.units)  # just checks that unit entry is valid
         default_dimensions = (
-            [6.0, 4.0, 2.7] if self.units == "meters" else [20.0, 13.0, 9.0]
+            [4.0, 6.0, 2.7] if self.units == "meters" else [20.0, 13.0, 9.0]
         )
         self.x = default_dimensions[0] if x is None else x
         self.y = default_dimensions[1] if y is None else y
