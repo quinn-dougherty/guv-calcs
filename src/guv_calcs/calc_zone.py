@@ -184,9 +184,10 @@ class CalcZone(object):
                 
         total_values = total_values.reshape(*self.num_points)
         
-        total_values = np.ma.masked_invalid(
-            total_values
-        )  # mask any nans near light source
+        if np.isnan(total_values.any()):
+            total_values = np.ma.masked_invalid(
+                total_values
+            )  # mask any nans near light source
         self.values = total_values
         # convert to dose
         if self.dose:
