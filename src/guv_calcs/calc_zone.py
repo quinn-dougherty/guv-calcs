@@ -181,16 +181,9 @@ class CalcZone(object):
 
                 # save the max value to the lamp object
                 lamp.max_irradiances[self.zone_id] = total_values.max()
-
-        # I have no earthly idea why it is necessary to do it this way
-        if len(self.num_points) == 3:
-            total_values = total_values.reshape(
-                (self.num_points[1], self.num_points[0], self.num_points[2])
-            )
-        elif len(self.num_points) == 2:
-            total_values = total_values.reshape(
-                (self.num_points[1], self.num_points[0])
-            )
+                
+        total_values = total_values.reshape(*self.num_points)
+        
         total_values = np.ma.masked_invalid(
             total_values
         )  # mask any nans near light source
@@ -296,7 +289,7 @@ class CalcVol(CalcZone):
             zpoints = np.linspace(self.z1, self.z2, numz)
         self.points = [xpoints, ypoints, zpoints]
         self.xp, self.yp, self.zp = self.points
-        X, Y, Z = [grid.reshape(-1) for grid in np.meshgrid(*self.points)]
+        X, Y, Z = [grid.reshape(-1) for grid in np.meshgrid(*self.points,indexing='ij')]
         self.coords = np.array((X, Y, Z)).T
 
 
@@ -391,7 +384,7 @@ class CalcPlane(CalcZone):
             ypoints = np.linspace(self.y1, self.y2, numy)
         self.points = [xpoints, ypoints]
         self.xp, self.yp = self.points
-        X, Y = [grid.reshape(-1) for grid in np.meshgrid(*self.points)]
+        X, Y = [grid.reshape(-1) for grid in np.meshgrid(*self.points, indexing='ij')]
         xy_coords = np.array([np.array((x0, y0)) for x0, y0 in zip(X, Y)])
         zs = np.ones(xy_coords.shape[0]) * self.height
         self.coords = np.stack([xy_coords.T[0], xy_coords.T[1], zs]).T
