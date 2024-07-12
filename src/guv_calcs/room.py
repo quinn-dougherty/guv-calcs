@@ -40,7 +40,7 @@ class Room:
         self.units = "meters" if units is None else units.lower()
         self.set_units(self.units)  # just checks that unit entry is valid
         default_dimensions = (
-            [4.0, 6.0, 2.7] if self.units == "meters" else [20.0, 13.0, 9.0]
+            [6.0, 4.0, 2.7] if self.units == "meters" else [20.0, 13.0, 9.0]
         )
         self.x = default_dimensions[0] if x is None else x
         self.y = default_dimensions[1] if y is None else y
@@ -66,6 +66,37 @@ class Room:
 
         self.lamps = {}
         self.calc_zones = {}
+        
+    def to_json(self, filename=None):
+        room_dict = self.__dict__.copy()
+        room_dict["lamps"] = {k: v.to_json() for k, v in room_dict["lamps"].items()}
+        room_dict["calc_zones"] = {
+            k: v.to_json() for k, v in room_dict["calc_zones"].items()
+        }
+        json_obj = json.dumps(room_dict, indent=4, cls=NumpyEncoder)
+        if filename is not None:
+            with open(filename, "w") as json_file:
+                json_file.write(json_obj)
+        return json_obj
+
+    @classmethod
+    def from_json(cls, jsondata):
+
+        room_dict = parse_json(jsondata)
+
+        roomkeys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
+        room = cls(**{k: v for k, v in room_dict.items() if k in roomkeys})
+
+        for lampid, lamp in room_dict["lamps"].items():
+            room.add_lamp(Lamp.from_json(lamp))
+
+        for zoneid, zone in room_dict["calc_zones"].items():
+            data = json.loads(zone)
+            if data["calctype"] == "Plane":
+                room.add_calc_zone(CalcPlane.from_json(zone))
+            elif data["calctype"] == "Volume":
+                room.add_calc_zone(CalcVol.from_json(zone))
+        return room
 
     def set_units(self, units):
         """set room units"""
@@ -156,24 +187,10 @@ class Room:
         for name, zone in self.calc_zones.items():
             if zone.enabled:
                 zone.calculate_values(lamps=self.lamps)
-
-    # def _set_visibility(self, fig, trace_id, val):
-    # """change visibility of lamp or calc zone trace"""
-    # traces = [trace.name for trace in fig.data]
-    # if trace_id in traces:
-    # # fig.data[traces.index(trace_id)].visible = val
-    # fig.update_traces(visible=val,selector=({"name": trace_id}))
-    # print(val)
-    # return fig
-
-    # def _get_visibility(self, fig, trace_id):
-    # """get visibility status of a trace"""
-    # traces = [trace.name for trace in fig.data]
-    # if trace_id in traces:
-    # vis = fig.data[traces.index(trace_id)].visible
-    # else:
-    # vis = None
-    # return vis
+    
+    def calculate_by_id(self,zone_id):
+        """calculate just the calc zone selected"""
+        self.calc_zones[zone_id].calculate_values(lamps=self.lamps)
 
     def _set_color(self, select_id, label, enabled):
         if not enabled:
@@ -447,89 +464,4 @@ class Room:
         )
         fig.update_scenes(camera_projection_type="orthographic")
         return fig
-
-    def plot(
-        self,
-        fig=None,
-        ax=None,
-        elev=30,
-        azim=-45,
-        title="",
-        color="#cc61ff",
-        alpha=0.4,
-        select_id=None,
-    ):
-        """
-        DEPRECATED
-        Generates a 3D plot of the room and the lamps in it
-        """
-        if fig is None:
-            fig = plt.figure()
-        if ax is None:
-            ax = fig.add_subplot(111, projection="3d")
-        ax.set_title(title)
-        ax.view_init(azim=azim, elev=elev)
-        ax.set_xlim(0, self.x)
-        ax.set_ylim(0, self.y)
-        ax.set_zlim(0, self.z)
-        for lampid, lamp in self.lamps.items():
-            if lamp.filename is not None and lamp.visible:
-                label = lamp.name
-                if select_id is not None and select_id == lampid:
-                    lampcolor = color
-                else:
-                    lampcolor = "blue"
-                x, y, z = lamp.transform(
-                    lamp.photometric_coords, scale=lamp.values.max()
-                ).T
-                Theta, Phi, R = to_polar(*lamp.photometric_coords.T)
-                tri = Delaunay(np.column_stack((Theta.flatten(), Phi.flatten())))
-                ax.plot_trisurf(
-                    x,
-                    y,
-                    z,
-                    triangles=tri.simplices,
-                    label=label,
-                    color=lampcolor,
-                    alpha=alpha,
-                )
-                ax.plot(
-                    *np.array((lamp.aim_point, lamp.position)).T,
-                    linestyle="--",
-                    linewidth=1,
-                    color="black",
-                    alpha=0.7,
-                )
-
-        return fig, ax
-
-    def to_json(self, filename=None):
-        room_dict = self.__dict__.copy()
-        room_dict["lamps"] = {k: v.to_json() for k, v in room_dict["lamps"].items()}
-        room_dict["calc_zones"] = {
-            k: v.to_json() for k, v in room_dict["calc_zones"].items()
-        }
-        json_obj = json.dumps(room_dict, indent=4, cls=NumpyEncoder)
-        if filename is not None:
-            with open(filename, "w") as json_file:
-                json_file.write(json_obj)
-        return json_obj
-
-    @classmethod
-    def from_json(cls, jsondata):
-
-        room_dict = parse_json(jsondata)
-
-        roomkeys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
-        room = cls(**{k: v for k, v in room_dict.items() if k in roomkeys})
-
-        for lampid, lamp in room_dict["lamps"].items():
-            room.add_lamp(Lamp.from_json(lamp))
-
-        for zoneid, zone in room_dict["calc_zones"].items():
-            data = json.loads(zone)
-            if data["calctype"] == "Plane":
-                room.add_calc_zone(CalcPlane.from_json(zone))
-            elif data["calctype"] == "Volume":
-                room.add_calc_zone(CalcVol.from_json(zone))
-        return room
+        
