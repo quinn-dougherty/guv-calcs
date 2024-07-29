@@ -381,7 +381,7 @@ class Room:
             )
         # fluence isosurface
         if zone.values is not None and zone.show_values:
-            X, Y, Z = np.meshgrid(*zone.points)
+            X, Y, Z = np.meshgrid(*zone.points,indexing='ij')
             x, y, z = X.flatten(), Y.flatten(), Z.flatten()
             values = zone.values.flatten()
             isomin = zone.values.mean() / 2
