@@ -20,7 +20,7 @@ endif
 install:
 	rm -rf dist build */*.egg-info *.egg-info
 	$(PYTHON_INTERPRETER) setup.py sdist
-	pip install .
+	pip install . --no-cache-dir
 	
 build:
 	rm -rf dist build */*.egg-info *.egg-info

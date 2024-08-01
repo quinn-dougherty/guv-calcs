@@ -2,7 +2,6 @@ import warnings
 import inspect
 import json
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay
 import plotly.graph_objs as go
 from .lamp import Lamp
@@ -66,7 +65,7 @@ class Room:
 
         self.lamps = {}
         self.calc_zones = {}
-        
+
     def to_json(self, filename=None):
         room_dict = self.__dict__.copy()
         room_dict["lamps"] = {k: v.to_json() for k, v in room_dict["lamps"].items()}
@@ -187,8 +186,8 @@ class Room:
         for name, zone in self.calc_zones.items():
             if zone.enabled:
                 zone.calculate_values(lamps=self.lamps)
-    
-    def calculate_by_id(self,zone_id):
+
+    def calculate_by_id(self, zone_id):
         """calculate just the calc zone selected"""
         self.calc_zones[zone_id].calculate_values(lamps=self.lamps)
 
@@ -381,7 +380,7 @@ class Room:
             )
         # fluence isosurface
         if zone.values is not None and zone.show_values:
-            X, Y, Z = np.meshgrid(*zone.points,indexing='ij')
+            X, Y, Z = np.meshgrid(*zone.points, indexing="ij")
             x, y, z = X.flatten(), Y.flatten(), Z.flatten()
             values = zone.values.flatten()
             isomin = zone.values.mean() / 2
@@ -464,4 +463,3 @@ class Room:
         )
         fig.update_scenes(camera_projection_type="orthographic")
         return fig
-        

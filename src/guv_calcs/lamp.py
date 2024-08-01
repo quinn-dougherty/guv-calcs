@@ -3,6 +3,7 @@ import csv
 import inspect
 import json
 from io import StringIO
+from importlib import resources
 import pathlib
 import warnings
 import numpy as np
@@ -54,7 +55,7 @@ class Lamp:
     enabled: bool
         determines if lamp participates in calculations
     """
-    
+
     def __init__(
         self,
         lamp_id,
@@ -99,15 +100,21 @@ class Lamp:
         self.max_irradiances = {} if max_irradiances is None else max_irradiances
 
         # spectral weightings
-        self.spectral_weight_source = spectral_weight_source
-        self.spectral_weightings = (
-            {} if spectral_weightings is None else spectral_weightings
-        )
-        if (
-            self.spectral_weight_source is not None
-            and len(self.spectral_weightings) == 0
-        ):
+        # load source
+        if spectral_weight_source is None:
+            # load package resource version if user does not provide file
+            fname = "UV Spectral Weighting Curves.csv"
+            path = resources.files("guv_calcs.data").joinpath(fname)
+            with path.open("rb") as file:
+                self.spectral_weight_source = file.read()
+        else:
+            self.spectral_weight_source = spectral_weight_source
+        # load weights from source
+        if spectral_weightings is None:
+            self.spectral_weightings = {}
+        if len(self.spectral_weightings) == 0:
             self._load_spectral_weightings()
+
         # spectra - unweighted and weighted
         self.spectra = {} if spectra is None else spectra
         self.spectra_source = spectra_source

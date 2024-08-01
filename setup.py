@@ -18,6 +18,7 @@ with open("README.md", "r") as fh:
         ],
         packages=find_packages('src'),
         package_dir={'': 'src'},
+        package_data={'guv_calcs': ['data/*', 'data/*/*']},
         zip_safe=True,
         python_requires=">=3.8",
         install_requires=[
