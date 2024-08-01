@@ -56,7 +56,11 @@ class Lamp:
         where N = the number of (wavelength, relative intensity) pairs.
     enabled: bool
         determines if lamp participates in calculations. A lamp may be created and added to a room, but disabled for
-        particular simulations.
+        particular simualtions.
+
+    External Methods
+    --------------------
+
     """
 
     def __init__(
@@ -204,14 +208,12 @@ class Lamp:
         coords = (coords.T / scale).T + self.position
         return coords
         
-    def plot_ies(self, title="",show=False):
+    def plot_ies(self, title=""):
         """standard polar plot of an ies file"""
         fig, ax = plot_ies(fdata=self.valdict, title=title)
-        if show:
-            plt.show()
         return fig, ax
 
-    def plot_spectra(self, title=None, fig=None, figsize=(6.4, 4.8), yscale="linear",show=False):
+    def plot_spectra(self, title=None, fig=None, figsize=(6.4, 4.8), yscale="linear"):
         """
         plot the spectra of the lamp. at minimum, the unweighted spectra, possibly all
         weighted spectra as well.
@@ -236,9 +238,6 @@ class Lamp:
 
             title = self.name if title is None else title
             ax.set_title(title)
-        if show:
-            plt.show()
-        
         return fig
         
     def plot_web(
@@ -252,7 +251,6 @@ class Lamp:
         xlim=None,
         ylim=None,
         zlim=None,
-        show=False,
     ):
         """plot photometric web, where distance r is set by the irradiance value"""
         scale = self.values.max()
@@ -277,8 +275,6 @@ class Lamp:
         if zlim is not None:
             ax.set_zlim(zlim)
         ax.view_init(azim=azim, elev=elev)
-        if show:
-            plt.show()
         return fig, ax
         
     def plot_3d(
@@ -292,7 +288,6 @@ class Lamp:
         cmap="rainbow",
         fig=None,
         ax=None,
-        show=False
     ):
         """
         plot in cartesian 3d space of the true positions of the irradiance values
@@ -316,8 +311,6 @@ class Lamp:
         ax.set_xlabel("x")
         ax.set_ylabel("y")
         ax.set_zlabel("z")
-        if show:
-            plt.show()
         return fig, ax    
         
     def reload(self, filename=None, filedata=None):

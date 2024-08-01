@@ -390,7 +390,7 @@ class CalcPlane(CalcZone):
         zs = np.ones(xy_coords.shape[0]) * self.height
         self.coords = np.stack([xy_coords.T[0], xy_coords.T[1], zs]).T
 
-    def plot_plane(self, fig=None, vmin=None, vmax=None, title=None,show=False):
+    def plot_plane(self, fig=None, vmin=None, vmax=None, title=None):
         """Plot the image of the radiation pattern"""
         if fig is None:
             fig, ax = plt.subplots()
@@ -411,7 +411,4 @@ class CalcPlane(CalcZone):
             )
             ax.set_title(title)
             cbar.set_label(self.units, loc="center")
-            
-        if show:
-            plt.show()
         return fig
