@@ -92,13 +92,49 @@ class CalcZone(object):
         self.coords = None
         self.values = values
 
+    def save_zone(self, filename=None):
+
+        data = {}
+        data["zone_id"] = self.zone_id
+        data["name"] = self.name
+        data["offset"] = self.offset
+        data["fov80"] = self.fov80
+        data["vert"] = self.vert
+        data["horiz"] = self.horiz
+        data["dose"] = self.dose
+        data["hours"] = self.hours
+        data["enabled"] = self.enabled
+        data["show_values"] = self.show_values
+        data["x1"] = self.x1
+        data["x2"] = self.x2
+        data["x_spacing"] = self.x_spacing
+        data["y1"] = self.y1
+        data["y2"] = self.y2
+        data["y_spacing"] = self.y_spacing
+        if isinstance(self, CalcPlane):
+            data["height"] = self.height
+            data["calctype"] = "Plane"
+        elif isinstance(self, CalcVol):
+            data["z1"] = self.z1
+            data["z2"] = self.z2
+            data["z_spacing"] = self.z_spacing
+            data["calctype"] = "Volume"
+
+        if filename is not None:
+            with open(filename, "w") as json_file:
+                json_file.write(json.dumps(data))
+
+        return data
+
     @classmethod
     def from_json(cls, jsondata):
-        keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
         data = parse_json(jsondata)
-        for key, val in data.items():
-            if key == "values":
-                data[key] = np.array(val)
+        keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
+        return cls(**{k: v for k, v in data.items() if k in keys})
+
+    @classmethod
+    def from_dict(cls, data):
+        keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
         return cls(**{k: v for k, v in data.items() if k in keys})
 
     def to_json(self):

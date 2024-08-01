@@ -83,6 +83,17 @@ class Lamp:
         max_irradiances=None,
         enabled=None,
     ):
+
+        """
+        TODO:
+            1. possibly worth removing the spectra and spectral_weightings arguments
+        and have it only possible for users to set them from a source?
+            2. probably __init__ needs to change initialization strategy
+            3. possibly Spectra should be its own class? idk...
+            4. in general much to think about
+
+        """
+
         self.lamp_id = lamp_id
         self.name = lamp_id if name is None else name
         self.enabled = True if enabled is None else enabled
@@ -100,9 +111,9 @@ class Lamp:
 
         # calc zone values will be stored here
         self.max_irradiances = {} if max_irradiances is None else max_irradiances
-        
+
         # spectral weightings
-        self.spectral_weight_source = spectral_weight_source # can be None        
+        self.spectral_weight_source = spectral_weight_source  # can be None
         # load weights from source
         if spectral_weightings is None:
             self.spectral_weightings = {}
@@ -140,12 +151,12 @@ class Lamp:
         self.position = position
         self.x, self.y, self.z = self.position
         return self
-        
+
     def rotate(self, angle):
         """designate lamp orientation with respect to its z axis"""
         self.angle = angle
         return self
-        
+
     def aim(self, x=None, y=None, z=None):
         """aim lamp at a point in cartesian space"""
         x = self.aimx if x is None else x
@@ -159,7 +170,7 @@ class Lamp:
         # self.heading = (heading+360)%360
         # self.bank = (bank+360)%360
         return self
-        
+
     def set_orientation(self, orientation, dimensions=None, distance=None):
         """
         set orientation/heading.
@@ -178,13 +189,13 @@ class Lamp:
         """
         # tilt = (tilt + 360) % 360
         self.bank = tilt
-        self._recalculate_aim_point(dimensions=dimensions, distance=distance)    
-    
+        self._recalculate_aim_point(dimensions=dimensions, distance=distance)
+
     def get_total_power(self):
         """return the lamp's total optical power"""
         self.total_optical_power = total_optical_power(self.interpdict)
         return self.total_optical_power
-        
+
     def get_cartesian(self, scale=1, sigfigs=9):
         """Return lamp's true position coordinates in cartesian space"""
         return self.transform(self.coords, scale=scale).round(sigfigs)
@@ -193,7 +204,7 @@ class Lamp:
         """Return lamp's true position coordinates in polar space"""
         cartesian = self.transform(self.coords) - self.position
         return np.array(to_polar(*cartesian.T)).round(sigfigs)
-        
+
     def transform(self, coords, scale=1):
         """
         Transforms the given coordinates based on the lamp's orientation and position.
@@ -207,7 +218,7 @@ class Lamp:
         ).T
         coords = (coords.T / scale).T + self.position
         return coords
-        
+
     def plot_ies(self, title=""):
         """standard polar plot of an ies file"""
         fig, ax = plot_ies(fdata=self.valdict, title=title)
@@ -239,7 +250,7 @@ class Lamp:
             title = self.name if title is None else title
             ax.set_title(title)
         return fig
-        
+
     def plot_web(
         self,
         elev=30,
@@ -276,7 +287,7 @@ class Lamp:
             ax.set_zlim(zlim)
         ax.view_init(azim=azim, elev=elev)
         return fig, ax
-        
+
     def plot_3d(
         self,
         elev=45,
@@ -291,7 +302,7 @@ class Lamp:
     ):
         """
         plot in cartesian 3d space of the true positions of the irradiance values
-        mostly a convenience visualization function. Generally irradiance values 
+        mostly a convenience visualization function. Generally irradiance values
         should use a polar plot.
         """
         x, y, z = self.transform(self.coords).T
@@ -311,8 +322,8 @@ class Lamp:
         ax.set_xlabel("x")
         ax.set_ylabel("y")
         ax.set_zlabel("z")
-        return fig, ax    
-        
+        return fig, ax
+
     def reload(self, filename=None, filedata=None):
         """
         replace the ies file without erasing any position/rotation/eing information
@@ -360,16 +371,18 @@ class Lamp:
     def load_weighted_spectra(self, spectral_weight_source):
         """
         external method to set self.spectral_weight_source after initialization
-        will update self.spectra with new weightings 
+        will update self.spectra with new weightings
         """
         self.spectral_weight_source = spectral_weight_source
         self._load_spectral_weightings()
         self._update_spectra()
 
-        
-                
     def _load_csv(self, datasource):
         """load csv data from either path or bytes"""
+
+        # p = Path('.').glob('**/*')
+        # files = [x for x in p if x.is_file()]
+        # print(files)
         if isinstance(datasource, (str, pathlib.PosixPath)):
             filepath = Path(datasource)
             filetype = filepath.suffix.lower()
@@ -542,16 +555,48 @@ class Lamp:
 
     @classmethod
     def from_json(cls, jsondata):
-        keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
+        """initialize class from json"""
         data = parse_json(jsondata)
-        # convert the contents of these dicts from lists to arrays
-        special_keys = ["spectra", "spectral_weightings"]
-        for key, val in data.items():
-            if key in special_keys:
-                data[key] = {k: np.array(v) for k, v in data[key].items()}
+        keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
+        return cls(**{k: v for k, v in data.items() if k in keys})
+
+    @classmethod
+    def from_dict(cls, data):
+        """initialize class from dict"""
+        keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
         return cls(**{k: v for k, v in data.items() if k in keys})
 
     def to_json(self):
-        # Create a dictionary of all instance variables
+        """
+        Create a dictionary of ALL instance variables
+        """
         data = {attr: getattr(self, attr) for attr in vars(self)}
         return json.dumps(data, cls=NumpyEncoder)
+
+    def save_lamp(self, filename=None):
+        """
+        save just the minimum number of parameters required to re-instantiate the lamp
+        Returns dict. If filename is not None, saves dict as json.
+        Does not save calculation data like max_irradiances.
+        """
+
+        data = {}
+        data["lamp_id"] = self.lamp_id
+        data["name"] = self.name
+        data["x"] = self.x
+        data["y"] = self.y
+        data["z"] = self.z
+        data["angle"] = self.angle
+        data["aimx"] = self.aimx
+        data["aimy"] = self.aimy
+        data["aimz"] = self.aimz
+        data["filedata"] = self.filedata
+        data["spectra_source"] = self.spectra_source
+        if self.spectral_weight_source is not None:
+            data["spectral_weight_source"] = self.spectral_weight_source
+
+        if filename is not None:
+            with open(filename, "w") as json_file:
+                json_file.write(json.dumps(data))
+
+        return data

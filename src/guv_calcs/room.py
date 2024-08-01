@@ -66,18 +66,6 @@ class Room:
         self.lamps = {}
         self.calc_zones = {}
 
-    def to_json(self, filename=None):
-        room_dict = self.__dict__.copy()
-        room_dict["lamps"] = {k: v.to_json() for k, v in room_dict["lamps"].items()}
-        room_dict["calc_zones"] = {
-            k: v.to_json() for k, v in room_dict["calc_zones"].items()
-        }
-        json_obj = json.dumps(room_dict, indent=4, cls=NumpyEncoder)
-        if filename is not None:
-            with open(filename, "w") as json_file:
-                json_file.write(json_obj)
-        return json_obj
-
     @classmethod
     def from_json(cls, jsondata):
 
@@ -87,15 +75,39 @@ class Room:
         room = cls(**{k: v for k, v in room_dict.items() if k in roomkeys})
 
         for lampid, lamp in room_dict["lamps"].items():
-            room.add_lamp(Lamp.from_json(lamp))
+            room.add_lamp(Lamp.from_dict(lamp))
 
         for zoneid, zone in room_dict["calc_zones"].items():
-            data = json.loads(zone)
-            if data["calctype"] == "Plane":
-                room.add_calc_zone(CalcPlane.from_json(zone))
-            elif data["calctype"] == "Volume":
-                room.add_calc_zone(CalcVol.from_json(zone))
+            if zone["calctype"] == "Plane":
+                room.add_calc_zone(CalcPlane.from_dict(zone))
+            elif zone["calctype"] == "Volume":
+                room.add_calc_zone(CalcVol.from_dict(zone))
         return room
+        
+    def to_json(self, filename=None):
+        data = {}
+        data["x"] = self.x
+        data["y"] = self.y
+        data["z"] = self.z
+        data["units"] = self.units
+        data["reflectance_ceiling"] = self.reflectance_ceiling
+        data["reflectance_north"] = self.reflectance_north
+        data["reflectance_east"] = self.reflectance_east
+        data["reflectance_south"] = self.reflectance_south
+        data["reflectance_west"] = self.reflectance_west
+        data["reflectance_floor"] = self.reflectance_floor
+
+        data["air_changes"] = self.air_changes
+        data["ozone_decay_constant"] = self.ozone_decay_constant
+
+        dct = self.__dict__.copy()
+        data["lamps"] = {k: v.save_lamp() for k, v in dct["lamps"].items()}
+        data["calc_zones"] = {k: v.save_zone() for k, v in dct["calc_zones"].items()}
+        json_obj = json.dumps(data, indent=4, cls=NumpyEncoder)
+        if filename is not None:
+            with open(filename, "w") as json_file:
+                json_file.write(json_obj)
+        return json_obj
 
     def set_units(self, units):
         """set room units"""
