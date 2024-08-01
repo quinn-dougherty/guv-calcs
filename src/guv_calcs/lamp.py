@@ -100,24 +100,15 @@ class Lamp:
 
         # calc zone values will be stored here
         self.max_irradiances = {} if max_irradiances is None else max_irradiances
-
+        
         # spectral weightings
-        # load source
-        if spectral_weight_source is None:
-            # load package resource version if user does not provide file
-            fname = "UV Spectral Weighting Curves.csv"
-            path = resources.files("guv_calcs.data").joinpath(fname)
-            with path.open("rb") as file:
-                self.spectral_weight_source = file.read()
-        else:
-            self.spectral_weight_source = spectral_weight_source
+        self.spectral_weight_source = spectral_weight_source # can be None        
         # load weights from source
         if spectral_weightings is None:
             self.spectral_weightings = {}
         if len(self.spectral_weightings) == 0:
             self._load_spectral_weightings()
-
-        # spectra - unweighted and weighted
+        # load spectra - unweighted and weighted
         self.spectra = {} if spectra is None else spectra
         self.spectra_source = spectra_source
         if self.spectra_source is not None and len(self.spectra) == 0:
@@ -134,6 +125,260 @@ class Lamp:
             self._load()
             self._orient()
 
+    def move(self, x=None, y=None, z=None):
+        """Designate lamp position in cartesian space"""
+        # determine new position   selected_lamp.
+        x = self.x if x is None else x
+        y = self.y if y is None else y
+        z = self.z if z is None else z
+        position = np.array([x, y, z])
+        # update aim point based on new position
+        diff = position - self.position
+        self.aim_point += diff
+        self.aimx, self.aimy, self.aimz = self.aim_point
+        # update position
+        self.position = position
+        self.x, self.y, self.z = self.position
+        return self
+        
+    def rotate(self, angle):
+        """designate lamp orientation with respect to its z axis"""
+        self.angle = angle
+        return self
+        
+    def aim(self, x=None, y=None, z=None):
+        """aim lamp at a point in cartesian space"""
+        x = self.aimx if x is None else x
+        y = self.aimy if y is None else y
+        z = self.aimz if z is None else z
+        self.aim_point = np.array([x, y, z])
+        self.aimx, self.aimy, self.aimz = self.aim_point
+        xr, yr, zr = self.aim_point - self.position
+        self.heading = np.degrees(np.arctan2(yr, xr))
+        self.bank = np.degrees(np.arctan2(np.sqrt(xr ** 2 + yr ** 2), zr) - np.pi)
+        # self.heading = (heading+360)%360
+        # self.bank = (bank+360)%360
+        return self
+        
+    def set_orientation(self, orientation, dimensions=None, distance=None):
+        """
+        set orientation/heading.
+        alternative to setting aim point with `aim`
+        distinct from rotation; applies to a tilted lamp. to rotate a lamp along its axis,
+        use the `rotate` method
+        """
+        # orientation = (orientation + 360) % 360
+        self.heading = orientation
+        self._recalculate_aim_point(dimensions=dimensions, distance=distance)
+
+    def set_tilt(self, tilt, dimensions=None, distance=None):
+        """
+        set tilt/bank
+        alternative to setting aim point with `aim`
+        """
+        # tilt = (tilt + 360) % 360
+        self.bank = tilt
+        self._recalculate_aim_point(dimensions=dimensions, distance=distance)    
+    
+    def get_total_power(self):
+        """return the lamp's total optical power"""
+        self.total_optical_power = total_optical_power(self.interpdict)
+        return self.total_optical_power
+        
+    def get_cartesian(self, scale=1, sigfigs=9):
+        """Return lamp's true position coordinates in cartesian space"""
+        return self.transform(self.coords, scale=scale).round(sigfigs)
+
+    def get_polar(self, sigfigs=9):
+        """Return lamp's true position coordinates in polar space"""
+        cartesian = self.transform(self.coords) - self.position
+        return np.array(to_polar(*cartesian.T)).round(sigfigs)
+        
+    def transform(self, coords, scale=1):
+        """
+        Transforms the given coordinates based on the lamp's orientation and position.
+        Applies rotation, then aiming, then scaling, then translation.
+        Scale parameter should generally only be used for photometric_coords
+        """
+        # in case user has updated x y and z
+        coords = np.array(attitude(coords.T, roll=0, pitch=0, yaw=self.angle)).T
+        coords = np.array(
+            attitude(coords.T, roll=0, pitch=self.bank, yaw=self.heading)
+        ).T
+        coords = (coords.T / scale).T + self.position
+        return coords
+        
+    def plot_ies(self, title="",show=False):
+        """standard polar plot of an ies file"""
+        fig, ax = plot_ies(fdata=self.valdict, title=title)
+        if show:
+            plt.show()
+        return fig, ax
+
+    def plot_spectra(self, title=None, fig=None, figsize=(6.4, 4.8), yscale="linear",show=False):
+        """
+        plot the spectra of the lamp. at minimum, the unweighted spectra, possibly all
+        weighted spectra as well.
+
+        `yscale` is generally either "linear" or "log", but any matplotlib scale is permitted
+        """
+
+        if fig is None:
+            fig, ax = plt.subplots()
+        else:
+            ax = fig.axes[0]
+
+        if len(self.spectra) > 0:
+            for key, val in self.spectra.items():
+                linestyle = "-" if key == "Unweighted" else "--"
+                ax.plot(val[0], val[1], label=key, linestyle=linestyle)
+            ax.legend()
+            ax.grid(True, which="both", ls="--", c="gray", alpha=0.3)
+            ax.set_xlabel("Wavelength [nm]")
+            ax.set_ylabel("Relative intensity [%]")
+            ax.set_yscale(yscale)
+
+            title = self.name if title is None else title
+            ax.set_title(title)
+        if show:
+            plt.show()
+        
+        return fig
+        
+    def plot_web(
+        self,
+        elev=30,
+        azim=-60,
+        title="",
+        figsize=(6, 4),
+        color="#cc61ff",
+        alpha=0.4,
+        xlim=None,
+        ylim=None,
+        zlim=None,
+        show=False,
+    ):
+        """plot photometric web, where distance r is set by the irradiance value"""
+        scale = self.values.max()
+        x, y, z = self.transform(self.photometric_coords, scale=scale).T
+        Theta, Phi, R = to_polar(*self.photometric_coords.T)
+        tri = Delaunay(np.column_stack((Theta.flatten(), Phi.flatten())))
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111, projection="3d")
+        ax.plot_trisurf(x, y, z, triangles=tri.simplices, color=color, alpha=alpha)
+        if self.aim_point is not None:
+            ax.plot(
+                *np.array((self.aim_point, self.position)).T,
+                linestyle="--",
+                color="black",
+                alpha=0.7,
+            )
+        ax.set_title(title)
+        if xlim is not None:
+            ax.set_xlim(xlim)
+        if ylim is not None:
+            ax.set_ylim(ylim)
+        if zlim is not None:
+            ax.set_zlim(zlim)
+        ax.view_init(azim=azim, elev=elev)
+        if show:
+            plt.show()
+        return fig, ax
+        
+    def plot_3d(
+        self,
+        elev=45,
+        azim=-45,
+        title="",
+        figsize=(6, 4),
+        show_cbar=False,
+        alpha=0.7,
+        cmap="rainbow",
+        fig=None,
+        ax=None,
+        show=False
+    ):
+        """
+        plot in cartesian 3d space of the true positions of the irradiance values
+        mostly a convenience visualization function. Generally irradiance values 
+        should use a polar plot.
+        """
+        x, y, z = self.transform(self.coords).T
+        intensity = self.values.flatten()
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111, projection="3d")
+        ax.scatter(x, y, z, c=intensity, cmap="rainbow", alpha=alpha)
+        if self.aim_point is not None:
+            ax.plot(
+                *np.array((self.aim_point, self.position)).T,
+                linestyle="--",
+                color="black",
+                alpha=0.7,
+            )
+        ax.set_title(title)
+        ax.view_init(azim=azim, elev=elev)
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.set_zlabel("z")
+        if show:
+            plt.show()
+        return fig, ax    
+        
+    def reload(self, filename=None, filedata=None):
+        """
+        replace the ies file without erasing any position/rotation/eing information
+        can be used to load an ies file after initialization
+        """
+
+        self.filename = filename
+        self.filedata = filedata
+        # if filename is a path, filedata is filename
+        self._check_filename
+
+        if self.filedata is not None:
+            self._load()
+            self._orient()
+        else:
+            self.lampdict = None
+            self.valdict = None
+            self.thetas = None
+            self.phis = None
+            self.values = None
+            self.interpdict = None
+            self.units = None
+            self.dimensions = None
+            self.input_watts = None
+            self.keywords = None
+            self.coords = None
+            self.photometric_coords = None
+            self.spectra = {}
+
+    def load_spectra(self, spectra_source):
+        """
+        external method to reload the spectra after initialization
+        If weightings are present, update weighted spectra also
+        If spectra_source is none, self.spectra will reset to empty
+        """
+        self.spectra_source = spectra_source
+        if self.spectra_source is None:
+            self.spectra = {}  # reset to empty
+        else:
+            self._load_spectra()
+            if self.spectral_weight_source is not None:
+                self._load_spectral_weightings()
+                self._update_spectra()
+
+    def load_weighted_spectra(self, spectral_weight_source):
+        """
+        external method to set self.spectral_weight_source after initialization
+        will update self.spectra with new weightings 
+        """
+        self.spectral_weight_source = spectral_weight_source
+        self._load_spectral_weightings()
+        self._update_spectra()
+
+        
+                
     def _load_csv(self, datasource):
         """load csv data from either path or bytes"""
         if isinstance(datasource, (str, pathlib.PosixPath)):
@@ -166,25 +411,17 @@ class Lamp:
                     warnings.warn(f"Skipping invalid datarow: {row}")
         self.spectra["Unweighted"] = np.array(spectra).T
 
-    def load_spectra(self, spectra_source):
-        """
-        external method to set self.spectra_source and invoke internal method
-        _load_spectra to read the source into self.spectra.
-        If weightings are present, update weighted spectra also
-        If spectra_source is none, self.spectra will reset to empty
-        """
-        self.spectra_source = spectra_source
-        if self.spectra_source is None:
-            self.spectra = {}  # reset to empty
-        else:
-            self._load_spectra()
-            if self.spectral_weight_source is not None:
-                self._load_spectral_weightings()
-                self._update_spectra()
-
     def _load_spectral_weightings(self):
         """load weightings"""
-        csv_data = self._load_csv(self.spectral_weight_source)
+        if self.spectral_weight_source is None:
+            # load package resource version if user does not provide file
+            fname = "UV Spectral Weighting Curves.csv"
+            path = resources.files("guv_calcs.data").joinpath(fname)
+            with path.open("rb") as file:
+                weights = file.read()
+        else:
+            weights = self.spectral_weight_source
+        csv_data = self._load_csv(weights)
         reader = csv.reader(csv_data, delimiter=",")
         headers = next(reader, None)  # get headers
 
@@ -224,15 +461,6 @@ class Lamp:
                 self.spectra[key] = np.stack(
                     (wavelengths, weighted_intensity * ratio)
                 ).tolist()
-
-    def load_weighted_spectra(self, spectral_weight_source):
-        """
-        external method to set self.spectral_weight_source and invoke internal method
-        _load_weighted_spectra to read the weightings and update self.spectra
-        """
-        self.spectral_weight_source = spectral_weight_source
-        self._load_spectral_weightings()
-        self._update_spectra()
 
     def _check_filename(self):
         """
@@ -322,216 +550,6 @@ class Lamp:
             distance = min([d for d in distances])
         self.aim_point = self.position + np.array([dx, dy, dz]) * distance
         self.aimx, self.aimy, self.aimz = self.aim_point
-
-    def get_total_power(self):
-        """return the lamp's total optical power"""
-        self.total_optical_power = total_optical_power(self.interpdict)
-        return self.total_optical_power
-
-    def reload(self, filename=None, filedata=None):
-        """replace the ies file without erasing any position/rotation/eing information"""
-
-        self.filename = filename
-        self.filedata = filedata
-        # if filename is a path, filedata is filename
-        self._check_filename
-
-        if self.filedata is not None:
-            self._load()
-            self._orient()
-        else:
-            self.lampdict = None
-            self.valdict = None
-            self.thetas = None
-            self.phis = None
-            self.values = None
-            self.interpdict = None
-            self.units = None
-            self.dimensions = None
-            self.input_watts = None
-            self.keywords = None
-            self.coords = None
-            self.photometric_coords = None
-            self.spectra = {}
-
-    def transform(self, coords, scale=1):
-        """
-        Transforms the given coordinates based on the lamp's orientation and position.
-        Applies rotation, then aiming, then scaling, then translation.
-        Scale parameter should generally only be used for photometric_coords
-        """
-        # in case user has updated x y and z
-        coords = np.array(attitude(coords.T, roll=0, pitch=0, yaw=self.angle)).T
-        coords = np.array(
-            attitude(coords.T, roll=0, pitch=self.bank, yaw=self.heading)
-        ).T
-        coords = (coords.T / scale).T + self.position
-        return coords
-
-    def get_cartesian(self, scale=1, sigfigs=9):
-        """Return lamp's true position coordinates in cartesian space"""
-        return self.transform(self.coords, scale=scale).round(sigfigs)
-
-    def get_polar(self, sigfigs=9):
-        """Return lamp's true position coordinates in polar space"""
-        cartesian = self.transform(self.coords) - self.position
-        return np.array(to_polar(*cartesian.T)).round(sigfigs)
-
-    def move(self, x=None, y=None, z=None):
-        """Designate lamp position in cartesian space"""
-        # determine new position   selected_lamp.
-        x = self.x if x is None else x
-        y = self.y if y is None else y
-        z = self.z if z is None else z
-        position = np.array([x, y, z])
-        # update aim point based on new position
-        diff = position - self.position
-        self.aim_point += diff
-        self.aimx, self.aimy, self.aimz = self.aim_point
-        # update position
-        self.position = position
-        self.x, self.y, self.z = self.position
-        return self
-
-    def rotate(self, angle):
-        """designate lamp orientation with respect to its z axis"""
-        self.angle = angle
-        return self
-
-    def set_orientation(self, orientation, dimensions=None, distance=None):
-        """
-        set orientation/heading.
-        alternative to setting aim point with `aim`
-        distinct from rotation; applies to a tilted lamp. to rotate a lamp along its axis,
-        use the `rotate` method
-        """
-        # orientation = (orientation + 360) % 360
-        self.heading = orientation
-        self._recalculate_aim_point(dimensions=dimensions, distance=distance)
-
-    def set_tilt(self, tilt, dimensions=None, distance=None):
-        """
-        set tilt/bank
-        alternative to setting aim point with `aim`
-        """
-        # tilt = (tilt + 360) % 360
-        self.bank = tilt
-        self._recalculate_aim_point(dimensions=dimensions, distance=distance)
-
-    def aim(self, x=None, y=None, z=None):
-        """aim lamp at a point in cartesian space"""
-        x = self.aimx if x is None else x
-        y = self.aimy if y is None else y
-        z = self.aimz if z is None else z
-        self.aim_point = np.array([x, y, z])
-        self.aimx, self.aimy, self.aimz = self.aim_point
-        xr, yr, zr = self.aim_point - self.position
-        self.heading = np.degrees(np.arctan2(yr, xr))
-        self.bank = np.degrees(np.arctan2(np.sqrt(xr ** 2 + yr ** 2), zr) - np.pi)
-        # self.heading = (heading+360)%360
-        # self.bank = (bank+360)%360
-        return self
-
-    def plot_ies(self, title=""):
-        """standard polar plot of an ies file"""
-        fig, ax = plot_ies(fdata=self.valdict, title=title)
-        return fig, ax
-
-    def plot_spectra(self, title=None, fig=None, figsize=(6.4, 4.8), yscale="linear"):
-        """
-        plot the spectra of the lamp. at minimum, the unweighted spectra, possibly all
-        weighted spectra as well.
-
-        `yscale` is generally either "linear" or "log", but any matplotlib scale is permitted
-        """
-
-        if fig is None:
-            fig, ax = plt.subplots()
-        else:
-            ax = fig.axes[0]
-
-        if len(self.spectra) > 0:
-            for key, val in self.spectra.items():
-                linestyle = "-" if key == "Unweighted" else "--"
-                ax.plot(val[0], val[1], label=key, linestyle=linestyle)
-            ax.legend()
-            ax.grid(True, which="both", ls="--", c="gray", alpha=0.3)
-            ax.set_xlabel("Wavelength [nm]")
-            ax.set_ylabel("Relative intensity [%]")
-            ax.set_yscale(yscale)
-
-            title = self.name if title is None else title
-            ax.set_title(title)
-        return fig
-
-    def plot_3d(
-        self,
-        elev=45,
-        azim=-45,
-        title="",
-        figsize=(6, 4),
-        show_cbar=False,
-        alpha=0.7,
-        cmap="rainbow",
-        fig=None,
-        ax=None,
-    ):
-        """plot in cartesian 3d space of the true positions of the irradiance values"""
-        x, y, z = self.transform(self.coords).T
-        intensity = self.values.flatten()
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111, projection="3d")
-        ax.scatter(x, y, z, c=intensity, cmap="rainbow", alpha=alpha)
-        if self.aim_point is not None:
-            ax.plot(
-                *np.array((self.aim_point, self.position)).T,
-                linestyle="--",
-                color="black",
-                alpha=0.7,
-            )
-        ax.set_title(title)
-        ax.view_init(azim=azim, elev=elev)
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
-        ax.set_zlabel("z")
-        return fig, ax
-
-    def plot_web(
-        self,
-        elev=30,
-        azim=-60,
-        title="",
-        figsize=(6, 4),
-        color="#cc61ff",
-        alpha=0.4,
-        xlim=None,
-        ylim=None,
-        zlim=None,
-    ):
-        """plot photometric web, where distance r is set by the irradiance value"""
-        scale = self.values.max()
-        x, y, z = self.transform(self.photometric_coords, scale=scale).T
-        Theta, Phi, R = to_polar(*self.photometric_coords.T)
-        tri = Delaunay(np.column_stack((Theta.flatten(), Phi.flatten())))
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111, projection="3d")
-        ax.plot_trisurf(x, y, z, triangles=tri.simplices, color=color, alpha=alpha)
-        if self.aim_point is not None:
-            ax.plot(
-                *np.array((self.aim_point, self.position)).T,
-                linestyle="--",
-                color="black",
-                alpha=0.7,
-            )
-        ax.set_title(title)
-        if xlim is not None:
-            ax.set_xlim(xlim)
-        if ylim is not None:
-            ax.set_ylim(ylim)
-        if zlim is not None:
-            ax.set_zlim(zlim)
-        ax.view_init(azim=azim, elev=elev)
-        return fig, ax
 
     @classmethod
     def from_json(cls, jsondata):
