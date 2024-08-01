@@ -56,11 +56,7 @@ class Lamp:
         where N = the number of (wavelength, relative intensity) pairs.
     enabled: bool
         determines if lamp participates in calculations. A lamp may be created and added to a room, but disabled for
-        particular simualtions.
-
-    External Methods
-    --------------------
-
+        particular simulations.
     """
 
     def __init__(
