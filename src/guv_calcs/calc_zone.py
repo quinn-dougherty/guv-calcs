@@ -174,10 +174,8 @@ class CalcZone(object):
                     values *= np.sin(np.radians(Theta0))
                 if self.horiz:
                     values *= np.cos(np.radians(Theta0))
-                if lamp.intensity_units == "mW/Sr":
-                    total_values += values / 10  # convert from mW/Sr to uW/cm2
-                else:
-                    raise KeyError("Units not recognized")
+
+                total_values += values / 10  # convert from mW/Sr to uW/cm2
 
                 # save the max value to the lamp object
                 lamp.max_irradiances[self.zone_id] = total_values.max()

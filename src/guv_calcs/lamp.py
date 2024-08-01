@@ -18,9 +18,10 @@ class Lamp:
     """
     Represents a lamp with properties defined by a photometric data file.
     This class handles the loading of IES photometric data, orienting the lamp in 3D space,
-    and provides methods for moving, rotating, and aiming the lamp
+    and provides methods for moving, rotating, and aiming the lamp.
 
-    Parameters:
+    Arguments
+    -------------------
     lamp_id: str
         A unique identifier for the lamp. Only required parameter.
     name: str
@@ -36,24 +37,30 @@ class Lamp:
     aimx, aimy, aimz: floats
         Sets initial aim point of lamp in cartesian space.
     spectra_source: Path or bytes or None
-        Data source for spectra
-    spectra_weight_source: Path or bytes or None
-        Data source for spectral weighting
+        Data source for spectra. Optional but recommended. Alternatively, spectra
     spectra: dict
         Dictionary where keys are labels and values are arraylikes of shape (2,N) where N = the number of
         (wavelength, relative intensity) pairs that define the lamp's spectra. Set by `spectra_source` if provided,
         otherwise None, or may be passed directly. An unweighted spectra will have the key 'Unweighted'. If an unlabeled
         arraylike is passed, it will be assumed to be unweighted and weighted spectra will be calculated on that basis, if
         a `spectral_weight_source` was passed.
+    spectra_weight_source: Path or bytes or None
+        Optional. Data source for spectral weighting. If not provided, default weights are loaded, which includes
+        the ICNIRP limits, and the 2022 ACGIH eye and skin limits. Users can provide their own spectral weights as well.
+        A weight source file must be a .csv, with at least two columns. The first row must be a header, and all other
+        rows must contain data. The first column should contain wavelength values, and subsequent columns should contain spectral
+        weighting values. Typically, spectral weighting values are 1 at a wavelentgh of 270 nm, and less than 1 at
+        all other wavelengths.
     spectral_weightings: dict
-        Dictionary where keys are labels for a particular spectral weighting, and values are arraylikes of shape (2,N)
+        Optional. Dictionary where keys are labels for a particular spectral weighting, and values are arraylikes of shape (2,N)
         where N = the number of (wavelength, relative intensity) pairs.
-    intensity_units: str
-        generally assumed to be `mW/Sr`. Future features will support other units, like uW/cm2
-    radiation_type: str
-        set from ies file keywords. Currently, only UVC222 is supported for GUV features.
     enabled: bool
-        determines if lamp participates in calculations
+        determines if lamp participates in calculations. A lamp may be created and added to a room, but disabled for
+        particular simualtions.
+
+    External Methods
+    --------------------
+
     """
 
     def __init__(
@@ -73,8 +80,6 @@ class Lamp:
         spectra=None,
         spectral_weight_source=None,
         spectral_weightings=None,
-        intensity_units=None,
-        radiation_type=None,
         max_irradiances=None,
         enabled=None,
     ):
@@ -93,9 +98,6 @@ class Lamp:
         self.aimz = self.z - 1.0 if aimz is None else aimz
         self.aim(self.aimx, self.aimy, self.aimz)  # updates heading and bank
 
-        # misc
-        self.intensity_units = "mW/Sr" if intensity_units is None else intensity_units
-        self.radiation_type = radiation_type
         # calc zone values will be stored here
         self.max_irradiances = {} if max_irradiances is None else max_irradiances
 
