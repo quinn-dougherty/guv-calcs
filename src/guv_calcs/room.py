@@ -84,7 +84,7 @@ class Room:
                 room.add_calc_zone(CalcVol.from_dict(zone))
         return room
 
-    def to_json(self, filename=None):
+    def to_dict(self):
         data = {}
         data["x"] = self.x
         data["y"] = self.y
@@ -103,11 +103,17 @@ class Room:
         dct = self.__dict__.copy()
         data["lamps"] = {k: v.save_lamp() for k, v in dct["lamps"].items()}
         data["calc_zones"] = {k: v.save_zone() for k, v in dct["calc_zones"].items()}
+        return data
+
+    def to_json(self, filename=None):
+        data = self.to_dict()
         json_obj = json.dumps(data, indent=4, cls=NumpyEncoder)
         if filename is not None:
             with open(filename, "w") as json_file:
                 json_file.write(json_obj)
         return json_obj
+
+    # def save(self, filename):
 
     def set_units(self, units):
         """set room units"""

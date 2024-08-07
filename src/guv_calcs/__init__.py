@@ -2,6 +2,7 @@ from .room import Room
 from .lamp import Lamp
 from .calc_zone import CalcVol, CalcPlane
 from .trigonometry import to_polar, to_cartesian, attitude
+from ._version import __version__
 
 __all__ = [
     "Room",
@@ -12,3 +13,5 @@ __all__ = [
     "to_cartesian",
     "attitude",
 ]
+
+

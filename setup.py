@@ -1,11 +1,18 @@
 from setuptools import setup, find_packages
+from pathlib import Path
 
+def get_version() -> dict:
+    version = {}
+    with open(Path(__file__).parent / 'src' / 'guv_calcs' / '_version.py') as f:
+        exec(f.read(), version)
+    return version['__version__']
+    
 with open("README.md", "r") as fh:
     long_description = fh.read()
     setup(
         name="guv-calcs",
         url="https://github.com/jvbelenky/guv-calcs",
-        version="0.0.18",
+        version=get_version(),
         author="J. Vivian Belenky",
         author_email="j.vivian.belenky@outlook.com",
         description="A library for carrying out fluence and irradiance calculations for germicidal UV (GUV) applications.",
