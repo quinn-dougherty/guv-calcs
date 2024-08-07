@@ -380,9 +380,6 @@ class Lamp:
     def _load_csv(self, datasource):
         """load csv data from either path or bytes"""
 
-        # p = Path('.').glob('**/*')
-        # files = [x for x in p if x.is_file()]
-        # print(files)
         if isinstance(datasource, (str, pathlib.PosixPath)):
             filepath = Path(datasource)
             filetype = filepath.suffix.lower()
@@ -477,7 +474,7 @@ class Lamp:
                 FILE_IS_PATH = True
         # if filename is a path and exists, it will replace filedata, but only if filedata wasn't specified to begin with
         if FILE_IS_PATH and self.filedata is None:
-            self.filedata = self.filename
+            self.filedata = Path(self.filename).read_text()
 
     def _load(self):
         """
@@ -564,6 +561,8 @@ class Lamp:
     def from_dict(cls, data):
         """initialize class from dict"""
         keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
+        for k, v in data["spectra"].items():
+            data["spectra"][k] = np.array(v)
         return cls(**{k: v for k, v in data.items() if k in keys})
 
     def to_json(self):
@@ -591,9 +590,7 @@ class Lamp:
         data["aimy"] = self.aimy
         data["aimz"] = self.aimz
         data["filedata"] = self.filedata
-        data["spectra_source"] = self.spectra_source
-        if self.spectral_weight_source is not None:
-            data["spectral_weight_source"] = self.spectral_weight_source
+        data["spectra"] = self.spectra
 
         if filename is not None:
             with open(filename, "w") as json_file:

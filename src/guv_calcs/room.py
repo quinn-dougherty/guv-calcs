@@ -83,7 +83,7 @@ class Room:
             elif zone["calctype"] == "Volume":
                 room.add_calc_zone(CalcVol.from_dict(zone))
         return room
-        
+
     def to_json(self, filename=None):
         data = {}
         data["x"] = self.x
@@ -96,7 +96,7 @@ class Room:
         data["reflectance_south"] = self.reflectance_south
         data["reflectance_west"] = self.reflectance_west
         data["reflectance_floor"] = self.reflectance_floor
-
+        data["standard"] = self.standard
         data["air_changes"] = self.air_changes
         data["ozone_decay_constant"] = self.ozone_decay_constant
 
