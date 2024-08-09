@@ -37,7 +37,6 @@ class Room:
         air_changes=None,
         ozone_decay_constant=None,
     ):
-
         self.units = "meters" if units is None else units.lower()
         self.set_units(self.units)  # just checks that unit entry is valid
         default_dimensions = (
@@ -101,13 +100,13 @@ class Room:
         savedata["timestamp"] = timestamp
 
         savedata["data"] = self.to_dict()
-        
+
         if fname is not None:
             filename = check_savefile(fname, ".guv")
             with open(filename, "w") as json_file:
                 json.dump(savedata, json_file, indent=4)
         else:
-            return json.dumps(savedata,indent=4)
+            return json.dumps(savedata, indent=4)
 
     @classmethod
     def load(cls, filedata):
@@ -135,8 +134,7 @@ class Room:
             elif zone["calctype"] == "Volume":
                 room.add_calc_zone(CalcVol.from_dict(zone))
         return room
-        
-        
+
     def set_units(self, units):
         """set room units"""
         if units not in ["meters", "feet"]:

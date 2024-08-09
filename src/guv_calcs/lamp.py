@@ -558,13 +558,6 @@ class Lamp:
         self.aim_point = self.position + np.array([dx, dy, dz]) * distance
         self.aimx, self.aimy, self.aimz = self.aim_point
 
-    # @classmethod
-    # def from_json(cls, jsondata):
-    # """initialize class from json"""
-    # data = parse_json(jsondata)
-    # keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
-    # return cls(**{k: v for k, v in data.items() if k in keys})
-
     @classmethod
     def from_dict(cls, data):
         """initialize class from dict"""
@@ -576,13 +569,6 @@ class Lamp:
                 lst = v
             data["spectra"][k] = np.array(lst)
         return cls(**{k: v for k, v in data.items() if k in keys})
-
-    # def to_json(self):
-    # """
-    # Create a dictionary of ALL instance variables
-    # """
-    # data = {attr: getattr(self, attr) for attr in vars(self)}
-    # return json.dumps(data, cls=NumpyEncoder)
 
     def save_lamp(self, filename=None):
         """
@@ -601,7 +587,14 @@ class Lamp:
         data["aimx"] = self.aimx
         data["aimy"] = self.aimy
         data["aimz"] = self.aimz
-        data["filedata"] = self.filedata
+
+        if isinstance(self.filedata, bytes):
+            filedata = self.filedata.decode("utf-8")
+        elif isinstance(self.filedata, str | None):
+            filedata = self.filedata
+        else:
+            raise TypeError(f"Filedata must be str or bytes, not {type(self.filedata)}")
+        data["filedata"] = filedata
 
         # this is just so that the file looks nicer in a text editor
         spectra_string = {}

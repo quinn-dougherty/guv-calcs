@@ -20,7 +20,7 @@ def parse_loadfile(filedata):
 
     try:
         dct = json.loads(filedata)
-    except JSONDecodeError:
+    except json.JSONDecodeError:
         path = Path(filedata)
         if path.is_file():
             if path.suffix.lower() != ".guv":
