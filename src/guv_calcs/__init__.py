@@ -14,4 +14,4 @@ __all__ = [
     "attitude",
 ]
 
-
+__version__ = __version__

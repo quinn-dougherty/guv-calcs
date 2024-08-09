@@ -17,6 +17,11 @@ endif
 #################################################################################
 
 ## Install package
+local:
+	rm -rf dist build */*.egg-info *.egg-info
+	$(PYTHON_INTERPRETER) setup.py sdist
+	pip install -e . --no-cache-dir
+	
 install:
 	rm -rf dist build */*.egg-info *.egg-info
 	$(PYTHON_INTERPRETER) setup.py sdist
@@ -41,7 +46,7 @@ clean:
 	@find . -type f -name "*.kate-swp" -delete
 	@echo "Done"
 
-test: install
+test: 
 	$(PYTHON_INTERPRETER) tests/test.py
 	
 all: lint install test clean
