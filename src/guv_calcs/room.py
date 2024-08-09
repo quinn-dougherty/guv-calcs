@@ -7,7 +7,9 @@ import plotly.graph_objs as go
 from .lamp import Lamp
 from .calc_zone import CalcZone, CalcPlane, CalcVol
 from .trigonometry import to_polar
-from ._helpers import NumpyEncoder, parse_json
+from ._helpers import NumpyEncoder, parse_json, get_version, check_savefile
+from pathlib import Path
+import datetime
 
 
 class Room:
@@ -66,24 +68,6 @@ class Room:
         self.lamps = {}
         self.calc_zones = {}
 
-    @classmethod
-    def from_json(cls, jsondata):
-
-        room_dict = parse_json(jsondata)
-
-        roomkeys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
-        room = cls(**{k: v for k, v in room_dict.items() if k in roomkeys})
-
-        for lampid, lamp in room_dict["lamps"].items():
-            room.add_lamp(Lamp.from_dict(lamp))
-
-        for zoneid, zone in room_dict["calc_zones"].items():
-            if zone["calctype"] == "Plane":
-                room.add_calc_zone(CalcPlane.from_dict(zone))
-            elif zone["calctype"] == "Volume":
-                room.add_calc_zone(CalcVol.from_dict(zone))
-        return room
-
     def to_dict(self):
         data = {}
         data["x"] = self.x
@@ -105,15 +89,55 @@ class Room:
         data["calc_zones"] = {k: v.save_zone() for k, v in dct["calc_zones"].items()}
         return data
 
-    def to_json(self, filename=None):
-        data = self.to_dict()
-        json_obj = json.dumps(data, indent=4, cls=NumpyEncoder)
-        if filename is not None:
-            with open(filename, "w") as json_file:
-                json_file.write(json_obj)
-        return json_obj
+    def save(self, fname):
 
-    # def save(self, filename):
+        filename = check_savefile(fname, ".guv")
+
+        savedata = {}
+        version = get_version(Path(__file__).parent / "_version.py")
+        savedata["guv-calcs_version"] = version
+
+        now = datetime.datetime.now()
+        now_local = datetime.datetime.now(now.astimezone().tzinfo)
+        timestamp = now_local.strftime("%Y-%m-%d %H:%M:%S %Z%z")
+        savedata["timestamp"] = timestamp
+
+        savedata["data"] = self.to_dict()
+        with open(filename, "w") as json_file:
+            json.dump(savedata, json_file, indent=4, cls=NumpyEncoder)
+
+    @classmethod
+    def load(cls, filename):
+        """load from a file"""
+
+        path = Path(filename)
+        if not path.is_file():
+            raise FileNotFoundError("Please provide a valid .guv file.")
+
+        if path.suffix != ".guv":
+            raise ValueError("Please provide a valid .guv file.")
+
+        load_data = parse_json(path)
+
+        saved_version = load_data["guv-calcs_version"]
+        current_version = get_version(Path(__file__).parent / "_version.py")
+        if saved_version != current_version:
+            warnings.warn(
+                f"This save file is from guv-calcs version {saved_version}, while you have version {current_version} installed."
+            )
+        room_dict = load_data["data"]
+
+        roomkeys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
+        room = cls(**{k: v for k, v in room_dict.items() if k in roomkeys})
+
+        for lampid, lamp in room_dict["lamps"].items():
+            room.add_lamp(Lamp.from_dict(lamp))
+
+        for zoneid, zone in room_dict["calc_zones"].items():
+            if zone["calctype"] == "Plane":
+                room.add_calc_zone(CalcPlane.from_dict(zone))
+            elif zone["calctype"] == "Volume":
+                room.add_calc_zone(CalcVol.from_dict(zone))
 
     def set_units(self, units):
         """set room units"""
