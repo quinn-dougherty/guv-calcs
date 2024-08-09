@@ -2,7 +2,6 @@ from pathlib import Path
 import csv
 import inspect
 import json
-from io import StringIO
 from importlib import resources
 import pathlib
 import warnings
@@ -11,7 +10,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay
 from photompy import read_ies_data, plot_ies, total_optical_power
 from .trigonometry import to_cartesian, to_polar, attitude
-from ._helpers import NumpyEncoder, parse_json
+from ._helpers import NumpyEncoder, parse_json, load_csv, validate_spectra
 
 
 class Lamp:
@@ -37,29 +36,35 @@ class Lamp:
     aimx, aimy, aimz: floats
         Sets initial aim point of lamp in cartesian space.
     spectra_source: Path or bytes or None
-        Data source for spectra. Optional but recommended. Alternatively, spectra
+        Optional. Data source for spectra. Alternatively, you
+        may pass a 'spectra' dict directly. *If a spectra is passed,
+        spectra_source will be ignored.*
     spectra: dict
-        Dictionary where keys are labels and values are arraylikes of shape (2,N) where N = the number of
-        (wavelength, relative intensity) pairs that define the lamp's spectra. Set by `spectra_source` if provided,
-        otherwise None, or may be passed directly. An unweighted spectra will have the key 'Unweighted'. If an unlabeled
-        arraylike is passed, it will be assumed to be unweighted and weighted spectra will be calculated on that basis, if
-        a `spectral_weight_source` was passed.
+        Opotional. Dictionary containing at least the keys "Wavelength" and
+        "Unweighted", where the values of each key are an array of the same
+        size. The values of the "Unweighted" key correspond to the raw
+        relative intensity values of the lamp spectra. Any further keys
+        are optional. If provided, will supercede spectra_source.
     spectra_weight_source: Path or bytes or None
-        Optional. Data source for spectral weighting. If not provided, default weights are loaded, which includes
-        the ICNIRP limits, and the 2022 ACGIH eye and skin limits. Users can provide their own spectral weights as well.
-        A weight source file must be a .csv, with at least two columns. The first row must be a header, and all other
-        rows must contain data. The first column should contain wavelength values, and subsequent columns should contain spectral
-        weighting values. Typically, spectral weighting values are 1 at a wavelentgh of 270 nm, and less than 1 at
-        all other wavelengths.
+        Optional. Data source for spectral weighting. If not provided, default
+        weights are loaded, which includes the ICNIRP limits, and the 2022
+        ACGIH eye and skin limits. Users can provide their own spectral
+        weights as well.  A weight source file must be a .csv, with at least
+        two columns. The first row must be a header, and all other rows must
+        contain data. The first column should contain wavelength values, and
+        subsequent columns should contain spectral weighting values.
+        Typically, spectral weighting values are 1 at a wavelentgh of 270 nm,
+        and less than 1 at all other wavelengths. *If spectral_weightings is
+        provided, spectral_weight_source is ignored.*
     spectral_weightings: dict
-        Optional. Dictionary where keys are labels for a particular spectral weighting, and values are arraylikes of shape (2,N)
-        where N = the number of (wavelength, relative intensity) pairs.
+        Optional. Dict containing at least the key "Wavelength". All further
+        keys must be labels for a spectral weighting, and the values of those
+        keys must be the same size as the values for "Wavelength". Values
+        must be numbers between 0 and 1. If provided, will supercede
+        spectral_weight_source
     enabled: bool
-        determines if lamp participates in calculations. A lamp may be created and added to a room, but disabled for
-        particular simualtions.
-
-    External Methods
-    --------------------
+        Determines if lamp participates in calculations. A lamp may be created
+        and added to a room, but disabled.
 
     """
 
@@ -114,17 +119,24 @@ class Lamp:
 
         # spectral weightings
         self.spectral_weight_source = spectral_weight_source  # can be None
+        self.spectral_weightings = spectral_weightings
+
         # load weights from source
         if spectral_weightings is None:
             self.spectral_weightings = {}
-        if len(self.spectral_weightings) == 0:
             self._load_spectral_weightings()
+        else:
+            self.spectral_weightings = validate_spectra(spectral_weightings)
+
         # load spectra - unweighted and weighted
-        self.spectra = {} if spectra is None else spectra
         self.spectra_source = spectra_source
-        if self.spectra_source is not None and len(self.spectra) == 0:
-            self._load_spectra()
-            self._update_spectra()
+        if spectra is None:
+            self.spectra = {}
+            if self.spectra_source is not None:
+                self._load_spectra()
+                self._update_spectra()
+        else:
+            self.spectra = validate_spectra(spectra)
 
         # load file and coordinates
         self.filename = filename
@@ -239,8 +251,17 @@ class Lamp:
 
         if len(self.spectra) > 0:
             for key, val in self.spectra.items():
+                if key == "Wavelength":
+                    continue
                 linestyle = "-" if key == "Unweighted" else "--"
-                ax.plot(val[0], val[1], label=key, linestyle=linestyle)
+                alpha = 1 if key == "Unweighted" else 0.7
+                ax.plot(
+                    self.spectra["Wavelength"],
+                    val,
+                    label=key,
+                    linestyle=linestyle,
+                    alpha=alpha,
+                )
             ax.legend()
             ax.grid(True, which="both", ls="--", c="gray", alpha=0.3)
             ax.set_xlabel("Wavelength [nm]")
@@ -377,25 +398,9 @@ class Lamp:
         self._load_spectral_weightings()
         self._update_spectra()
 
-    def _load_csv(self, datasource):
-        """load csv data from either path or bytes"""
-
-        if isinstance(datasource, (str, pathlib.PosixPath)):
-            filepath = Path(datasource)
-            filetype = filepath.suffix.lower()
-            if filetype != ".csv":
-                raise TypeError("Currently, only .csv files are supported")
-            csv_data = open(datasource, mode="r", newline="")
-        elif isinstance(datasource, bytes):
-            # Convert bytes to a string using StringIO to simulate a file
-            csv_data = StringIO(datasource.decode("utf-8"))
-        else:
-            raise TypeError(f"File type {type(datasource)} not valid")
-        return csv_data
-
     def _load_spectra(self):
         """load spectral data from source"""
-        csv_data = self._load_csv(self.spectra_source)
+        csv_data = load_csv(self.spectra_source)
         reader = csv.reader(csv_data, delimiter=",")
         # read each line
         spectra = []
@@ -408,10 +413,11 @@ class Lamp:
                     continue
                 else:
                     warnings.warn(f"Skipping invalid datarow: {row}")
-        self.spectra["Unweighted"] = np.array(spectra).T
+        self.spectra["Wavelength"] = np.array(spectra).T[0]
+        self.spectra["Unweighted"] = np.array(spectra).T[1]
 
     def _load_spectral_weightings(self):
-        """load weightings"""
+        """load spectral weightings"""
         if self.spectral_weight_source is None:
             # load package resource version if user does not provide file
             fname = "UV Spectral Weighting Curves.csv"
@@ -420,7 +426,7 @@ class Lamp:
                 weights = file.read()
         else:
             weights = self.spectral_weight_source
-        csv_data = self._load_csv(weights)
+        csv_data = load_csv(weights)
         reader = csv.reader(csv_data, delimiter=",")
         headers = next(reader, None)  # get headers
 
@@ -431,14 +437,12 @@ class Lamp:
             for header, value in zip(headers, row):
                 data[header].append(float(value))
 
-        # update self.spectra
-        wavelengths = data[headers[0]]
         for i, (key, val) in enumerate(data.items()):
             if i == 0:
+                self.spectral_weightings["Wavelength"] = np.array(val)
                 continue
             else:
-                values = np.array(val)
-                self.spectral_weightings[key] = np.stack((wavelengths, values)).tolist()
+                self.spectral_weightings[key] = np.array(val)
 
     def _update_spectra(self):
         """
@@ -447,19 +451,23 @@ class Lamp:
         """
 
         if self.spectra is not None:
-            wavelengths = self.spectra["Unweighted"][0]
-            intensities = self.spectra["Unweighted"][1]
+            wavelengths = self.spectra["Wavelength"]
+            intensities = self.spectra["Unweighted"]
             maxval = max(intensities)
+            weighted_wavelengths = self.spectral_weightings["Wavelength"]
             for key, val in self.spectral_weightings.items():
+                if key == "Wavelength":
+                    continue
                 # update weights to match the spectral wavelengths we've got
-                weights = np.interp(wavelengths, val[0], val[1])
-                # self.spectral_weightings[key] = np.stack((wavelengths, weights))
+                weights = np.interp(wavelengths, weighted_wavelengths, val)
                 # weight spectra
                 weighted_intensity = intensities * weights
                 ratio = maxval / max(weighted_intensity)
-                self.spectra[key] = np.stack(
-                    (wavelengths, weighted_intensity * ratio)
-                ).tolist()
+                self.spectra[key] = weighted_intensity * ratio
+        else:
+            warnings.warn(
+                "Spectra was not updated with weights as a spectra was not provided."
+            )
 
     def _check_filename(self):
         """
@@ -562,7 +570,8 @@ class Lamp:
         """initialize class from dict"""
         keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
         for k, v in data["spectra"].items():
-            data["spectra"][k] = np.array(v)
+            lst = list(map(float,v.split(', ')))
+            data["spectra"][k] = np.array(lst)
         return cls(**{k: v for k, v in data.items() if k in keys})
 
     def to_json(self):
@@ -590,7 +599,12 @@ class Lamp:
         data["aimy"] = self.aimy
         data["aimz"] = self.aimz
         data["filedata"] = self.filedata
-        data["spectra"] = self.spectra
+
+        # this is just so that the file looks nicer in a text editor
+        spectra_string = {}
+        for key, val in self.spectra.items():
+            spectra_string[key] = ", ".join(map(str, self.spectra[key]))
+        data["spectra"] = spectra_string
 
         if filename is not None:
             with open(filename, "w") as json_file:
