@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from photompy import get_intensity_vectorized
 from .trigonometry import attitude, to_polar
-from ._helpers import parse_json
 
 
 class CalcZone(object):
@@ -126,11 +125,11 @@ class CalcZone(object):
 
         return data
 
-    @classmethod
-    def from_json(cls, jsondata):
-        data = parse_json(jsondata)
-        keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
-        return cls(**{k: v for k, v in data.items() if k in keys})
+    # @classmethod
+    # def from_json(cls, jsondata):
+        # data = parse_json(jsondata)
+        # keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
+        # return cls(**{k: v for k, v in data.items() if k in keys})
 
     @classmethod
     def from_dict(cls, data):

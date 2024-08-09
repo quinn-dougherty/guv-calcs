@@ -7,7 +7,7 @@ import plotly.graph_objs as go
 from .lamp import Lamp
 from .calc_zone import CalcZone, CalcPlane, CalcVol
 from .trigonometry import to_polar
-from ._helpers import parse_json, get_version, check_savefile
+from ._helpers import parse_loadfile, get_version, check_savefile
 from pathlib import Path
 import datetime
 
@@ -89,9 +89,7 @@ class Room:
         data["calc_zones"] = {k: v.save_zone() for k, v in dct["calc_zones"].items()}
         return data
 
-    def save(self, fname):
-
-        filename = check_savefile(fname, ".guv")
+    def save(self, fname=None):
 
         savedata = {}
         version = get_version(Path(__file__).parent / "_version.py")
@@ -103,21 +101,19 @@ class Room:
         savedata["timestamp"] = timestamp
 
         savedata["data"] = self.to_dict()
-        with open(filename, "w") as json_file:
-            json.dump(savedata, json_file, indent=4)
+        
+        if fname is not None:
+            filename = check_savefile(fname, ".guv")
+            with open(filename, "w") as json_file:
+                json.dump(savedata, json_file, indent=4)
+        else:
+            return json.dumps(savedata,indent=4)
 
     @classmethod
-    def load(cls, filename):
+    def load(cls, filedata):
         """load from a file"""
 
-        path = Path(filename)
-        if not path.is_file():
-            raise FileNotFoundError("Please provide a valid .guv file.")
-
-        if path.suffix != ".guv":
-            raise ValueError("Please provide a valid .guv file.")
-
-        load_data = parse_json(path)
+        load_data = parse_loadfile(filedata)
 
         saved_version = load_data["guv-calcs_version"]
         current_version = get_version(Path(__file__).parent / "_version.py")
@@ -138,7 +134,9 @@ class Room:
                 room.add_calc_zone(CalcPlane.from_dict(zone))
             elif zone["calctype"] == "Volume":
                 room.add_calc_zone(CalcVol.from_dict(zone))
-
+        return room
+        
+        
     def set_units(self, units):
         """set room units"""
         if units not in ["meters", "feet"]:

@@ -6,31 +6,30 @@ from io import StringIO
 
 
 def get_version(path) -> dict:
-    
+
     version = {}
     with open(path) as f:
         exec(f.read(), version)
     return version["__version__"]
 
 
-def parse_json(jsondata):
-    # parse input type
-    FILE = False
-    if isinstance(jsondata, str):
-        if Path(jsondata).is_file():
-            FILE = True
-        if jsondata.lower().endswith(".json"):
-            FILE = True
-    elif isinstance(jsondata, pathlib.PosixPath):
-        FILE = True
-    else:
-        raise ValueError("Could not parse jsondata")
+def parse_loadfile(filedata):
+    """
+    validate and parse a loadfile
+    """
 
-    if FILE:
-        with open(jsondata, "r") as json_file:
-            dct = json.load(json_file)
-    else:
-        dct = json.loads(jsondata)
+    try:
+        dct = json.loads(filedata)
+    except JSONDecodeError:
+        path = Path(filedata)
+        if path.is_file():
+            if path.suffix.lower() != ".guv":
+                raise ValueError("Please provide a valid .guv file")
+            with open(filedata, "r") as json_file:
+                dct = json.load(json_file)
+        else:
+            raise FileNotFoundError("Please provide a valid .guv file")
+
     return dct
 
 
