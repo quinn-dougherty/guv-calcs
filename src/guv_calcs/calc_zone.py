@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from photompy import get_intensity_vectorized
 from .trigonometry import attitude, to_polar
-from ._helpers import NumpyEncoder, parse_json
+from ._helpers import parse_json
 
 
 class CalcZone(object):
@@ -136,11 +136,6 @@ class CalcZone(object):
     def from_dict(cls, data):
         keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
         return cls(**{k: v for k, v in data.items() if k in keys})
-
-    def to_json(self):
-        # Create a dictionary of all instance variables
-        data = {attr: getattr(self, attr) for attr in vars(self)}
-        return json.dumps(data, cls=NumpyEncoder)
 
     def set_dimensions(self, dimensions):
         raise NotImplementedError

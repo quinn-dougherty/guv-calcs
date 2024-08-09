@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay
 from photompy import read_ies_data, plot_ies, total_optical_power
 from .trigonometry import to_cartesian, to_polar, attitude
-from ._helpers import NumpyEncoder, parse_json, load_csv, validate_spectra
+from ._helpers import load_csv, validate_spectra
 
 
 class Lamp:
@@ -558,28 +558,31 @@ class Lamp:
         self.aim_point = self.position + np.array([dx, dy, dz]) * distance
         self.aimx, self.aimy, self.aimz = self.aim_point
 
-    @classmethod
-    def from_json(cls, jsondata):
-        """initialize class from json"""
-        data = parse_json(jsondata)
-        keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
-        return cls(**{k: v for k, v in data.items() if k in keys})
+    # @classmethod
+    # def from_json(cls, jsondata):
+    # """initialize class from json"""
+    # data = parse_json(jsondata)
+    # keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
+    # return cls(**{k: v for k, v in data.items() if k in keys})
 
     @classmethod
     def from_dict(cls, data):
         """initialize class from dict"""
         keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
         for k, v in data["spectra"].items():
-            lst = list(map(float,v.split(', ')))
+            if isinstance(v, str):
+                lst = list(map(float, v.split(", ")))
+            elif isinstance(v, list):
+                lst = v
             data["spectra"][k] = np.array(lst)
         return cls(**{k: v for k, v in data.items() if k in keys})
 
-    def to_json(self):
-        """
-        Create a dictionary of ALL instance variables
-        """
-        data = {attr: getattr(self, attr) for attr in vars(self)}
-        return json.dumps(data, cls=NumpyEncoder)
+    # def to_json(self):
+    # """
+    # Create a dictionary of ALL instance variables
+    # """
+    # data = {attr: getattr(self, attr) for attr in vars(self)}
+    # return json.dumps(data, cls=NumpyEncoder)
 
     def save_lamp(self, filename=None):
         """
@@ -608,6 +611,6 @@ class Lamp:
 
         if filename is not None:
             with open(filename, "w") as json_file:
-                json_file.write(json.dumps(data))
+                json.dump(data, json_file, indent=4)
 
         return data

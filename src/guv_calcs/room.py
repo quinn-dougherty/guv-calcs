@@ -7,7 +7,7 @@ import plotly.graph_objs as go
 from .lamp import Lamp
 from .calc_zone import CalcZone, CalcPlane, CalcVol
 from .trigonometry import to_polar
-from ._helpers import NumpyEncoder, parse_json, get_version, check_savefile
+from ._helpers import parse_json, get_version, check_savefile
 from pathlib import Path
 import datetime
 
@@ -104,7 +104,7 @@ class Room:
 
         savedata["data"] = self.to_dict()
         with open(filename, "w") as json_file:
-            json.dump(savedata, json_file, indent=4, cls=NumpyEncoder)
+            json.dump(savedata, json_file, indent=4)
 
     @classmethod
     def load(cls, filename):

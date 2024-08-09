@@ -5,19 +5,8 @@ from pathlib import Path
 from io import StringIO
 
 
-class NumpyEncoder(json.JSONEncoder):
-    """Custom encoder for numpy and bytes data types"""
-
-    def default(self, obj):
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif isinstance(obj, bytes):
-            return obj.decode("utf8")
-        return json.JSONEncoder.default(self, obj)
-
-
 def get_version(path) -> dict:
-
+    
     version = {}
     with open(path) as f:
         exec(f.read(), version)
