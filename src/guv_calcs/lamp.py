@@ -590,7 +590,7 @@ class Lamp:
 
         if isinstance(self.filedata, bytes):
             filedata = self.filedata.decode("utf-8")
-        elif isinstance(self.filedata, str | None):
+        elif isinstance(self.filedata, str) or self.filedata is None:
             filedata = self.filedata
         else:
             raise TypeError(f"Filedata must be str or bytes, not {type(self.filedata)}")

@@ -118,7 +118,7 @@ class Room:
         current_version = get_version(Path(__file__).parent / "_version.py")
         if saved_version != current_version:
             warnings.warn(
-                f"This save file is from guv-calcs version {saved_version}, while you have version {current_version} installed."
+                f"This file was saved with guv-calcs {saved_version}, while you have {current_version} installed."
             )
         room_dict = load_data["data"]
 
