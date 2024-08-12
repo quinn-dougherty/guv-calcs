@@ -1,8 +1,8 @@
 import inspect
 import json
+import csv
 import numpy as np
 import matplotlib.pyplot as plt
-import pandas as pd
 from photompy import get_intensity_vectorized
 from .trigonometry import attitude, to_polar
 
@@ -80,7 +80,6 @@ class CalcZone(object):
         self.z1 = None
         self.z2 = None
         self.height = None
-        self.spacing = None
         self.x_spacing = None
         self.y_spacing = None
         self.z_spacing = None
@@ -323,6 +322,39 @@ class CalcVol(CalcZone):
             grid.reshape(-1) for grid in np.meshgrid(*self.points, indexing="ij")
         ]
         self.coords = np.array((X, Y, Z)).T
+        
+    def export(self, fname=None):
+        """
+        export solution to csv file
+        """
+        if fname is None:
+            fname = self.name+".csv"
+            
+        header="""Data format notes:
+
+         Data consists of numZ horizontal grids of fluence rate values; each grid contains numX by numY points.
+
+         numX; numY; numZ are given on the first line of data.
+         The next line contains numX values; indicating the X-coordinate of each grid column.
+         The next line contains numY values; indicating the Y-coordinate of each grid row.
+         The next line contains numZ values; indicating the Z-coordinate of each horizontal grid.
+         A blank line separates the position data from the first horizontal grid of fluence rate values.
+         A blank line separates each subsequent horizontal grid of fluence rate values.
+
+         fluence rate values are given in µW/cm²
+         
+         """
+        lines = header.split("\n")
+        rows = [[line] for line in lines]
+        rows += [self.num_points]
+        rows += self.points
+        num_z = self.num_points[2]
+        for i in range(num_z):
+            rows += [""]
+            rows += self.values.T[i].tolist()
+        with open(fname, 'w', newline='',encoding="cp1252") as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerows(rows)
 
 
 class CalcPlane(CalcZone):
@@ -451,13 +483,17 @@ class CalcPlane(CalcZone):
         if fname is None:
             fname = self.name+".csv"     
             
+        rows = [[""]+self.points[0].tolist()]
+        if self.values is None:
+            vals= [[""]*num_y]*num_x
+        else:
+            vals = self.values
+        rows += np.concat(([np.flip(self.points[1])],vals)).T.tolist()
+        rows += [""]
+        # zvals
         num_x = len(self.points[0])
         num_y = len(self.points[1])
-        xvals = self.points[0]
-        yvals = np.flip(self.points[1])
-        df1 = pd.DataFrame(self.values, index=xvals, columns=yvals).T  # main data
-        df2 = pd.DataFrame([[""]*num_x],columns=xvals,index=[""]) # blank row 
-        zvals = np.ones(df1.shape)*self.height 
-        df3 = pd.DataFrame(zvals, columns=xvals, index=[""]*num_y) # z values
-        df = pd.concat((df1,df2,df3))
-        df.to_csv(fname)
+        rows += [[""]+[self.height]*num_x]*num_y
+        with open(fname, 'w', newline='',encoding="cp1252") as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerows(rows)

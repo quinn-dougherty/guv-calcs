@@ -9,7 +9,7 @@ lamp = Lamp("Lamp1",
             spectra_source="src/guv_calcs/data/lamp_data/uvpro222_b1.csv",
             ).move(x=room.x/2,y=room.y/2,z=2.6)
 height = 1.9
-skin_limits = CalcPlane("SkinLimits", height = height,x1=0,x2=room.x,y1=0,y2=room.y, vert=False, horiz=False, fov80=False, dose=False)
+skin_limits = CalcPlane("SkinLimits", height = height,x1=0,x2=room.x,y1=0,y2=room.y, vert=False, horiz=False, fov80=False, dose=True)
 eye_limits = CalcPlane("EyeLimits", height = height,x1=0,x2=room.x,y1=0,y2=room.y, vert=True, horiz=False, fov80=True, dose=True)
 fluence = CalcVol(
         zone_id="WholeRoomFluence",
@@ -32,6 +32,7 @@ newroom = Room.load('test.guv')
 
 
 skin_limits.export()
+fluence.export()
 
 # import matplotlib.pyplot as plt
 # # fig=skin_limits.plot_plane()
