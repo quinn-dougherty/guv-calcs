@@ -2,6 +2,7 @@ import inspect
 import json
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 from photompy import get_intensity_vectorized
 from .trigonometry import attitude, to_polar
 
@@ -442,3 +443,21 @@ class CalcPlane(CalcZone):
             ax.set_title(title)
             cbar.set_label(self.units, loc="center")
         return fig
+
+    def export(self,fname=None):
+        """
+        export solution to csv
+        """
+        if fname is None:
+            fname = self.name+".csv"     
+            
+        num_x = len(self.points[0])
+        num_y = len(self.points[1])
+        xvals = self.points[0]
+        yvals = np.flip(self.points[1])
+        df1 = pd.DataFrame(self.values, index=xvals, columns=yvals).T  # main data
+        df2 = pd.DataFrame([[""]*num_x],columns=xvals,index=[""]) # blank row 
+        zvals = np.ones(df1.shape)*self.height 
+        df3 = pd.DataFrame(zvals, columns=xvals, index=[""]*num_y) # z values
+        df = pd.concat((df1,df2,df3))
+        df.to_csv(fname)
