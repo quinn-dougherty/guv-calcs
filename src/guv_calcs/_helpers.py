@@ -2,7 +2,8 @@ import json
 import pathlib
 import numpy as np
 from pathlib import Path
-from io import StringIO
+import io
+import csv
 
 
 def get_version(path) -> dict:
@@ -42,8 +43,8 @@ def load_csv(datasource):
             raise TypeError("Currently, only .csv files are supported")
         csv_data = open(datasource, mode="r", newline="")
     elif isinstance(datasource, bytes):
-        # Convert bytes to a string using StringIO to simulate a file
-        csv_data = StringIO(datasource.decode("utf-8"))
+        # Convert bytes to a string using io.StringIO to simulate a file
+        csv_data = io.StringIO(datasource.decode("utf-8"))
     else:
         raise TypeError(f"File type {type(datasource)} not valid")
     return csv_data
@@ -91,3 +92,23 @@ def validate_spectra(spectra, required_keys=None):
 def validate_key(key, dct):
     if key not in dct:
         raise KeyError("Required key {key} is absent.")
+
+
+def rows_to_bytes(rows, encoding="cp1252"):
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerows(rows)
+
+    # Get the CSV data from buffer, convert to bytes
+    csv_data = buffer.getvalue()
+    csv_bytes = csv_data.encode(encoding)  # encode to bytes
+    return csv_bytes
+
+
+def fig_to_bytes(fig):
+    buf = io.BytesIO()
+    fig.savefig(
+        buf, format="png"
+    )  # You can change the format as needed (e.g., 'jpeg', 'pdf')
+    buf.seek(0)  # Rewind the buffer
+    return buf.getvalue()

@@ -1,4 +1,6 @@
 import warnings
+from pathlib import Path
+import datetime
 import inspect
 import json
 import zipfile
@@ -9,9 +11,7 @@ import plotly.graph_objs as go
 from .lamp import Lamp
 from .calc_zone import CalcZone, CalcPlane, CalcVol
 from .trigonometry import to_polar
-from ._helpers import parse_loadfile, get_version, check_savefile
-from pathlib import Path
-import datetime
+from ._helpers import parse_loadfile, get_version, check_savefile, fig_to_bytes
 
 
 class Room:
@@ -136,34 +136,68 @@ class Room:
             elif zone["calctype"] == "Volume":
                 room.add_calc_zone(CalcVol.from_dict(zone))
         return room
-        
-    def export_zip(self, fname=None):
+
+    def export_zip(
+        self, fname=None, 
+        include_ies=False, 
+        include_spectra=False, 
+        include_lamp_plots=False,
+        include_plots=False
+    ):
         """
-        write the project file and all results files to a zip file
+        write the project file and all results files to a zip file. Optionally include 
+        extra files like lamp ies files, spectra files, and plots.
         """
 
         # save project
         data_dict = {"room.guv": self.save()}
-        
+
         # save all results
         for zone_id, zone in self.calc_zones.items():
-            data_dict[zone.name+".csv"] = zone.export()
-        
-        zip_buffer = io.BytesIO()        
+            data_dict[zone.name + ".csv"] = zone.export()
+            if include_plots:
+                if zone.calctype == "Plane":
+                    # Save the figure to a BytesIO object
+                    if zone.dose:
+                        title = f"{zone.hours} Hour Dose ({zone.height} m)"
+                    else:
+                        title = f"Irradiance ({zone.height} m)"
+                    fig = zone.plot_plane(title=title)
+                    data_dict[zone.name + ".png"] = fig_to_bytes(fig)
+
+        for lamp_id, lamp in self.lamps.items():
+            if lamp.filedata is not None:
+                if include_ies:
+                    data_dict[lamp.name + ".ies"] = lamp.save_ies()
+                if include_lamp_plots:
+                    ies_fig, ax = lamp.plot_ies(lamp.name)
+                    data_dict[lamp.name + "_ies.png"] = fig_to_bytes(ies_fig)    
+            if len(lamp.spectra)>0:        
+                if include_spectra:
+                    data_dict[lamp.name + ".csv"] = lamp.save_spectra()
+                if include_lamp_plots:   
+                    linfig = lamp.plot_spectra(title=lamp.name,yscale="linear")
+                    logfig = lamp.plot_spectra(title=lamp.name,yscale="log")
+                    linkey = lamp.name + "_spectra_linear.png"
+                    logkey = lamp.name + "_spectra_log.png"
+                    data_dict[linkey] = fig_to_bytes(linfig)
+                    data_dict[logkey] = fig_to_bytes(logfig)
+
+        zip_buffer = io.BytesIO()
         # Create a zip file within this BytesIO object
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
             # Loop through the dictionary, adding each string/byte stream to the zip
             for filename, content in data_dict.items():
                 # Ensure the content is in bytes
                 if isinstance(content, str):
-                    content = content.encode('utf-8')                
+                    content = content.encode("utf-8")
                 # Add the file to the zip; writing the bytes to a BytesIO object for the file
                 file_buffer = io.BytesIO(content)
                 zip_file.writestr(filename, file_buffer.getvalue())
         zip_bytes = zip_buffer.getvalue()
-            
+
         if fname is not None:
-            with open(fname, 'wb') as f:
+            with open(fname, "wb") as f:
                 f.write(zip_bytes)
         else:
             return zip_bytes

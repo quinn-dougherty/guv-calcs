@@ -1,11 +1,10 @@
 import inspect
 import json
-import csv
-import io
 import numpy as np
 import matplotlib.pyplot as plt
 from photompy import get_intensity_vectorized
 from .trigonometry import attitude, to_polar
+from ._helpers import rows_to_bytes
 
 
 class CalcZone(object):
@@ -223,15 +222,7 @@ class CalcZone(object):
     def export(self, fname=None):
 
         rows = self._write_rows()  # implemented in subclass
-
-        # Use StringIO to write CSV data into a string buffer
-        buffer = io.StringIO()
-        writer = csv.writer(buffer)
-        writer.writerows(rows)
-
-        # Get the CSV data from buffer, convert to bytes
-        csv_data = buffer.getvalue()
-        csv_bytes = csv_data.encode("cp1252")  # encode to bytes
+        csv_bytes = rows_to_bytes(rows)
 
         if fname is not None:
             with open(fname, "wb") as csvfile:

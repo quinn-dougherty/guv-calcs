@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay
 from photompy import read_ies_data, plot_ies, total_optical_power
 from .trigonometry import to_cartesian, to_polar, attitude
-from ._helpers import load_csv, validate_spectra
+from ._helpers import load_csv, validate_spectra, rows_to_bytes
 
 
 class Lamp:
@@ -569,6 +569,28 @@ class Lamp:
                 lst = v
             data["spectra"][k] = np.array(lst)
         return cls(**{k: v for k, v in data.items() if k in keys})
+
+    def save_spectra(self, fname=None):
+        """"""
+        rows = [list(self.spectra.keys())]
+        rows += list(np.array(list(self.spectra.values())).T)
+        csv_bytes = rows_to_bytes(rows)
+        if fname is not None:
+            with open(fname, "wb") as csvfile:
+                csvfile.write(csv_bytes)
+        else:
+            return csv_bytes
+
+    def save_ies(self, fname=None):
+        if isinstance(self.filedata,str):
+            iesbytes = self.filedata.encode("utf-8")
+        elif isinstance(self.filedata,bytes):
+            iesbytes = self.filedata
+        if fname is not None:
+            with open(fname, "wb") as file:
+                file.write(iesbytes)
+        else:
+            return iesbytes
 
     def save_lamp(self, filename=None):
         """
