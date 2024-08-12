@@ -1,6 +1,7 @@
 import inspect
 import json
 import csv
+import io
 import numpy as np
 import matplotlib.pyplot as plt
 from photompy import get_intensity_vectorized
@@ -83,7 +84,6 @@ class CalcZone(object):
         self.x_spacing = None
         self.y_spacing = None
         self.z_spacing = None
-
         self.num_points = None
         self.xp = None
         self.yp = None
@@ -125,12 +125,6 @@ class CalcZone(object):
 
         return data
 
-    # @classmethod
-    # def from_json(cls, jsondata):
-    # data = parse_json(jsondata)
-    # keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
-    # return cls(**{k: v for k, v in data.items() if k in keys})
-
     @classmethod
     def from_dict(cls, data):
         keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
@@ -140,6 +134,9 @@ class CalcZone(object):
         raise NotImplementedError
 
     def set_spacing(self, spacing):
+        raise NotImplementedError
+
+    def _write_rows(self):
         raise NotImplementedError
 
     def set_offset(self, offset):
@@ -222,6 +219,25 @@ class CalcZone(object):
             self.values = self.values * 3.6 * self.hours
 
         return self.values
+
+    def export(self, fname=None):
+
+        rows = self._write_rows()  # implemented in subclass
+
+        # Use StringIO to write CSV data into a string buffer
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerows(rows)
+
+        # Get the CSV data from buffer, convert to bytes
+        csv_data = buffer.getvalue()
+        csv_bytes = csv_data.encode("cp1252")  # encode to bytes
+
+        if fname is not None:
+            with open(fname, "wb") as csvfile:
+                csvfile.write(csv_bytes)
+        else:
+            return csv_bytes
 
 
 class CalcVol(CalcZone):
@@ -322,15 +338,13 @@ class CalcVol(CalcZone):
             grid.reshape(-1) for grid in np.meshgrid(*self.points, indexing="ij")
         ]
         self.coords = np.array((X, Y, Z)).T
-        
-    def export(self, fname=None):
+
+    def _write_rows(self):
         """
         export solution to csv file
         """
-        if fname is None:
-            fname = self.name+".csv"
-            
-        header="""Data format notes:
+
+        header = """Data format notes:
 
          Data consists of numZ horizontal grids of fluence rate values; each grid contains numX by numY points.
 
@@ -352,9 +366,7 @@ class CalcVol(CalcZone):
         for i in range(num_z):
             rows += [""]
             rows += self.values.T[i].tolist()
-        with open(fname, 'w', newline='',encoding="cp1252") as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerows(rows)
+        return rows
 
 
 class CalcPlane(CalcZone):
@@ -476,24 +488,22 @@ class CalcPlane(CalcZone):
             cbar.set_label(self.units, loc="center")
         return fig
 
-    def export(self,fname=None):
+    def _write_rows(self, fname=None):
         """
         export solution to csv
         """
-        if fname is None:
-            fname = self.name+".csv"     
-            
-        rows = [[""]+self.points[0].tolist()]
-        if self.values is None:
-            vals= [[""]*num_y]*num_x
-        else:
-            vals = self.values
-        rows += np.concat(([np.flip(self.points[1])],vals)).T.tolist()
-        rows += [""]
-        # zvals
+        # if fname is None:
+        # fname = self.name+".csv"
         num_x = len(self.points[0])
         num_y = len(self.points[1])
-        rows += [[""]+[self.height]*num_x]*num_y
-        with open(fname, 'w', newline='',encoding="cp1252") as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerows(rows)
+
+        rows = [[""] + self.points[0].tolist()]
+        if self.values is None:
+            vals = [[""] * num_y] * num_x
+        else:
+            vals = self.values
+        rows += np.concat(([np.flip(self.points[1])], vals)).T.tolist()
+        rows += [""]
+        # zvals
+        rows += [[""] + [self.height] * num_x] * num_y
+        return rows
