@@ -1,6 +1,8 @@
 import warnings
 import inspect
 import json
+import zipfile
+import io
 import numpy as np
 from scipy.spatial import Delaunay
 import plotly.graph_objs as go
@@ -134,6 +136,37 @@ class Room:
             elif zone["calctype"] == "Volume":
                 room.add_calc_zone(CalcVol.from_dict(zone))
         return room
+        
+    def export_zip(self, fname=None):
+        """
+        write the project file and all results files to a zip file
+        """
+
+        # save project
+        data_dict = {"room.guv": self.save()}
+        
+        # save all results
+        for zone_id, zone in self.calc_zones.items():
+            data_dict[zone.name+".csv"] = zone.export()
+        
+        zip_buffer = io.BytesIO()        
+        # Create a zip file within this BytesIO object
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Loop through the dictionary, adding each string/byte stream to the zip
+            for filename, content in data_dict.items():
+                # Ensure the content is in bytes
+                if isinstance(content, str):
+                    content = content.encode('utf-8')                
+                # Add the file to the zip; writing the bytes to a BytesIO object for the file
+                file_buffer = io.BytesIO(content)
+                zip_file.writestr(filename, file_buffer.getvalue())
+        zip_bytes = zip_buffer.getvalue()
+            
+        if fname is not None:
+            with open(fname, 'wb') as f:
+                f.write(zip_bytes)
+        else:
+            return zip_bytes
 
     def set_units(self, units):
         """set room units"""
