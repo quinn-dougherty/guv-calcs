@@ -333,6 +333,7 @@ class CalcVol(CalcZone):
     def _write_rows(self):
         """
         export solution to csv file
+        designed to be in the same format as the Acuity Visual export
         """
 
         header = """Data format notes:
@@ -356,7 +357,10 @@ class CalcVol(CalcZone):
         num_z = self.num_points[2]
         for i in range(num_z):
             rows += [""]
-            rows += self.values.T[i].tolist()
+            if self.values is None:
+                rows += [[""] * num_x] * num_y
+            else:
+                rows += self.values.T[i].tolist()
         return rows
 
 
