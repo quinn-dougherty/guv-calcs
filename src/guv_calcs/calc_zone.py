@@ -354,6 +354,8 @@ class CalcVol(CalcZone):
         rows = [[line] for line in lines]
         rows += [self.num_points]
         rows += self.points
+        num_x = self.num_points[0]
+        num_y = self.num_points[1]
         num_z = self.num_points[2]
         for i in range(num_z):
             rows += [""]
@@ -489,8 +491,8 @@ class CalcPlane(CalcZone):
         """
         # if fname is None:
         # fname = self.name+".csv"
-        num_x = len(self.points[0])
-        num_y = len(self.points[1])
+        num_x = self.num_points[0]
+        num_y = self.num_points[1]
 
         rows = [[""] + self.points[0].tolist()]
         if self.values is None:
