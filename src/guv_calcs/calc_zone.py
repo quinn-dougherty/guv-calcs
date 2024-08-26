@@ -499,7 +499,7 @@ class CalcPlane(CalcZone):
             vals = [[""] * num_y] * num_x
         else:
             vals = self.values
-        rows += np.concat(([np.flip(self.points[1])], vals)).T.tolist()
+        rows += np.concatenate(([np.flip(self.points[1])], vals)).T.tolist()
         rows += [""]
         # zvals
         rows += [[""] + [self.height] * num_x] * num_y
