@@ -50,7 +50,7 @@ class Room:
         self.set_dimensions()
 
         self.standard = (
-            "ANSI IES RP 27.1-22 (America) - UL8802" if standard is None else standard
+            "ANSI IES RP 27.1-22 (America)" if standard is None else standard
         )
 
         self.reflectance_ceiling = (
@@ -138,14 +138,15 @@ class Room:
         return room
 
     def export_zip(
-        self, fname=None, 
-        include_ies=False, 
-        include_spectra=False, 
+        self,
+        fname=None,
+        include_ies=False,
+        include_spectra=False,
         include_lamp_plots=False,
-        include_plots=False
+        include_plots=False,
     ):
         """
-        write the project file and all results files to a zip file. Optionally include 
+        write the project file and all results files to a zip file. Optionally include
         extra files like lamp ies files, spectra files, and plots.
         """
 
@@ -171,13 +172,13 @@ class Room:
                     data_dict[lamp.name + ".ies"] = lamp.save_ies()
                 if include_lamp_plots:
                     ies_fig, ax = lamp.plot_ies(lamp.name)
-                    data_dict[lamp.name + "_ies.png"] = fig_to_bytes(ies_fig)    
-            if len(lamp.spectra)>0:        
+                    data_dict[lamp.name + "_ies.png"] = fig_to_bytes(ies_fig)
+            if lamp.spectra is not None:
                 if include_spectra:
                     data_dict[lamp.name + ".csv"] = lamp.save_spectra()
-                if include_lamp_plots:   
-                    linfig = lamp.plot_spectra(title=lamp.name,yscale="linear")
-                    logfig = lamp.plot_spectra(title=lamp.name,yscale="log")
+                if include_lamp_plots:
+                    linfig = lamp.plot_spectra(title=lamp.name, yscale="linear")
+                    logfig = lamp.plot_spectra(title=lamp.name, yscale="log")
                     linkey = lamp.name + "_spectra_linear.png"
                     logkey = lamp.name + "_spectra_log.png"
                     data_dict[linkey] = fig_to_bytes(linfig)
@@ -548,6 +549,7 @@ class Room:
                 fig = self._plot_vol(zone=zone, fig=fig, select_id=select_id)
         # set views
         fig.update_layout(
+            title=title,
             scene=dict(
                 xaxis=dict(range=[0, self.x]),
                 yaxis=dict(range=[0, self.y]),

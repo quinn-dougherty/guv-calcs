@@ -1,16 +1,14 @@
 from pathlib import Path
-import csv
 import inspect
 import json
-from importlib import resources
 import pathlib
 import warnings
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay
 from photompy import read_ies_data, plot_ies, total_optical_power
+from .spectrum import Spectrum
 from .trigonometry import to_cartesian, to_polar, attitude
-from ._helpers import load_csv, validate_spectra, rows_to_bytes
 
 
 class Lamp:
@@ -36,15 +34,9 @@ class Lamp:
     aimx, aimy, aimz: floats
         Sets initial aim point of lamp in cartesian space.
     spectra_source: Path or bytes or None
-        Optional. Data source for spectra. Alternatively, you
-        may pass a 'spectra' dict directly. *If a spectra is passed,
-        spectra_source will be ignored.*
-    spectra: dict
-        Opotional. Dictionary containing at least the keys "Wavelength" and
-        "Unweighted Relative Intensity", where the values of each key are an array of the same
-        size. The values of the "Unweighted Relative Intensity" key correspond to the raw
-        relative intensity values of the lamp spectra. Any further keys
-        are optional. If provided, will supercede spectra_source.
+        Optional. Data source for spectra. May be a filepath, a binary stream,
+        or a dict where the first value contains values of wavelengths, and
+        the second value contains values of relative intensity.
     enabled: bool
         Determines if lamp participates in calculations. A lamp may be created
         and added to a room, but disabled.
@@ -65,17 +57,13 @@ class Lamp:
         aimy=None,
         aimz=None,
         spectra_source=None,
-        spectra=None,
         enabled=None,
+        # virtual_offset=None
     ):
 
         """
         TODO:
-            1. possibly worth removing the spectra and spectral_weightings arguments
-        and have it only possible for users to set them from a source?
-            2. probably __init__ needs to change initialization strategy
-            3. possibly Spectra should be its own class? idk...
-            4. in general much to think about
+            probably __init__ needs to change initialization strategy
 
         """
 
@@ -93,22 +81,13 @@ class Lamp:
         self.aimy = self.y if aimy is None else aimy
         self.aimz = self.z - 1.0 if aimz is None else aimz
         self.aim(self.aimx, self.aimy, self.aimz)  # updates heading and bank
+        # self.virtual_offset = 0 if virtual_offset is None else virtual_offset
 
         # calc zone values will be stored here
         self.max_irradiances = {}
-        # spectral weightings
-        self.spectral_weightings = {}
-        self._load_spectral_weightings()
 
-        # load spectra - unweighted and weighted
         self.spectra_source = spectra_source
-        if spectra is None:
-            self.spectra = {}
-            if self.spectra_source is not None:
-                self._load_spectra()
-                self._update_spectra()
-        else:
-            self.spectra = validate_spectra(spectra)
+        self.spectra = self._load_spectra(spectra_source)
 
         # load file and coordinates
         self.filename = filename
@@ -174,11 +153,10 @@ class Lamp:
         # tilt = (tilt + 360) % 360
         self.bank = tilt
         self._recalculate_aim_point(dimensions=dimensions, distance=distance)
-
+            
     def get_total_power(self):
         """return the lamp's total optical power"""
-        self.total_optical_power = total_optical_power(self.interpdict)
-        return self.total_optical_power
+        return total_optical_power(self.interpdict)
 
     def get_cartesian(self, scale=1, sigfigs=9):
         """Return lamp's true position coordinates in cartesian space"""
@@ -207,42 +185,6 @@ class Lamp:
         """standard polar plot of an ies file"""
         fig, ax = plot_ies(fdata=self.valdict, title=title)
         return fig, ax
-
-    def plot_spectra(self, title=None, fig=None, figsize=(6.4, 4.8), yscale="linear"):
-        """
-        plot the spectra of the lamp. at minimum, the unweighted spectra, possibly all
-        weighted spectra as well.
-
-        `yscale` is generally either "linear" or "log", but any matplotlib scale is permitted
-        """
-
-        if fig is None:
-            fig, ax = plt.subplots()
-        else:
-            ax = fig.axes[0]
-
-        if len(self.spectra) > 0:
-            for key, val in self.spectra.items():
-                if key == "Wavelength":
-                    continue
-                linestyle = "-" if key == "Unweighted Relative Intensity" else "--"
-                alpha = 1 if key == "Unweighted Relative Intensity" else 0.7
-                ax.plot(
-                    self.spectra["Wavelength"],
-                    val,
-                    label=key,
-                    linestyle=linestyle,
-                    alpha=alpha,
-                )
-            ax.legend()
-            ax.grid(True, which="both", ls="--", c="gray", alpha=0.3)
-            ax.set_xlabel("Wavelength [nm]")
-            ax.set_ylabel("Relative intensity [%]")
-            ax.set_yscale(yscale)
-
-            title = self.name if title is None else title
-            ax.set_title(title)
-        return fig
 
     def plot_web(
         self,
@@ -346,90 +288,6 @@ class Lamp:
             self.photometric_coords = None
             self.spectra = {}
 
-    def load_spectra(self, spectra_source):
-        """
-        external method to reload the spectra after initialization
-        If weightings are present, update weighted spectra also
-        If spectra_source is none, self.spectra will reset to empty
-        """
-        self.spectra_source = spectra_source
-        if self.spectra_source is None:
-            self.spectra = {}  # reset to empty
-        else:
-            self._load_spectra()
-            self._load_spectral_weightings()
-            self._update_spectra()
-
-    def _load_spectra(self):
-        
-        """load spectral data from source"""
-        csv_data = load_csv(self.spectra_source)
-        reader = csv.reader(csv_data, delimiter=",")
-        # read each line
-        spectra = []
-        for i, row in enumerate(reader):
-            try:
-                wavelength, intensity = map(float, row)
-                spectra.append((wavelength, intensity))
-            except ValueError:
-                if i == 0:  # probably a header
-                    continue
-                else:
-                    warnings.warn(f"Skipping invalid datarow: {row}")
-        self.spectra["Wavelength"] = np.array(spectra).T[0]
-        self.spectra["Unweighted Relative Intensity"] = np.array(spectra).T[1]
-
-    def _load_spectral_weightings(self):
-        """load spectral weightings"""
-        # load weights from within package
-        fname = "UV Spectral Weighting Curves.csv"
-        path = resources.files("guv_calcs.data").joinpath(fname)
-        with path.open("rb") as file:
-            weights = file.read()
-        
-        csv_data = load_csv(weights)
-        reader = csv.reader(csv_data, delimiter=",")
-        headers = next(reader, None)  # get headers
-
-        data = {}
-        for header in headers:
-            data[header] = []
-        for row in reader:
-            for header, value in zip(headers, row):
-                data[header].append(float(value))
-
-        for i, (key, val) in enumerate(data.items()):
-            if i == 0:
-                self.spectral_weightings["Wavelength"] = np.array(val)
-                continue
-            else:
-                self.spectral_weightings[key] = np.array(val)
-
-    def _update_spectra(self):
-        """
-        weight the unweighted spectra by all potential spectral weightings and add to
-        the self.spectra dict
-        """
-
-        if self.spectra is not None:
-            wavelengths = self.spectra["Wavelength"]
-            intensities = self.spectra["Unweighted Relative Intensity"]
-            maxval = max(intensities)
-            weighted_wavelengths = self.spectral_weightings["Wavelength"]
-            for key, val in self.spectral_weightings.items():
-                if key == "Wavelength":
-                    continue
-                # update weights to match the spectral wavelengths we've got
-                weights = np.interp(wavelengths, weighted_wavelengths, val)
-                # weight spectra
-                weighted_intensity = intensities * weights
-                ratio = maxval / max(weighted_intensity)
-                self.spectra[key] = weighted_intensity * ratio
-        else:
-            warnings.warn(
-                "Spectra was not updated with weights as a spectra was not provided."
-            )
-
     def _check_filename(self):
         """
         determine datasource
@@ -441,6 +299,8 @@ class Lamp:
         if isinstance(self.filename, (str, pathlib.PosixPath)):
             if Path(self.filename).is_file():
                 FILE_IS_PATH = True
+            else:
+                warnings.warn(f"File {self.filename} not found")
         # if filename is a path and exists, it will replace filedata, but only if filedata wasn't specified to begin with
         if FILE_IS_PATH and self.filedata is None:
             self.filedata = Path(self.filename).read_text()
@@ -492,6 +352,26 @@ class Lamp:
         xp, yp, zp = to_cartesian(tflat, pflat, self.values.flatten())
         self.photometric_coords = np.array([xp, yp, zp]).T
 
+    def _load_spectra(self, spectra_source):
+        """initialize a Spectrum object from the source"""
+        if isinstance(spectra_source, dict):
+            spectra = Spectrum.from_dict(spectra_source)
+        elif isinstance(spectra_source, (str, pathlib.Path, bytes)):
+            spectra = Spectrum.from_file(spectra_source)
+        elif isinstance(spectra_source, tuple):
+            spectra = Spectrum(spectra_source[0], spectra_source[1])
+        elif spectra_source is None:
+            spectra = None
+        else:
+            spectra = None
+            warnings.warn(
+                f"Datatype {type(spectra_source)} not recognized spectral data source"
+            )
+        return spectra
+
+    def load_spectra(self, spectra_source):
+        self.spectra = self._load_spectra(spectra_source)
+
     def _recalculate_aim_point(self, dimensions=None, distance=None):
         """
         internal method to call if setting tilt/bank or orientation/heading
@@ -531,21 +411,10 @@ class Lamp:
             data["spectra"][k] = np.array(lst)
         return cls(**{k: v for k, v in data.items() if k in keys})
 
-    def save_spectra(self, fname=None):
-        """"""
-        rows = [list(self.spectra.keys())]
-        rows += list(np.array(list(self.spectra.values())).T)
-        csv_bytes = rows_to_bytes(rows)
-        if fname is not None:
-            with open(fname, "wb") as csvfile:
-                csvfile.write(csv_bytes)
-        else:
-            return csv_bytes
-
     def save_ies(self, fname=None):
-        if isinstance(self.filedata,str):
+        if isinstance(self.filedata, str):
             iesbytes = self.filedata.encode("utf-8")
-        elif isinstance(self.filedata,bytes):
+        elif isinstance(self.filedata, bytes):
             iesbytes = self.filedata
         if fname is not None:
             with open(fname, "wb") as file:
@@ -579,12 +448,13 @@ class Lamp:
             raise TypeError(f"Filedata must be str or bytes, not {type(self.filedata)}")
         data["filedata"] = filedata
 
-        # this is just so that the file looks nicer in a text editor
-        spectra_string = {}
-        for key in ["Wavelength","Unweighted Relative Intensity"]:
-            spectra_string[key] = ", ".join(map(str, self.spectra[key]))
-        data["spectra"] = spectra_string
-
+        if self.spectra is not None:
+            spectra_dict = self.spectra.to_dict(as_string=True)
+            keys = list(spectra_dict.keys())[0:2]  # keep the first two keys only
+            data["spectra"] = {key: spectra_dict[key] for key in keys}
+        else:
+            data["spectra"] = None
+        
         if filename is not None:
             with open(filename, "w") as json_file:
                 json.dump(data, json_file, indent=4)

@@ -178,7 +178,9 @@ class CalcZone(object):
         for lamp_id, lamp in lamps.items():
             if lamp.filedata is not None and lamp.enabled:
                 # determine lamp placement + calculate relative coordinates
-                rel_coords = self.coords - lamp.position
+                # rel_coords = self.coords - lamp.position
+                # offset = np.array([0,0,lamp.virtual_offset])
+                rel_coords = self.coords - (lamp.position)#+offset)
                 # store the theta and phi data based on this orientation
                 Theta0, Phi0, R0 = to_polar(*rel_coords.T)
                 # apply all transformations that have been applied to this lamp, but in reverse
@@ -462,10 +464,17 @@ class CalcPlane(CalcZone):
         zs = np.ones(xy_coords.shape[0]) * self.height
         self.coords = np.stack([xy_coords.T[0], xy_coords.T[1], zs]).T
 
-    def plot_plane(self, fig=None, vmin=None, vmax=None, title=None):
+    def plot_plane(self, fig=None, ax=None, vmin=None, vmax=None, title=None):
         """Plot the image of the radiation pattern"""
         if fig is None:
-            fig, ax = plt.subplots()
+            if ax is None:
+                fig, ax = plt.subplots()
+            else:
+                fig = plt.gcf()
+        else:
+            if ax is None:
+                ax = fig.axes[0]
+
         title = "" if title is None else title
         if self.values is not None:
             vmin = self.values.min() if vmin is None else vmin
@@ -483,7 +492,7 @@ class CalcPlane(CalcZone):
             )
             ax.set_title(title)
             cbar.set_label(self.units, loc="center")
-        return fig
+        return fig, ax
 
     def _write_rows(self, fname=None):
         """

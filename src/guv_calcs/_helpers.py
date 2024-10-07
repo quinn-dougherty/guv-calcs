@@ -5,6 +5,7 @@ from pathlib import Path
 import io
 import csv
 
+
 def get_version(path) -> dict:
 
     version = {}
