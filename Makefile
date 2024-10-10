@@ -23,6 +23,7 @@ local:
 	pip install -e . --no-cache-dir
 	
 install:
+	pip install -r requirements.txt
 	rm -rf dist build */*.egg-info *.egg-info
 	$(PYTHON_INTERPRETER) setup.py sdist
 	pip install . --no-cache-dir

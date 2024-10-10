@@ -2,7 +2,7 @@ import inspect
 import json
 import numpy as np
 import matplotlib.pyplot as plt
-from photompy import get_intensity_vectorized
+from photompy import get_intensity
 from .trigonometry import attitude, to_polar
 from ._helpers import rows_to_bytes
 
@@ -194,7 +194,7 @@ class CalcZone(object):
                     attitude(rel_coords.T, roll=0, pitch=0, yaw=-lamp.angle)
                 ).T
                 Theta, Phi, R = to_polar(*rel_coords.T)
-                values = get_intensity_vectorized(Theta, Phi, lamp.interpdict) / R ** 2
+                values = get_intensity(Theta, Phi, lamp.interpdict) / R ** 2
 
                 if self.fov80:
                     values[Theta0 < 50] = 0

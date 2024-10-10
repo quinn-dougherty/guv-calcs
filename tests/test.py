@@ -1,8 +1,8 @@
 from guv_calcs import *
 
-# Room().save('test.json')
-
-room = Room(x=4,y=6,z=2.7, units='meters')
+room = Room(x=6, y=4,z=2.7, units='meters')
+# df=get_disinfection_table(1,280,room)
+# print(df)
 
 lamp = Lamp("Lamp1", 
             filename="src/guv_calcs/data/lamp_data/uvpro222_b1.ies",
@@ -13,35 +13,39 @@ skin_limits = CalcPlane("SkinLimits", height = height,x1=0,x2=room.x,y1=0,y2=roo
 eye_limits = CalcPlane("EyeLimits", height = height,x1=0,x2=room.x,y1=0,y2=room.y, vert=True, horiz=False, fov80=True, dose=True)
 fluence = CalcVol(
         zone_id="WholeRoomFluence",
-        name="Whole Room Fluence",
         x1=0,
         x2=room.x,
         y1=0,
-        y2=room.y,
         z1=0,
         z2=room.z,
     )
-room.add_calc_zone(fluence)
-room.add_calc_zone(skin_limits)
-room.add_calc_zone(eye_limits)
-room.add_lamp(lamp)
-room.calculate()
+# room.add_calc_zone(fluence)
+# room.add_calc_zone(skin_limits)
+# room.add_calc_zone(eye_limits)s
+room.add_lamp(lamp).add_standard_zones().calculate()
+# room.add_lamp(lamp)
+# room.calculate()
 
-room.save('test.guv')
-newroom = Room.load('test.guv')
+room.save('tests/test.guv')
+newroom = Room.load('tests/test.guv')
 
 
 skin_limits.export()
 fluence.export()
 
-# import matplotlib.pyplot as plt
-# # fig=skin_limits.plot_plane()
-# # plt.show()
-# lamp.plot_spectra()
-# plt.show()
-# # fig=room.plotly()
-# fig.show()
+room.export_zip("tests/test.zip",
+    include_plots=True,
+    include_lamp_files=True,
+    include_lamp_plots=True,)
 
-# room.to_json('tests/test.json')
-# newroom = Room.from_json('tests/test.json')
-# newroom.calculate()
+# # import matplotlib.pyplot as plt
+# # # fig=skin_limits.plot_plane()
+# # # plt.show()
+# # lamp.plot_spectra()
+# # plt.show()
+# # # fig=room.plotly()
+# # fig.show()
+
+# # room.to_json('tests/test.json')
+# # newroom = Room.from_json('tests/test.json')
+# # newroom.calculate()

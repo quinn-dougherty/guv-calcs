@@ -140,10 +140,9 @@ class Room:
     def export_zip(
         self,
         fname=None,
-        include_ies=False,
-        include_spectra=False,
-        include_lamp_plots=False,
         include_plots=False,
+        include_lamp_files=False,
+        include_lamp_plots=False,
     ):
         """
         write the project file and all results files to a zip file. Optionally include
@@ -163,22 +162,20 @@ class Room:
                         title = f"{zone.hours} Hour Dose ({zone.height} m)"
                     else:
                         title = f"Irradiance ({zone.height} m)"
-                    fig = zone.plot_plane(title=title)
+                    fig, ax = zone.plot_plane(title=title)
                     data_dict[zone.name + ".png"] = fig_to_bytes(fig)
 
         for lamp_id, lamp in self.lamps.items():
             if lamp.filedata is not None:
-                if include_ies:
+                if include_lamp_files:
                     data_dict[lamp.name + ".ies"] = lamp.save_ies()
                 if include_lamp_plots:
                     ies_fig, ax = lamp.plot_ies(lamp.name)
                     data_dict[lamp.name + "_ies.png"] = fig_to_bytes(ies_fig)
             if lamp.spectra is not None:
-                if include_spectra:
-                    data_dict[lamp.name + ".csv"] = lamp.save_spectra()
                 if include_lamp_plots:
-                    linfig = lamp.plot_spectra(title=lamp.name, yscale="linear")
-                    logfig = lamp.plot_spectra(title=lamp.name, yscale="log")
+                    linfig, _ = lamp.spectra.plot(title=lamp.name, yscale="linear", weights=True,label=True)
+                    logfig, _ = lamp.spectra.plot(title=lamp.name, yscale="log", weights=True,label=True)
                     linkey = lamp.name + "_spectra_linear.png"
                     logkey = lamp.name + "_spectra_log.png"
                     data_dict[linkey] = fig_to_bytes(linfig)
@@ -208,6 +205,7 @@ class Room:
         if units not in ["meters", "feet"]:
             raise KeyError("Valid units are `meters` or `feet`")
         self.units = units
+        return self
 
     def set_dimensions(self, x=None, y=None, z=None):
         """set room dimensions"""
@@ -216,6 +214,7 @@ class Room:
         self.z = self.z if z is None else z
         self.dimensions = (self.x, self.y, self.z)
         self.volume = self.x * self.y * self.z
+        return self
 
     def get_units(self):
         """return room units"""
@@ -223,14 +222,67 @@ class Room:
 
     def get_dimensions(self):
         """return room dimensions"""
-        self.dimensions = (self.x, self.y, self.z)
+        self.dimensions = np.array((self.x, self.y, self.z))
         return self.dimensions
 
     def get_volume(self):
         """return room volume"""
         self.volume = self.x * self.y * self.z
         return self.volume
-
+        
+    def add_standard_zones(self):
+        """
+        convenience function. Add skin and eye limit calculation planes, 
+        plus whole room fluence.
+        """
+        if "UL8802" in self.standard:
+            height = 1.9
+            skin_horiz = False
+            eye_vert = False
+            fov80 = False
+        else:
+            height = 1.8
+            skin_horiz = True
+            eye_vert = True
+            fov80 = True
+            
+        standard_zones = {}
+        self.add_calc_zone(
+            CalcVol(
+                zone_id="WholeRoomFluence",
+                name="Whole Room Fluence",
+                x1=0, x2=self.x,
+                y1=0, y2=self.y,
+                z1=0, z2=self.z,
+                show_values=False,
+            )
+        )
+        
+        self.add_calc_zone(
+            CalcPlane(
+            zone_id="SkinLimits",
+            name="Skin Dose (8 Hours)",
+            height=height,
+            x1=0, x2=self.x, 
+            y1=0, y2=self.y, 
+            vert=False, horiz=skin_horiz, 
+            fov80=False, dose=True, hours=8,
+            )
+        )
+        
+        self.add_calc_zone(
+            CalcPlane(
+            zone_id="EyeLimits",
+            name="Eye Dose (8 Hours)",
+            height=height,   
+            x1=0, x2=self.x, 
+            y1=0, y2=self.y,
+            vert=eye_vert, horiz=False,  
+            fov80=fov80, dose=True, hours=8,
+            )
+        )
+        return self
+        
     def _check_position(self, dimensions, obj_name):
         """
         Method to check if an object's dimensions exceed the room's boundaries.
@@ -269,10 +321,12 @@ class Room:
         """
         self.check_lamp_position(lamp)
         self.lamps[lamp.lamp_id] = lamp
+        return self
 
     def remove_lamp(self, lamp_id):
         """remove a lamp from the room"""
         del self.lamps[lamp_id]
+        return self
 
     def add_calc_zone(self, calc_zone):
         """
@@ -280,10 +334,12 @@ class Room:
         """
         self.check_zone_position(calc_zone)
         self.calc_zones[calc_zone.zone_id] = calc_zone
+        return self
 
     def remove_calc_zone(self, zone_id):
         """remove calculation zone from room"""
         del self.calc_zones[zone_id]
+        return self
 
     def calculate(self):
         """
@@ -292,11 +348,13 @@ class Room:
         for name, zone in self.calc_zones.items():
             if zone.enabled:
                 zone.calculate_values(lamps=self.lamps)
-
+        return self
+        
     def calculate_by_id(self, zone_id):
         """calculate just the calc zone selected"""
         self.calc_zones[zone_id].calculate_values(lamps=self.lamps)
-
+        return self
+        
     def _set_color(self, select_id, label, enabled):
         if not enabled:
             color = "#d1d1d1"  # grey
