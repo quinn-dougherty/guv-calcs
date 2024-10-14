@@ -178,9 +178,7 @@ class CalcZone(object):
         for lamp_id, lamp in lamps.items():
             if lamp.filedata is not None and lamp.enabled:
                 # determine lamp placement + calculate relative coordinates
-                # rel_coords = self.coords - lamp.position
-                # offset = np.array([0,0,lamp.virtual_offset])
-                rel_coords = self.coords - (lamp.position)#+offset)
+                rel_coords = self.coords - lamp.position
                 # store the theta and phi data based on this orientation
                 Theta0, Phi0, R0 = to_polar(*rel_coords.T)
                 # apply all transformations that have been applied to this lamp, but in reverse

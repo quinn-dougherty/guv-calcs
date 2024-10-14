@@ -5,6 +5,7 @@ import numpy as np
 import csv
 from ._helpers import load_csv
 
+
 def get_disinfection_table(fluence, wavelength=222, room=None):
     """
     Retrieve and format inactivtion data for this room.
@@ -31,9 +32,7 @@ def get_disinfection_table(fluence, wavelength=222, room=None):
     eACH = (k1 * (1 - f) + k2 - k2 * (1 - f)) * fluence * 3.6
     df["eACH-UV"] = eACH.round(1)
 
-    newkeys = [
-        "eACH-UV"
-    ]
+    newkeys = ["eACH-UV"]
 
     if room is not None:
         volume = room.get_volume()
@@ -93,15 +92,28 @@ def get_spectral_weightings():
     for i, (key, val) in enumerate(data.items()):
         spectral_weightings[key] = np.array(val)
     return spectral_weightings
-    
+
+
+def get_standards():
+    """
+    load possible standards, as a list of strings
+    """
+    return list(get_spectral_weightings().keys())[1:]
+
+
 def get_tlv(ref, standard):
     """
-    return the value of the UV dose not to be exceeded over 8 hours, 
+    return the value of the UV dose not to be exceeded over 8 hours,
     assuming a monochromatic wavelength
-    TODO: some way to verify the standard label is in the keys
     """
-    
+
     weights = get_spectral_weightings()
+    valid_keys = list(weights.keys())[1:]
+    if standard not in valid_keys:
+        raise KeyError(
+            f"{standard} is not a valid spectral weighting standard. Select one of {valid_keys}"
+        )
+
     tlv_wavelengths = weights["Wavelength (nm)"]
     tlv_values = weights[standard]
     weighting = np.interp(ref, tlv_wavelengths, tlv_values)

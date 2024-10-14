@@ -3,7 +3,12 @@ from .lamp import Lamp
 from .calc_zone import CalcVol, CalcPlane
 from .spectrum import Spectrum, sum_spectrum
 from .trigonometry import to_polar, to_cartesian, attitude
-from ._calculate import get_disinfection_table, get_tlv, get_spectral_weightings
+from ._data import (
+    get_disinfection_table,
+    get_tlv,
+    get_spectral_weightings,
+    get_standards,
+)
 from ._version import __version__
 
 __all__ = [
@@ -19,6 +24,7 @@ __all__ = [
     "get_disinfection_table",
     "get_tlv",
     "get_spectral_weightings",
+    "get_standards",
 ]
 
 __version__ = __version__

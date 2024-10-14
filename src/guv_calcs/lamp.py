@@ -58,7 +58,6 @@ class Lamp:
         aimz=None,
         spectra_source=None,
         enabled=None,
-        # virtual_offset=None
     ):
 
         """
@@ -81,7 +80,6 @@ class Lamp:
         self.aimy = self.y if aimy is None else aimy
         self.aimz = self.z - 1.0 if aimz is None else aimz
         self.aim(self.aimx, self.aimy, self.aimz)  # updates heading and bank
-        # self.virtual_offset = 0 if virtual_offset is None else virtual_offset
 
         # calc zone values will be stored here
         self.max_irradiances = {}
@@ -153,7 +151,7 @@ class Lamp:
         # tilt = (tilt + 360) % 360
         self.bank = tilt
         self._recalculate_aim_point(dimensions=dimensions, distance=distance)
-            
+
     def get_total_power(self):
         """return the lamp's total optical power"""
         return total_optical_power(self.interpdict)
@@ -403,12 +401,14 @@ class Lamp:
     def from_dict(cls, data):
         """initialize class from dict"""
         keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
-        for k, v in data["spectra"].items():
-            if isinstance(v, str):
-                lst = list(map(float, v.split(", ")))
-            elif isinstance(v, list):
-                lst = v
-            data["spectra"][k] = np.array(lst)
+        if data["spectra"] is not None:
+            data["spectra_source"] = {}
+            for k, v in data["spectra"].items():
+                if isinstance(v, str):
+                    lst = list(map(float, v.split(", ")))
+                elif isinstance(v, list):
+                    lst = v
+                data["spectra_source"][k] = np.array(lst)
         return cls(**{k: v for k, v in data.items() if k in keys})
 
     def save_ies(self, fname=None):
@@ -454,7 +454,7 @@ class Lamp:
             data["spectra"] = {key: spectra_dict[key] for key in keys}
         else:
             data["spectra"] = None
-        
+
         if filename is not None:
             with open(filename, "w") as json_file:
                 json.dump(data, json_file, indent=4)

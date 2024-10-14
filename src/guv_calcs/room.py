@@ -174,8 +174,12 @@ class Room:
                     data_dict[lamp.name + "_ies.png"] = fig_to_bytes(ies_fig)
             if lamp.spectra is not None:
                 if include_lamp_plots:
-                    linfig, _ = lamp.spectra.plot(title=lamp.name, yscale="linear", weights=True,label=True)
-                    logfig, _ = lamp.spectra.plot(title=lamp.name, yscale="log", weights=True,label=True)
+                    linfig, _ = lamp.spectra.plot(
+                        title=lamp.name, yscale="linear", weights=True, label=True
+                    )
+                    logfig, _ = lamp.spectra.plot(
+                        title=lamp.name, yscale="log", weights=True, label=True
+                    )
                     linkey = lamp.name + "_spectra_linear.png"
                     logkey = lamp.name + "_spectra_log.png"
                     data_dict[linkey] = fig_to_bytes(linfig)
@@ -229,10 +233,10 @@ class Room:
         """return room volume"""
         self.volume = self.x * self.y * self.z
         return self.volume
-        
+
     def add_standard_zones(self):
         """
-        convenience function. Add skin and eye limit calculation planes, 
+        convenience function. Add skin and eye limit calculation planes,
         plus whole room fluence.
         """
         if "UL8802" in self.standard:
@@ -245,44 +249,56 @@ class Room:
             skin_horiz = True
             eye_vert = True
             fov80 = True
-            
-        standard_zones = {}
+
         self.add_calc_zone(
             CalcVol(
                 zone_id="WholeRoomFluence",
                 name="Whole Room Fluence",
-                x1=0, x2=self.x,
-                y1=0, y2=self.y,
-                z1=0, z2=self.z,
+                x1=0,
+                x2=self.x,
+                y1=0,
+                y2=self.y,
+                z1=0,
+                z2=self.z,
                 show_values=False,
             )
         )
-        
+
         self.add_calc_zone(
             CalcPlane(
-            zone_id="SkinLimits",
-            name="Skin Dose (8 Hours)",
-            height=height,
-            x1=0, x2=self.x, 
-            y1=0, y2=self.y, 
-            vert=False, horiz=skin_horiz, 
-            fov80=False, dose=True, hours=8,
+                zone_id="SkinLimits",
+                name="Skin Dose (8 Hours)",
+                height=height,
+                x1=0,
+                x2=self.x,
+                y1=0,
+                y2=self.y,
+                vert=False,
+                horiz=skin_horiz,
+                fov80=False,
+                dose=True,
+                hours=8,
             )
         )
-        
+
         self.add_calc_zone(
             CalcPlane(
-            zone_id="EyeLimits",
-            name="Eye Dose (8 Hours)",
-            height=height,   
-            x1=0, x2=self.x, 
-            y1=0, y2=self.y,
-            vert=eye_vert, horiz=False,  
-            fov80=fov80, dose=True, hours=8,
+                zone_id="EyeLimits",
+                name="Eye Dose (8 Hours)",
+                height=height,
+                x1=0,
+                x2=self.x,
+                y1=0,
+                y2=self.y,
+                vert=eye_vert,
+                horiz=False,
+                fov80=fov80,
+                dose=True,
+                hours=8,
             )
         )
         return self
-        
+
     def _check_position(self, dimensions, obj_name):
         """
         Method to check if an object's dimensions exceed the room's boundaries.
@@ -349,12 +365,12 @@ class Room:
             if zone.enabled:
                 zone.calculate_values(lamps=self.lamps)
         return self
-        
+
     def calculate_by_id(self, zone_id):
         """calculate just the calc zone selected"""
         self.calc_zones[zone_id].calculate_values(lamps=self.lamps)
         return self
-        
+
     def _set_color(self, select_id, label, enabled):
         if not enabled:
             color = "#d1d1d1"  # grey

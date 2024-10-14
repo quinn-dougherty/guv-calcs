@@ -23,12 +23,12 @@ class Spectrum:
     def __init__(self, wavelengths, intensities, weights=None):
         self.raw_wavelengths = np.array(wavelengths)
         self.raw_intensities = np.array(intensities)
-        
+
         # sort values in case they are out of order
         sortidx = np.argsort(self.raw_wavelengths)
         self.raw_wavelengths = self.raw_wavelengths[sortidx]
         self.raw_intensities = self.raw_intensities[sortidx]
-             
+
         if len(self.raw_wavelengths) != len(self.raw_intensities):
             raise ValueError("Number of wavelengths and intensities do not match.")
 
@@ -46,7 +46,7 @@ class Spectrum:
         """
         initialize spectrum object from file
         Be careful initializing from file, as the class assumes the file's
-        first column correponds to 'Wavelengths' and the second column 
+        first column correponds to 'Wavelengths' and the second column
         corresponds to 'Intensities'. 'Wavelengths' should be in units of
         nanometers, 'Intensities' should be in units of relative intensity.
         """
@@ -57,15 +57,15 @@ class Spectrum:
         for i, row in enumerate(reader):
             try:
                 vals = list(map(float, row))
-                spectra.append((vals[0],vals[1]))
+                spectra.append((vals[0], vals[1]))
             except ValueError:
                 if i == 0:  # probably a header
                     continue
                 # else:
-                    # warnings.warn(f"Skipping invalid datarow: {row}")
-        if len(spectra)==0:
+                # warnings.warn(f"Skipping invalid datarow: {row}")
+        if len(spectra) == 0:
             raise ValueError("File contains no valid data.")
-                    
+
         wavelengths = np.array(spectra).T[0]
         intensities = np.array(spectra).T[1]
         return cls(wavelengths, intensities)
@@ -133,8 +133,7 @@ class Spectrum:
             else:
                 spectral_weightings[key] = (wavelengths, np.array(val))
         return spectral_weightings
-        
-    
+
     def weight(self, standard):
         """weight by spectral effectiveness"""
         if standard in self.weights.keys():
@@ -142,9 +141,9 @@ class Spectrum:
             weights = np.interp(self.wavelengths, weight_wavelengths, weights_orig)
             weighted_intensity = self.intensities * weights
         else:
-            warnings.warn(f"{weight} not in available weightings.")
-        return weighted_intensity        
-            
+            warnings.warn(f"{standard} not in available weightings.")
+        return weighted_intensity
+
     def _weight_spectra(self):
         """calculate the weighted spectra"""
         weighted_intensities = {}
@@ -172,7 +171,7 @@ class Spectrum:
         idx2 = np.argwhere(wavelength <= maxval)
         idx = np.intersect1d(idx1, idx2)
         return wavelength[idx], intensity[idx]
-        
+
     def revert(self):
         """restore wavelength and intensity values to original values"""
         self.wavelengths = self.raw_wavelengths
@@ -196,13 +195,13 @@ class Spectrum:
             intensities = self.weighted_intensities[weight]
             wavelengths, intensities = self._filter(
                 self.wavelengths, intensities, minval, maxval
-        )
+            )
         else:
             wavelengths, intensities = self._filter(
                 self.wavelengths, self.intensities, minval, maxval
-        )
+            )
         return sum_spectrum(wavelengths, intensities)
-        
+
     def scale(self, power, minval=None, maxval=None):
         """
         scale the spectra to a power value, such that the total spectral
@@ -217,31 +216,31 @@ class Spectrum:
         """normalize the maximum intensity to a value"""
         self._scale(normval / max(self.intensities))
         return self
-        
+
     def get_tlv(self, standard):
-        """return the total uv dose over 8 hours for this specific lamp, 
+        """return the total uv dose over 8 hours for this specific lamp,
         per a particular spectral effectiveness standard. units: mJ/cm2"""
-        weights = np.interp(self.wavelengths, *self.weights[standard]) # get weights        
-        i_new = self.intensities / self.sum() # scale 
-        s_lambda = sum_spectrum(self.wavelengths, weights*i_new)
+        weights = np.interp(self.wavelengths, *self.weights[standard])  # get weights
+        i_new = self.intensities / self.sum()  # scale
+        s_lambda = sum_spectrum(self.wavelengths, weights * i_new)
         return 3 / s_lambda
 
     def get_max_irradiance(self, standard):
         """return max irradiance for this specific spectra, per a particular
         spectral effectiveness standard. units: uW/cm2"""
-        return get_tlv(standard)/60/60/8*1000
-        
+        return self.get_tlv(standard) / 60 / 60 / 8 * 1000
+
     def get_seconds_to_tlv(self, irradiance, standard):
         """
         determine the number of seconds before a TLV is reached
-        provided an irradiance value in uW/cm2 
+        provided an irradiance value in uW/cm2
         and a spectral effectiveness standard
         """
-        weights = np.interp(self.wavelengths, *self.weights[standard]) # get weights        
-        i_new = self.intensities * irradiance / self.sum() # scale 
-        weighted_irradiance = sum_spectrum(self.wavelengths, weights*i_new)
+        weights = np.interp(self.wavelengths, *self.weights[standard])  # get weights
+        i_new = self.intensities * irradiance / self.sum()  # scale
+        weighted_irradiance = sum_spectrum(self.wavelengths, weights * i_new)
         return 3000 / weighted_irradiance
-        
+
     def plot(
         self,
         title="",
@@ -254,15 +253,15 @@ class Spectrum:
     ):
         """
         plot the spectra and any weighted spectra.
-        `yscale` is generally either "linear" or "log", but any matplotlib 
-        scale is permitted        
+        `yscale` is generally either "linear" or "log", but any matplotlib
+        scale is permitted
         label: str or bool or None
-            if str, the spectrum will be labeled with that str. If True, 
+            if str, the spectrum will be labeled with that str. If True,
             default label is `Unweighted Relative Intensity`. If False, label
-            will not be used. if 
+            will not be used. if
         weights: bool or str
-            If not False or None, 
-        
+            If not False or None,
+
         """
 
         if fig is None:
@@ -273,26 +272,30 @@ class Spectrum:
         else:
             if ax is None:
                 ax = fig.axes[0]
-                
+
         default_label = "Unweighted Relative Intensity"
         if label:
-            if isinstance(label,str):                
+            if isinstance(label, str):
                 ax.plot(self.wavelengths, self.intensities, label=label)
             else:
                 ax.plot(self.wavelengths, self.intensities, label=default_label)
-        else: 
+        else:
             ax.plot(self.wavelengths, self.intensities)
-            
+
         if weights:
             if isinstance(weights, str):
                 if weights in self.weighted_intensities.keys():
-                    val = self.weighted_intensities[weight]
-                    ax.plot(self.wavelengths, 
-                            self.weighted_intensities[weights], 
-                            label=weights, alpha=0.7, linestyle="--")
+                    val = self.weighted_intensities[weights]
+                    ax.plot(
+                        self.wavelengths,
+                        self.weighted_intensities[weights],
+                        label=weights,
+                        alpha=0.7,
+                        linestyle="--",
+                    )
             elif isinstance(weights, bool):
                 for key, val in self.weighted_intensities.items():
-                    ax.plot(self.wavelengths, val, label=key, alpha=0.7, linestyle="--")              
+                    ax.plot(self.wavelengths, val, label=key, alpha=0.7, linestyle="--")
 
         if label or weights:
             ax.legend()

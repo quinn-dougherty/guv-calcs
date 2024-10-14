@@ -19,12 +19,24 @@ fluence = CalcVol(
         z1=0,
         z2=room.z,
     )
-# room.add_calc_zone(fluence)
-# room.add_calc_zone(skin_limits)
-# room.add_calc_zone(eye_limits)s
+room.add_calc_zone(fluence)
+room.add_calc_zone(skin_limits)
+room.add_calc_zone(eye_limits)
+room.add_lamp(lamp)
+room.calculate()
+
+print(get_disinfection_table(fluence.values.mean()))
+standard = get_standards()[1]
+print(get_tlv(222,standard))
+
+spectra_source="src/guv_calcs/data/lamp_data/uvpro222_b1.csv"
+spec = Spectrum.from_file(spectra_source)
+print(spec.get_tlv(standard))
+print(spec.get_max_irradiance(standard))
+print(spec.get_seconds_to_tlv(15, standard)/3600)
+
 room.add_lamp(lamp).add_standard_zones().calculate()
-# room.add_lamp(lamp)
-# room.calculate()
+
 
 room.save('tests/test.guv')
 newroom = Room.load('tests/test.guv')
@@ -49,3 +61,5 @@ room.export_zip("tests/test.zip",
 # # room.to_json('tests/test.json')
 # # newroom = Room.from_json('tests/test.json')
 # # newroom.calculate()
+
+# test data retrieval functions
