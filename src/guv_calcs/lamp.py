@@ -43,6 +43,8 @@ class Lamp:
     units: str or int in [1, 2] or None
         `feet` or `meters`. 1 corresponds to feet, 2 to `meters`. If not
         provided, will be read from .ies file, and length/width will be ignored.
+    source_density: int or float, default=1
+
     enabled: bool, defualt=True
         Determines if lamp participates in calculations. A lamp may be created
         and added to a room, but disabled.
@@ -66,6 +68,7 @@ class Lamp:
         length=None,
         width=None,
         units=None,
+        source_density=None,
         enabled=None,
     ):
 
@@ -88,12 +91,17 @@ class Lamp:
         self.aimx = self.x if aimx is None else aimx
         self.aimy = self.y if aimy is None else aimy
         self.aimz = self.z - 1.0 if aimz is None else aimz
-        self.aim(self.aimx, self.aimy, self.aimz)  # updates heading and bank
-
+        
         # source values
         self.length = length
         self.width = width
         self.units = units
+        self.source_density = 1 if source_density is None else source_density
+        self.grid_points = None  # populated from ies data
+        self.photometric_distance = None #ditto
+        
+        #aim
+        self.aim(self.aimx, self.aimy, self.aimz)  # updates heading and bank
 
         # calc zone values will be stored here
         self.max_irradiances = {}
@@ -125,6 +133,7 @@ class Lamp:
         # update position
         self.position = position
         self.x, self.y, self.z = self.position
+        self.grid_points = self._generate_source_points()
         return self
 
     def rotate(self, angle):
@@ -144,6 +153,8 @@ class Lamp:
         self.bank = np.degrees(np.arctan2(np.sqrt(xr ** 2 + yr ** 2), zr) - np.pi)
         # self.heading = (heading+360)%360
         # self.bank = (bank+360)%360
+        # update grid points
+        self.grid_points = self._generate_source_points()
         return self
 
     def set_orientation(self, orientation, dimensions=None, distance=None):
@@ -345,10 +356,11 @@ class Lamp:
                 msg = "Length, width, and units arguments will be ignored and set from the .ies file instead."
                 warnings.warn(msg, stacklevel=2)
 
+        self.photometric_distance = min(self.width,self.length)*10
+        self.grid_points = self._generate_source_points()
+
         self.input_watts = self.lampdict["input_watts"]
         self.keywords = self.lampdict["keywords"]
-        if "_RADIATIONTYPE" in self.keywords.keys():
-            self.radiation_type = self.keywords["_RADIATIONTYPE"]
 
     def _orient(self):
         """
@@ -412,6 +424,66 @@ class Lamp:
             distance = min([d for d in distances])
         self.aim_point = self.position + np.array([dx, dy, dz]) * distance
         self.aimx, self.aimy, self.aimz = self.aim_point
+        self.grid_points = self._generate_source_points()
+
+    def _generate_source_points(self):
+        """
+        generate the points with which the calculations should be performed.
+        If the source is approximately square and source_density is 1, only
+        one point is generated. If source is more than twice as long as wide,
+        (or vice versa), 2 or more points will be generated even if density is 1.
+        Total number of points will increase quadratically with density.
+        """
+
+        # generate the points
+        if not all([self.length,self.width]):
+            grid_points = self.position
+        else:
+            spacing = min(self.length, self.width) / self.source_density
+
+            # Determine the number of points in each direction
+            num_points_u = max(int(self.width / spacing), 1)
+            num_points_v = max(int(self.length / spacing), 1)
+
+            # If there's only one point, place it at the center
+            if num_points_u == 1:
+                u_points = np.array([0])  # Single point at the center of the width
+            else:
+                startu = -self.width / 2 + spacing / 2
+                stopu = self.width / 2 - spacing / 2
+                u_points = np.linspace(startu, stopu, num_points_u)
+
+            if num_points_v == 1:
+                v_points = np.array([0])  # Single point at the center of the length
+            else:
+                startv = -self.length / 2 + spacing / 2
+                stopv = self.length / 2 - spacing / 2
+                v_points = np.linspace(startv, stopv, num_points_v)
+            uu, vv = np.meshgrid(u_points, v_points)
+
+            # get the normal plane to the aim point
+            # Normalize the direction vector (normal vector)
+            direction = self.position - self.aim_point
+            normal = direction / np.linalg.norm(direction)
+
+            # Generate two vectors orthogonal to the normal
+            if np.allclose(
+                normal, [1, 0, 0]
+            ):  # if normal is close to x-axis, use y and z to define the plane
+                u = np.array([0, 1, 0])
+            else:
+                u = np.cross(normal, [1, 0, 0])
+            u = u / np.linalg.norm(u)  # ensure it's unit length
+
+            # Second vector orthogonal to both the normal and u
+            v = np.cross(normal, u)
+            v = v / np.linalg.norm(v)  # ensure it's unit length
+            # Calculate the 3D coordinates of the points, with an overall shift by the original point
+            grid_points = (
+                self.position + np.outer(uu.flatten(), u) + np.outer(vv.flatten(), v)
+            )
+
+        return grid_points
 
     @classmethod
     def from_dict(cls, data):
@@ -455,6 +527,10 @@ class Lamp:
         data["aimx"] = self.aimx
         data["aimy"] = self.aimy
         data["aimz"] = self.aimz
+        data["length"] = self.length
+        data["width"] = self.width
+        data["units"] = self.units
+        data["source_density"] = self.source_density
 
         if isinstance(self.filedata, bytes):
             filedata = self.filedata.decode("utf-8")
