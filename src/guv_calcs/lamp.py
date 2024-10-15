@@ -21,23 +21,29 @@ class Lamp:
     -------------------
     lamp_id: str
         A unique identifier for the lamp. Only required parameter.
-    name: str
-        Non-unique display name for the lamp
-    filename: Path, str, or None
+    name: str, default=None
+        Non-unique display name for the lamp. If None set by lamp_id
+    filename: Path, str
         If None or not pathlike, `filedata` must not be None
-    filedata: Path or bytes or None
+    filedata: Path or bytes, default=None
         Set by `filename` if filename is pathlike.
-    x, y, z: floats
+    x, y, z: floats, default=[0,0,0]
         Sets initial position of lamp in cartesian space
-    angle: float
+    angle: float, default=0
         Sets lamps initial rotation on its own axis.
-    aimx, aimy, aimz: floats
+    aimx, aimy, aimz: floats, default=[0,0,z-1]
         Sets initial aim point of lamp in cartesian space.
-    spectra_source: Path or bytes or None
+    spectra_source: Path or bytes, default=None
         Optional. Data source for spectra. May be a filepath, a binary stream,
         or a dict where the first value contains values of wavelengths, and
         the second value contains values of relative intensity.
-    enabled: bool
+    length, width: floats, default=[None, None]
+        length (or height, or y-axis extent) of the source, in the units
+        provided. If not provided, will be read from the .ies file.
+    units: str or int in [1, 2] or None
+        `feet` or `meters`. 1 corresponds to feet, 2 to `meters`. If not
+        provided, will be read from .ies file, and length/width will be ignored.
+    enabled: bool, defualt=True
         Determines if lamp participates in calculations. A lamp may be created
         and added to a room, but disabled.
 
@@ -57,6 +63,9 @@ class Lamp:
         aimy=None,
         aimz=None,
         spectra_source=None,
+        length=None,
+        width=None,
+        units=None,
         enabled=None,
     ):
 
@@ -80,6 +89,11 @@ class Lamp:
         self.aimy = self.y if aimy is None else aimy
         self.aimz = self.z - 1.0 if aimz is None else aimz
         self.aim(self.aimx, self.aimy, self.aimz)  # updates heading and bank
+
+        # source values
+        self.length = length
+        self.width = width
+        self.units = units
 
         # calc zone values will be stored here
         self.max_irradiances = {}
@@ -314,21 +328,23 @@ class Lamp:
         self.values = self.valdict["values"]
         self.interpdict = self.lampdict["interp_vals"]
 
-        units_type = self.lampdict["units_type"]
-        if units_type == 1:
-            self.units = "feet"
-        elif units_type == 2:
-            self.units = "meters"
-        else:
-            msg = "Lamp dimension units could not be determined. Your ies file may be malformed. Units of meters are being assumed."
-            warnings.warn(msg)
-            self.units = "meters"
+        if not all([self.length, self.width, self.units]):
+            units_type = self.lampdict["units_type"]
+            if units_type == 1:
+                self.units = "feet"
+            elif units_type == 2:
+                self.units = "meters"
+            else:
+                msg = "Lamp dimension units could not be determined. Your ies file may be malformed. Units of meters are being assumed."
+                warnings.warn(msg, stacklevel=2)
+                self.units = "meters"
 
-        self.dimensions = [
-            self.lampdict["width"],
-            self.lampdict["length"],
-            self.lampdict["height"],
-        ]
+            self.length = self.lampdict["length"]
+            self.width = self.lampdict["width"]
+            if any([self.length, self.width, self.units]):
+                msg = "Length, width, and units arguments will be ignored and set from the .ies file instead."
+                warnings.warn(msg, stacklevel=2)
+
         self.input_watts = self.lampdict["input_watts"]
         self.keywords = self.lampdict["keywords"]
         if "_RADIATIONTYPE" in self.keywords.keys():
