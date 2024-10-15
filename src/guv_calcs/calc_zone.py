@@ -169,39 +169,60 @@ class CalcZone(object):
         if type(hours) not in [float, int]:
             raise TypeError("Hours must be numeric")
         self.hours = hours
-        
-    def calculate_single_lamp(self, lamp):
-        """calculate the zone values for a single lamp"""
+
+    def _transform_lamp_coords(self, rel_coords, lamp):
+        """
+        transform zone coordinates to be consistent with any lamp
+        transformations applied, and convert to polar coords for further
+        operations
+        """
+        Theta0, Phi0, R0 = to_polar(*rel_coords.T)
+        # apply all transformations that have been applied to this lamp, but in reverse
+        rel_coords = np.array(
+            attitude(rel_coords.T, roll=0, pitch=0, yaw=-lamp.heading)
+        ).T
+        rel_coords = np.array(attitude(rel_coords.T, roll=0, pitch=-lamp.bank, yaw=0)).T
+        rel_coords = np.array(
+            attitude(rel_coords.T, roll=0, pitch=0, yaw=-lamp.angle)
+        ).T
+        Theta, Phi, R = to_polar(*rel_coords.T)
+        return Theta, Phi, R
+
+    def _calculate_nearfield(self, lamp, R, values):
+        """
+        calculate the values within the photometric distance
+        over a discretized source
+        """
+        near_idx = np.where(R < lamp.photometric_distance)
+        # set current values to zero
+        values[near_idx] = 0
+        # redo calculation in a loop
         num_points = len(lamp.grid_points)
-        all_values = np.zeros(self.coords.shape[0])
         for point in lamp.grid_points:
             rel_coords = self.coords - point
-            # store the theta and phi data based on this orientation
-            Theta0, Phi0, R0 = to_polar(*rel_coords.T)
-            # apply all transformations that have been applied to this lamp, but in reverse
-            rel_coords = np.array(
-                attitude(rel_coords.T, roll=0, pitch=0, yaw=-lamp.heading)
-            ).T
-            rel_coords = np.array(
-                attitude(rel_coords.T, roll=0, pitch=-lamp.bank, yaw=0)
-            ).T
-            rel_coords = np.array(
-                attitude(rel_coords.T, roll=0, pitch=0, yaw=-lamp.angle)
-            ).T
-            Theta, Phi, R = to_polar(*rel_coords.T)
-            values = get_intensity(Theta, Phi, lamp.interpdict) / R ** 2
-            values /= num_points
+            Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
+            Theta_n, Phi_n, R_n = Theta[near_idx], Phi[near_idx], R[near_idx]
+            near_values = get_intensity(Theta_n, Phi_n, lamp.interpdict) / R_n ** 2
+            near_values /= num_points
+            values[near_idx] += near_values
+        return values
 
-            if self.fov80:
-                values[Theta0 < 50] = 0
-            if self.vert:
-                values *= np.sin(np.radians(Theta0))
-            if self.horiz:
-                values *= np.cos(np.radians(Theta0))
-                
-            all_values += values
-            
-        return all_values
+    def _calculate_single_lamp(self, lamp):
+        """calculate the zone values for a single lamp"""
+        rel_coords = self.coords - lamp.position        
+        Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
+        values = get_intensity(Theta, Phi, lamp.interpdict) / R ** 2
+        values = self._calculate_nearfield(lamp, R, values)
+
+        Theta0, Phi0, R0 = to_polar(*rel_coords.T)
+        if self.fov80:
+            values[Theta0 < 50] = 0
+        if self.vert:
+            values *= np.sin(np.radians(Theta0))
+        if self.horiz:
+            values *= np.cos(np.radians(Theta0))
+
+        return values
 
     def calculate_values(self, lamps: list):
         """
@@ -211,7 +232,7 @@ class CalcZone(object):
         for lamp_id, lamp in lamps.items():
             if lamp.filedata is not None and lamp.enabled:
                 # determine lamp placement + calculate relative coordinates
-                values = self.calculate_single_lamp(lamp)
+                values = self._calculate_single_lamp(lamp)
                 total_values += values / 10  # convert from mW/Sr to uW/cm2
                 # save the max value to the lamp object
                 lamp.max_irradiances[self.zone_id] = total_values.max()

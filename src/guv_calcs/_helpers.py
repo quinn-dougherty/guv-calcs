@@ -112,3 +112,11 @@ def fig_to_bytes(fig):
     )  # You can change the format as needed (e.g., 'jpeg', 'pdf')
     buf.seek(0)  # Rewind the buffer
     return buf.getvalue()
+
+
+def feet_to_meters(val):
+    return val * 0.3048
+
+
+def meters_to_feet(val):
+    return val / 0.3048

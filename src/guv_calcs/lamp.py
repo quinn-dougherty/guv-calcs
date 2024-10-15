@@ -91,16 +91,16 @@ class Lamp:
         self.aimx = self.x if aimx is None else aimx
         self.aimy = self.y if aimy is None else aimy
         self.aimz = self.z - 1.0 if aimz is None else aimz
-        
+
         # source values
         self.length = length
         self.width = width
         self.units = units
         self.source_density = 1 if source_density is None else source_density
         self.grid_points = None  # populated from ies data
-        self.photometric_distance = None #ditto
-        
-        #aim
+        self.photometric_distance = None  # ditto
+
+        # aim
         self.aim(self.aimx, self.aimy, self.aimz)  # updates heading and bank
 
         # calc zone values will be stored here
@@ -356,7 +356,7 @@ class Lamp:
                 msg = "Length, width, and units arguments will be ignored and set from the .ies file instead."
                 warnings.warn(msg, stacklevel=2)
 
-        self.photometric_distance = min(self.width,self.length)*10
+        self.photometric_distance = min(self.width, self.length) * 10
         self.grid_points = self._generate_source_points()
 
         self.input_watts = self.lampdict["input_watts"]
@@ -436,7 +436,7 @@ class Lamp:
         """
 
         # generate the points
-        if not all([self.length,self.width]):
+        if not all([self.length, self.width]):
             grid_points = self.position
         else:
             spacing = min(self.length, self.width) / self.source_density
