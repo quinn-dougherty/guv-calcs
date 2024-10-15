@@ -169,6 +169,39 @@ class CalcZone(object):
         if type(hours) not in [float, int]:
             raise TypeError("Hours must be numeric")
         self.hours = hours
+        
+    def calculate_single_lamp(self, lamp):
+        """calculate the zone values for a single lamp"""
+        num_points = len(lamp.grid_points)
+        all_values = np.zeros(self.coords.shape[0])
+        for point in lamp.grid_points:
+            rel_coords = self.coords - point
+            # store the theta and phi data based on this orientation
+            Theta0, Phi0, R0 = to_polar(*rel_coords.T)
+            # apply all transformations that have been applied to this lamp, but in reverse
+            rel_coords = np.array(
+                attitude(rel_coords.T, roll=0, pitch=0, yaw=-lamp.heading)
+            ).T
+            rel_coords = np.array(
+                attitude(rel_coords.T, roll=0, pitch=-lamp.bank, yaw=0)
+            ).T
+            rel_coords = np.array(
+                attitude(rel_coords.T, roll=0, pitch=0, yaw=-lamp.angle)
+            ).T
+            Theta, Phi, R = to_polar(*rel_coords.T)
+            values = get_intensity(Theta, Phi, lamp.interpdict) / R ** 2
+            values /= num_points
+
+            if self.fov80:
+                values[Theta0 < 50] = 0
+            if self.vert:
+                values *= np.sin(np.radians(Theta0))
+            if self.horiz:
+                values *= np.cos(np.radians(Theta0))
+                
+            all_values += values
+            
+        return all_values
 
     def calculate_values(self, lamps: list):
         """
@@ -178,31 +211,8 @@ class CalcZone(object):
         for lamp_id, lamp in lamps.items():
             if lamp.filedata is not None and lamp.enabled:
                 # determine lamp placement + calculate relative coordinates
-                rel_coords = self.coords - lamp.position
-                # store the theta and phi data based on this orientation
-                Theta0, Phi0, R0 = to_polar(*rel_coords.T)
-                # apply all transformations that have been applied to this lamp, but in reverse
-                rel_coords = np.array(
-                    attitude(rel_coords.T, roll=0, pitch=0, yaw=-lamp.heading)
-                ).T
-                rel_coords = np.array(
-                    attitude(rel_coords.T, roll=0, pitch=-lamp.bank, yaw=0)
-                ).T
-                rel_coords = np.array(
-                    attitude(rel_coords.T, roll=0, pitch=0, yaw=-lamp.angle)
-                ).T
-                Theta, Phi, R = to_polar(*rel_coords.T)
-                values = get_intensity(Theta, Phi, lamp.interpdict) / R ** 2
-
-                if self.fov80:
-                    values[Theta0 < 50] = 0
-                if self.vert:
-                    values *= np.sin(np.radians(Theta0))
-                if self.horiz:
-                    values *= np.cos(np.radians(Theta0))
-
+                values = self.calculate_single_lamp(lamp)
                 total_values += values / 10  # convert from mW/Sr to uW/cm2
-
                 # save the max value to the lamp object
                 lamp.max_irradiances[self.zone_id] = total_values.max()
 
