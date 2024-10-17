@@ -44,7 +44,7 @@ class Lamp:
         `feet` or `meters`. 1 corresponds to feet, 2 to `meters`. If not
         provided, will be read from .ies file, and length/width will be ignored.
     source_density: int or float, default=1
-
+    
     enabled: bool, defualt=True
         Determines if lamp participates in calculations. A lamp may be created
         and added to a room, but disabled.
@@ -436,9 +436,8 @@ class Lamp:
         """
 
         # generate the points
-        if not all([self.length, self.width]):
-            grid_points = self.position
-        else:
+        
+        if all([self.length, self.width, self.source_density]):
             spacing = min(self.length, self.width) / self.source_density
 
             # Determine the number of points in each direction
@@ -482,6 +481,8 @@ class Lamp:
             grid_points = (
                 self.position + np.outer(uu.flatten(), u) + np.outer(vv.flatten(), v)
             )
+        else: 
+            grid_points = self.position
 
         return grid_points
 

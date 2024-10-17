@@ -212,7 +212,8 @@ class CalcZone(object):
         rel_coords = self.coords - lamp.position        
         Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
         values = get_intensity(Theta, Phi, lamp.interpdict) / R ** 2
-        values = self._calculate_nearfield(lamp, R, values)
+        if lamp.source_density > 0:
+            values = self._calculate_nearfield(lamp, R, values)
 
         Theta0, Phi0, R0 = to_polar(*rel_coords.T)
         if self.fov80:
