@@ -359,7 +359,7 @@ class Lamp:
             self.length = self.lampdict["length"]
             self.width = self.lampdict["width"]
 
-        self.photometric_distance = min(self.width, self.length) * 10
+        self.photometric_distance = max(self.width, self.length) * 10
         self.grid_points = self._generate_source_points()
 
         self.input_watts = self.lampdict["input_watts"]
