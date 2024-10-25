@@ -44,7 +44,7 @@ class Lamp:
         `feet` or `meters`. 1 corresponds to feet, 2 to `meters`. If not
         provided, will be read from .ies file, and length/width will be ignored.
     source_density: int or float, default=1
-    
+
     enabled: bool, defualt=True
         Determines if lamp participates in calculations. A lamp may be created
         and added to a room, but disabled.
@@ -69,6 +69,7 @@ class Lamp:
         width=None,
         units=None,
         source_density=None,
+        relative_map=None,
         enabled=None,
     ):
 
@@ -97,6 +98,8 @@ class Lamp:
         self.width = width
         self.units = units
         self.source_density = 1 if source_density is None else source_density
+        self.relative_map = relative_map
+
         self.grid_points = None  # populated from ies data
         self.photometric_distance = None  # ditto
 
@@ -340,6 +343,9 @@ class Lamp:
         self.interpdict = self.lampdict["interp_vals"]
 
         if not all([self.length, self.width, self.units]):
+            if any([self.length, self.width, self.units]):
+                msg = "Length, width, and units arguments will be ignored and set from the .ies file instead."
+                warnings.warn(msg, stacklevel=2)
             units_type = self.lampdict["units_type"]
             if units_type == 1:
                 self.units = "feet"
@@ -352,9 +358,6 @@ class Lamp:
 
             self.length = self.lampdict["length"]
             self.width = self.lampdict["width"]
-            if any([self.length, self.width, self.units]):
-                msg = "Length, width, and units arguments will be ignored and set from the .ies file instead."
-                warnings.warn(msg, stacklevel=2)
 
         self.photometric_distance = min(self.width, self.length) * 10
         self.grid_points = self._generate_source_points()
@@ -436,27 +439,33 @@ class Lamp:
         """
 
         # generate the points
-        
-        if all([self.length, self.width, self.source_density]):
-            spacing = min(self.length, self.width) / self.source_density
 
-            # Determine the number of points in each direction
-            num_points_u = max(int(self.width / spacing), 1)
-            num_points_v = max(int(self.length / spacing), 1)
+        if all([self.length, self.width, self.source_density]):
+            num_points = self.source_density + self.source_density - 1
+            num_points_u = num_points * int(round(self.width / self.length))
+            num_points_v = num_points * int(round(self.length / self.width))
+            if num_points_u % 2 == 0:
+                num_points_u += 1
+            if num_points_v % 2 == 0:
+                num_points_v += 1
+
+            spacing = min(self.length, self.width) / num_points
+            spacing_u = self.width / num_points_u
+            spacing_v = self.length / num_points_v
 
             # If there's only one point, place it at the center
             if num_points_u == 1:
                 u_points = np.array([0])  # Single point at the center of the width
             else:
-                startu = -self.width / 2 + spacing / 2
-                stopu = self.width / 2 - spacing / 2
+                startu = -self.width / 2 + spacing_u / 2
+                stopu = self.width / 2 - spacing_u / 2
                 u_points = np.linspace(startu, stopu, num_points_u)
 
             if num_points_v == 1:
                 v_points = np.array([0])  # Single point at the center of the length
             else:
-                startv = -self.length / 2 + spacing / 2
-                stopv = self.length / 2 - spacing / 2
+                startv = -self.length / 2 + spacing_v / 2
+                stopv = self.length / 2 - spacing_v / 2
                 v_points = np.linspace(startv, stopv, num_points_v)
             uu, vv = np.meshgrid(u_points, v_points)
 
@@ -481,7 +490,10 @@ class Lamp:
             grid_points = (
                 self.position + np.outer(uu.flatten(), u) + np.outer(vv.flatten(), v)
             )
-        else: 
+            grid_points = grid_points[::-1]
+            if self.relative_map is None:
+                self.relative_map = np.ones(len(grid_points))
+        else:
             grid_points = self.position
 
         return grid_points

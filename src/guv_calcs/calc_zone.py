@@ -198,18 +198,19 @@ class CalcZone(object):
         values[near_idx] = 0
         # redo calculation in a loop
         num_points = len(lamp.grid_points)
-        for point in lamp.grid_points:
+
+        for point, val in zip(lamp.grid_points, lamp.relative_map):
             rel_coords = self.coords - point
             Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
             Theta_n, Phi_n, R_n = Theta[near_idx], Phi[near_idx], R[near_idx]
             near_values = get_intensity(Theta_n, Phi_n, lamp.interpdict) / R_n ** 2
-            near_values /= num_points
+            near_values = near_values * val / num_points
             values[near_idx] += near_values
         return values
 
     def _calculate_single_lamp(self, lamp):
         """calculate the zone values for a single lamp"""
-        rel_coords = self.coords - lamp.position        
+        rel_coords = self.coords - lamp.position
         Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
         values = get_intensity(Theta, Phi, lamp.interpdict) / R ** 2
         if lamp.source_density > 0:
@@ -445,8 +446,8 @@ class CalcPlane(CalcZone):
         self.x2 = 6 if x2 is None else x2
         self.y1 = 0 if y1 is None else y1
         self.y2 = 4 if y2 is None else y2
-        self.x_spacing = 0.1 if x_spacing is None else x_spacing
-        self.y_spacing = 0.1 if y_spacing is None else y_spacing
+        self.x_spacing = (self.x2 - self.x1) / 30 if x_spacing is None else x_spacing
+        self.y_spacing = (self.y2 - self.y1) / 30 if y_spacing is None else y_spacing
         self._update()
 
     def set_height(self, height):
@@ -455,6 +456,7 @@ class CalcPlane(CalcZone):
             raise TypeError("Height must be numeric")
         self.height = height
         self._update()
+        return self
 
     def set_dimensions(self, x1=None, x2=None, y1=None, y2=None):
         """set the dimensions and update the coordinate points"""
@@ -463,12 +465,25 @@ class CalcPlane(CalcZone):
         self.y1 = self.y1 if y1 is None else y1
         self.y2 = self.y2 if y2 is None else y2
         self._update()
+        return self
 
     def set_spacing(self, x_spacing=None, y_spacing=None):
         """set the fineness of the grid spacing and update the coordinate points"""
         self.x_spacing = self.x_spacing if x_spacing is None else x_spacing
         self.y_spacing = self.y_spacing if y_spacing is None else y_spacing
         self._update()
+        return self
+
+    def set_num_points(self, num_x=None, num_y=None):
+        """
+        set the number of points desired in a dimension, instead of setting the spacing
+        """
+        x = self.num_points[0] if num_x is None else num_x
+        y = self.num_points[1] if num_y is None else num_y
+        self.x_spacing = (self.x2 - self.x1) / x
+        self.y_spacing = (self.y2 - self.y1) / y
+        self._update()
+        return self
 
     def _update(self):
         """

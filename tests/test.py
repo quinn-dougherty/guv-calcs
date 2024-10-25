@@ -1,4 +1,5 @@
 from guv_calcs import *
+import numpy as np
 
 room = Room(x=6, y=4,z=2.7, units='meters')
 # df=get_disinfection_table(1,280,room)
@@ -28,15 +29,23 @@ room = Room(x=6, y=4,z=2.7, units='meters')
 # room.add_calc_zone(fluence)
 # room.add_calc_zone(skin_limits)
 # room.add_calc_zone(eye_limits)
+
+rel_map = np.array([
+	0.679274542,1.004584682,0.804004854,0.758158037,0.532632147,
+	0.748381877,1.439455232,1.303600324,1.109088457,0.666127292,
+	0.768608414,1.520361381,1.498786408,1.277642934,0.679948759,
+	0.824905609,1.554072276,1.380461165,1.179881338,0.645563646,
+	0.765237325,1.183252427,1.061893204,1.007955771,0.606121899,
+])
+
 import matplotlib.pyplot as plt
-for val in [1,4]:
+for val in [1,2,3]:
     lamp = Lamp("Lamp1", 
                 filename="src/guv_calcs/data/lamp_data/uvpro222_b1.ies",
                 spectra_source="src/guv_calcs/data/lamp_data/uvpro222_b1.csv",
-                # units='meters',
-                # length=0.1,
-                # width=0.1,
+                angle=270,
                 source_density=val,
+                relative_map=rel_map if val==3 else None
                 ).move(1,1,1)
     zone = CalcPlane("test", 
             height = 0.95,
