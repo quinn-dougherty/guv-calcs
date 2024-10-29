@@ -491,10 +491,14 @@ class Lamp:
                 self.position + np.outer(uu.flatten(), u) + np.outer(vv.flatten(), v)
             )
             grid_points = grid_points[::-1]
-            if self.relative_map is None:
-                self.relative_map = np.ones(len(grid_points))
+            
         else:
             grid_points = self.position
+
+        if self.relative_map is None:
+            self.relative_map = np.ones(len(grid_points))
+        if len(self.relative_map) != len(grid_points):
+            self.relative_map = np.ones(len(grid_points))
 
         return grid_points
 
