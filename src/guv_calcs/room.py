@@ -25,10 +25,10 @@ class Room:
 
     def __init__(
         self,
-        units=None,
         x=None,
         y=None,
         z=None,
+        units=None,
         standard=None,
         reflectance_ceiling=None,
         reflectance_north=None,

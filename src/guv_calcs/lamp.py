@@ -75,7 +75,8 @@ class Lamp:
 
         """
         TODO:
-            probably __init__ needs to change initialization strategy
+            probably __init__ needs to change initialization strategy. some kind of from_file? 
+            unfortunately this object is initialized with two files...maybe that is an issue
 
         """
 
@@ -326,7 +327,8 @@ class Lamp:
             if Path(self.filename).is_file():
                 FILE_IS_PATH = True
             else:
-                warnings.warn(f"File {self.filename} not found")
+                if self.filedata is None:
+                    warnings.warn(f"File {self.filename} not found. Provide a valid file or the filedata.")
         # if filename is a path and exists, it will replace filedata, but only if filedata wasn't specified to begin with
         if FILE_IS_PATH and self.filedata is None:
             self.filedata = Path(self.filename).read_text()
@@ -342,7 +344,7 @@ class Lamp:
         self.values = self.valdict["values"]
         self.interpdict = self.lampdict["interp_vals"]
 
-        if not all([self.length, self.width, self.units]):
+        if not all([self.length, self.width, self.units])
             if any([self.length, self.width, self.units]):
                 msg = "Length, width, and units arguments will be ignored and set from the .ies file instead."
                 warnings.warn(msg, stacklevel=2)
@@ -361,6 +363,11 @@ class Lamp:
 
         self.photometric_distance = max(self.width, self.length) * 10
         self.grid_points = self._generate_source_points()
+        
+        if self.relative_map is None:
+            self.relative_map = np.ones(len(self.grid_points))
+        if len(self.relative_map) != len(self.grid_points):
+            self.relative_map = np.ones(len(self.grid_points))
 
         self.input_watts = self.lampdict["input_watts"]
         self.keywords = self.lampdict["keywords"]
@@ -490,15 +497,10 @@ class Lamp:
             grid_points = (
                 self.position + np.outer(uu.flatten(), u) + np.outer(vv.flatten(), v)
             )
-            grid_points = grid_points[::-1]
+            grid_points = grid_points[::-1] # reverse so that the 'upper left' point is first
             
         else:
             grid_points = self.position
-
-        if self.relative_map is None:
-            self.relative_map = np.ones(len(grid_points))
-        if len(self.relative_map) != len(grid_points):
-            self.relative_map = np.ones(len(grid_points))
 
         return grid_points
 
@@ -549,6 +551,7 @@ class Lamp:
         data["units"] = self.units
         data["source_density"] = self.source_density
 
+        data["filename"] = self.filename
         if isinstance(self.filedata, bytes):
             filedata = self.filedata.decode("utf-8")
         elif isinstance(self.filedata, str) or self.filedata is None:
