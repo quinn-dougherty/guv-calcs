@@ -41,10 +41,10 @@ def load_csv(datasource):
         filetype = filepath.suffix.lower()
         if filetype != ".csv":
             raise TypeError("Currently, only .csv files are supported")
-        csv_data = open(datasource, mode="r", newline="")
+        csv_data = open(datasource, mode="r")
     elif isinstance(datasource, bytes):
         # Convert bytes to a string using io.StringIO to simulate a file
-        csv_data = io.StringIO(datasource.decode("utf-8"))
+        csv_data = io.StringIO(datasource.decode("utf-8"), newline='')
     else:
         raise TypeError(f"File type {type(datasource)} not valid")
     return csv_data

@@ -51,7 +51,7 @@ class Spectrum:
         nanometers, 'Intensities' should be in units of relative intensity.
         """
         csv_data = load_csv(filepath)
-        reader = csv.reader(csv_data, delimiter=",")
+        reader = csv.reader(csv_data)
         # read each line
         spectra = []
         for i, row in enumerate(reader):
