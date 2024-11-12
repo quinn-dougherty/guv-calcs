@@ -33,6 +33,12 @@ class Lamp:
         Sets lamps initial rotation on its own axis.
     aimx, aimy, aimz: floats, default=[0,0,z-1]
         Sets initial aim point of lamp in cartesian space.
+    guv_type: str
+        Optional label for type of GUV source. Presently available: 
+        ["Krypton chloride (222 nm)", "Low-pressure mercury (254 nm)", "Other"]
+    wavelength: float
+        Optional label for principle GUV wavelength. Set from guv_type if guv_type
+        is not "Other".
     spectra_source: Path or bytes, default=None
         Optional. Data source for spectra. May be a filepath, a binary stream,
         or a dict where the first value contains values of wavelengths, and
@@ -64,6 +70,8 @@ class Lamp:
         aimx=None,
         aimy=None,
         aimz=None,
+        guv_type=None,
+        wavelength=None,
         spectra_source=None,
         length=None,
         width=None,
@@ -93,6 +101,15 @@ class Lamp:
         self.aimx = self.x if aimx is None else aimx
         self.aimy = self.y if aimy is None else aimy
         self.aimz = self.z - 1.0 if aimz is None else aimz
+        
+        # source type
+        self.guv_type = guv_type
+        if "Krypton chloride" in guv_type:
+            self.wavelength = 222
+        elif "Low-pressure mercury" in guv_type:
+            self.wavelength = 254
+        else:
+            self.wavelength = wavelength 
 
         # source values
         self.length = length
@@ -550,6 +567,8 @@ class Lamp:
         data["aimx"] = self.aimx
         data["aimy"] = self.aimy
         data["aimz"] = self.aimz
+        data["guv_type"] = self.guv_type
+        data["wavelength"] = self.wavelength
         data["length"] = self.length
         data["width"] = self.width
         data["units"] = self.units
