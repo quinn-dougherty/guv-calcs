@@ -6,7 +6,12 @@ import csv
 from ._helpers import load_csv
 
 
-def get_disinfection_table(fluence, wavelength=222, room=None):
+def get_full_disinfection_table():
+    fname = "UVC Inactivation Constants.csv"
+    path = resources.files("guv_calcs.data").joinpath(fname)
+    return pd.read_csv(path)
+
+def get_disinfection_table(fluence, wavelength=None, room=None):
     """
     Retrieve and format inactivtion data for this room.
 
@@ -14,16 +19,15 @@ def get_disinfection_table(fluence, wavelength=222, room=None):
     cleverer than this
     """
 
-    fname = "UVC Inactivation Constants.csv"
-    path = resources.files("guv_calcs.data").joinpath(fname)
-    df = pd.read_csv(path)
-
+    df = get_full_disinfection_table()
+    
     valid_wavelengths = df["wavelength [nm]"].unique()
     if wavelength not in valid_wavelengths:
         warnings.warn(f"No data is available for wavelength {wavelength} nm.")
 
     df = df[df["Medium"] == "Aerosol"]
-    df = df[df["wavelength [nm]"] == wavelength]
+    if wavelength is not None:
+        df = df[df["wavelength [nm]"] == wavelength]
 
     # calculate eACH before filling nans
     k1 = df["k1 [cm2/mJ]"].fillna(0).astype(float)

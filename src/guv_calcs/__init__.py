@@ -4,6 +4,7 @@ from .calc_zone import CalcVol, CalcPlane
 from .spectrum import Spectrum, sum_spectrum
 from .trigonometry import to_polar, to_cartesian, attitude
 from ._data import (
+    get_full_disinfection_table,
     get_disinfection_table,
     get_tlv,
     get_spectral_weightings,
@@ -21,6 +22,7 @@ __all__ = [
     "to_polar",
     "to_cartesian",
     "attitude",
+    "get_full_disinfection_table",
     "get_disinfection_table",
     "get_tlv",
     "get_spectral_weightings",
