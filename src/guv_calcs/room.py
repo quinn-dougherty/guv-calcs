@@ -260,6 +260,9 @@ class Room:
                 y2=self.y,
                 z1=0,
                 z2=self.z,
+                num_x=int(self.x*20),
+                num_y=int(self.y*20),
+                num_z=int(self.z*20),
                 show_values=False,
             )
         )
@@ -273,6 +276,8 @@ class Room:
                 x2=self.x,
                 y1=0,
                 y2=self.y,
+                num_x=int(self.x*20),
+                num_y=int(self.y*20),
                 vert=False,
                 horiz=skin_horiz,
                 fov80=False,
@@ -290,6 +295,8 @@ class Room:
                 x2=self.x,
                 y1=0,
                 y2=self.y,
+                num_x=int(self.x*20),
+                num_y=int(self.y*20),
                 vert=eye_vert,
                 horiz=False,
                 fov80=fov80,
