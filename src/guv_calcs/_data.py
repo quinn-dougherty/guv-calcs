@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import warnings
 from importlib import resources
@@ -122,18 +123,20 @@ def get_tlvs(ref, std=0):
     
     standards = ["ANSI IES RP 27.1-22", "IEC 62471-6:2022"]
     # check user inputs
-    default = standards[0]
-    msg = f"{std} is not a valid argument. Defaulting to {default}"
+    msg =f"{std} is not a valid spectral weighting standard. Select one of {standards}"
     if isinstance(std,int):
         if std>len(standards)-1:
-            warnings.warn(msg, stacklevel=3)
-            key = default
+            raise KeyError(msg)
         else:
             key = standards[std]
     elif isinstance(std, str):
         if std not in standards:
-            warnings.warn(msg,stacklevel=3)
-            key = default
+            # check for a substring
+            subkey = ''.join([os.path.commonprefix([std,val]) for val in standards])
+            if subkey not in standards:
+                raise KeyError(msg)
+            else:
+                key = subkey
         else:
             key = std
     else:
@@ -150,6 +153,7 @@ def get_tlvs(ref, std=0):
     eye_tlv = get_tlv(ref, eyekey)
 
     return skin_tlv, eye_tlv
+    
 
 def get_tlv(ref, standard=0):
     """
@@ -177,10 +181,16 @@ def get_tlv(ref, standard=0):
     else:
         raise TypeError(f"{type(standard)} is not a valid type for argument std")
         
-    tlv_wavelengths = weights["Wavelength (nm)"]
-    tlv_values = weights[key]
-    weighting = np.interp(ref, tlv_wavelengths, tlv_values)
-    tlv = 3 / weighting  # value not to be exceeded in 8 hours
+    if isinstance(ref,(int,float)):
+        tlv_wavelengths = weights["Wavelength (nm)"]
+        tlv_values = weights[key]
+        weighting = np.interp(ref, tlv_wavelengths, tlv_values)
+        tlv = 3 / weighting  # value not to be exceeded in 8 hours
+    elif isinstance(ref,Spectrum):
+        tlv = ref.get_tlv(key)
+    else:
+        msg = f"Argument `ref` must be either float, int, or Spectrum object, not {type(ref)}"
+        raise TypeError(msg)
     return tlv
 
 def get_version(path) -> dict:
