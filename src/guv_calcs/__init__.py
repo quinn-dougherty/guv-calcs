@@ -10,6 +10,7 @@ from ._data import (
     get_spectral_weightings,
     get_standards,
 )
+from ._helpers import new_lamp_position, get_lamp_positions
 from ._version import __version__
 
 __all__ = [
@@ -27,6 +28,8 @@ __all__ = [
     "get_tlv",
     "get_spectral_weightings",
     "get_standards",
+    "new_lamp_position",
+    "get_lamp_positions"
 ]
 
 __version__ = __version__

@@ -11,6 +11,7 @@ def get_full_disinfection_table():
     path = resources.files("guv_calcs.data").joinpath(fname)
     return pd.read_csv(path)
 
+
 def get_disinfection_table(fluence, wavelength=None, room=None):
     """
     Retrieve and format inactivtion data for this room.
@@ -20,7 +21,7 @@ def get_disinfection_table(fluence, wavelength=None, room=None):
     """
 
     df = get_full_disinfection_table()
-    
+
     valid_wavelengths = df["wavelength [nm]"].unique()
     if wavelength not in valid_wavelengths:
         warnings.warn(f"No data is available for wavelength {wavelength} nm.")
@@ -64,7 +65,11 @@ def get_disinfection_table(fluence, wavelength=None, room=None):
     ]
     df = df[newkeys].fillna(" ")
     df = df.rename(
-        columns={"Medium (specific)": "Medium", "Full Citation": "Reference"}
+        columns={
+            "Medium (specific)": "Medium",
+            "Full Citation": "Reference",
+            "Organism": "Category",
+        }
     )
     df = df.sort_values("Species")
 
@@ -123,3 +128,10 @@ def get_tlv(ref, standard):
     weighting = np.interp(ref, tlv_wavelengths, tlv_values)
     tlv = 3 / weighting  # value not to be exceeded in 8 hours
     return tlv
+
+def get_version(path) -> dict:
+
+    version = {}
+    with open(path) as f:
+        exec(f.read(), version)
+    return version["__version__"]
