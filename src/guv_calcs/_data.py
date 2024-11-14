@@ -3,6 +3,7 @@ import warnings
 from importlib import resources
 import numpy as np
 import csv
+from .spectrum import Spectrum
 from ._helpers import load_csv
 
 
@@ -110,21 +111,74 @@ def get_standards():
     return list(get_spectral_weightings().keys())[1:]
 
 
-def get_tlv(ref, standard):
+def get_tlvs(ref, std=0):
     """
     return the value of the UV dose not to be exceeded over 8 hours,
-    assuming a monochromatic wavelength
+    assuming a monochromatic wavelength. standard may be either an exact 
+    string match or integer corresponding to this dictionary:
+    0: `ANSI IES RP 27.1-22`
+    1: `IEC 62471-6:2022`
+    """
+    
+    standards = ["ANSI IES RP 27.1-22", "IEC 62471-6:2022"]
+    # check user inputs
+    default = standards[0]
+    msg = f"{std} is not a valid argument. Defaulting to {default}"
+    if isinstance(std,int):
+        if std>len(standards)-1:
+            warnings.warn(msg, stacklevel=3)
+            key = default
+        else:
+            key = standards[std]
+    elif isinstance(std, str):
+        if std not in standards:
+            warnings.warn(msg,stacklevel=3)
+            key = default
+        else:
+            key = std
+    else:
+        raise TypeError(f"{type(std)} is not a valid type for argument std")
+            
+    if key == standards[0]:
+        skinkey = key + " (Skin)"
+        eyekey = key + " (Eye)"
+    elif key == standards[1]:
+        skinkey  = key + " (Eye/Skin)"
+        eyekey = skinkey
+
+    skin_tlv = get_tlv(ref, skinkey)
+    eye_tlv = get_tlv(ref, eyekey)
+
+    return skin_tlv, eye_tlv
+
+def get_tlv(ref, standard=0):
+    """
+    return the value of the UV dose not to be exceeded over 8 hours,
+    assuming a monochromatic wavelength. standard may be either an exact 
+    string match or integer corresponding to this dictionary:
+    0: `ANSI IES RP 27.1-22 (Eye)`
+    1: `ANSI IES RP 27.1-22 (Skin)`
+    2: `IEC 62471-6:2022 (Eye/Skin)`
     """
 
     weights = get_spectral_weightings()
     valid_keys = list(weights.keys())[1:]
-    if standard not in valid_keys:
-        raise KeyError(
-            f"{standard} is not a valid spectral weighting standard. Select one of {valid_keys}"
-        )
-
+    msg =f"{standard} is not a valid spectral weighting standard. Select one of {valid_keys}"
+    if isinstance(standard,str):
+        if standard not in valid_keys:
+            raise KeyError(msg)
+        else:
+            key = standard
+    elif isinstance(standard,int):
+        if standard>len(valid_keys)-1:
+            raise KeyError(msg)
+        else:
+            key = valid_keys[standard]
+    else:
+        raise TypeError(f"{type(standard)} is not a valid type for argument std")
+        
     tlv_wavelengths = weights["Wavelength (nm)"]
-    tlv_values = weights[standard]
+    tlv_values = weights[key]
     weighting = np.interp(ref, tlv_wavelengths, tlv_values)
     tlv = 3 / weighting  # value not to be exceeded in 8 hours
     return tlv

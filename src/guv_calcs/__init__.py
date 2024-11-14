@@ -7,6 +7,7 @@ from ._data import (
     get_full_disinfection_table,
     get_disinfection_table,
     get_tlv,
+    get_tlvs,
     get_spectral_weightings,
     get_standards,
 )
@@ -26,6 +27,7 @@ __all__ = [
     "get_full_disinfection_table",
     "get_disinfection_table",
     "get_tlv",
+    "get_tlvs",
     "get_spectral_weightings",
     "get_standards",
     "new_lamp_position",
