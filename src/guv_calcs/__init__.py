@@ -10,6 +10,8 @@ from ._data import (
     get_tlvs,
     get_spectral_weightings,
     get_standards,
+    sum_multiwavelength_data,
+    plot_disinfection_data,
 )
 from ._helpers import new_lamp_position, get_lamp_positions
 from ._version import __version__
@@ -30,8 +32,10 @@ __all__ = [
     "get_tlvs",
     "get_spectral_weightings",
     "get_standards",
+    "sum_multiwavelength_data",
+    "plot_disinfection_data",
     "new_lamp_position",
-    "get_lamp_positions"
+    "get_lamp_positions",
 ]
 
 __version__ = __version__

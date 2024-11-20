@@ -1,5 +1,5 @@
 from setuptools import setup, find_packages
-from src.guv_calcs._helpers import get_version
+from src.guv_calcs._data import get_version
 from pathlib import Path
     
 with open("README.md", "r") as fh:
@@ -27,6 +27,7 @@ with open("README.md", "r") as fh:
             "numpy",
             "scipy",
             "matplotlib",
+            "seaborn",
             "plotly",
             "photompy"
         ],
