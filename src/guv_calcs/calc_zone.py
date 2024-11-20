@@ -65,9 +65,9 @@ class CalcZone(object):
         self.horiz = False if horiz is None else horiz
         self.dose = False if dose is None else dose
         if self.dose:
-            self.units = "mJ/cm2"
+            self.units = "mJ/cm²"
         else:
-            self.units = "uW/cm2"
+            self.units = "uW/cm²"
         self.hours = 8.0 if hours is None else abs(hours)  # only used if dose is true
         self.enabled = True if enabled is None else enabled
         self.show_values = True if show_values is None else show_values
@@ -232,20 +232,28 @@ class CalcZone(object):
         Calculate and return irradiance values at all coordinate points within the zone.
         """
         total_values = np.zeros(self.coords.shape[0])
+        self.lamp_values = {}
         for lamp_id, lamp in lamps.items():
             if lamp.filedata is not None and lamp.enabled:
                 # determine lamp placement + calculate relative coordinates
                 values = self._calculate_single_lamp(lamp)
-                total_values += values / 10  # convert from mW/Sr to uW/cm2
+                values = values / 10  # convert from mW/Sr to uW/cm2
+
+                total_values += values
                 # save the max value to the lamp object
                 lamp.max_irradiances[self.zone_id] = total_values.max()
 
+                # add lamp-specific values to dict
+                if self.dose:
+                    values = values * 3.6 * self.hours
+                if np.isnan(values.any()):
+                    values = np.ma.masked_invalid(values)
+                self.lamp_values[lamp_id] = values.reshape(*self.num_points)
+
         total_values = total_values.reshape(*self.num_points)
 
-        if np.isnan(total_values.any()):
-            total_values = np.ma.masked_invalid(
-                total_values
-            )  # mask any nans near light source
+        if np.isnan(total_values.any()):  # mask any nans near light source
+            total_values = np.ma.masked_invalid(total_values)
         self.values = total_values
         # convert to dose
         if self.dose:
@@ -255,14 +263,17 @@ class CalcZone(object):
 
     def export(self, fname=None):
 
-        rows = self._write_rows()  # implemented in subclass
-        csv_bytes = rows_to_bytes(rows)
+        try:
+            rows = self._write_rows()  # implemented in subclass
+            csv_bytes = rows_to_bytes(rows)
 
-        if fname is not None:
-            with open(fname, "wb") as csvfile:
-                csvfile.write(csv_bytes)
-        else:
-            return csv_bytes
+            if fname is not None:
+                with open(fname, "wb") as csvfile:
+                    csvfile.write(csv_bytes)
+            else:
+                return csv_bytes
+        except NotImplementedError:
+            pass
 
 
 class CalcVol(CalcZone):
@@ -659,12 +670,7 @@ class CalcPlane(CalcZone):
             vmin = self.values.min() if vmin is None else vmin
             vmax = self.values.max() if vmax is None else vmax
             extent = [self.x1, self.x2, self.y1, self.y2]
-            # ratio = (self.y2 - self.y1) / (self.x2 - self.x1)
-            # if ratio < 1:
-            # orientation, location = "horizontal", "top"
-            # else:
-            # orientation, location = "vertical", "right"
-            img = ax.imshow(self.values.T, extent=extent, vmin=vmin, vmax=vmax)
+            img = ax.imshow(self.values.T[::-1], extent=extent, vmin=vmin, vmax=vmax)
             cbar = fig.colorbar(
                 img,
                 pad=0.03,  # orientation=orientation, location=location
