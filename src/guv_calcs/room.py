@@ -11,7 +11,8 @@ import plotly.graph_objs as go
 from .lamp import Lamp
 from .calc_zone import CalcZone, CalcPlane, CalcVol
 from .trigonometry import to_polar
-from ._helpers import parse_loadfile, get_version, check_savefile, fig_to_bytes
+from ._data import get_version
+from ._helpers import parse_loadfile, check_savefile, fig_to_bytes
 
 
 class Room:
@@ -154,16 +155,17 @@ class Room:
 
         # save all results
         for zone_id, zone in self.calc_zones.items():
-            data_dict[zone.name + ".csv"] = zone.export()
-            if include_plots:
-                if zone.calctype == "Plane":
-                    # Save the figure to a BytesIO object
-                    if zone.dose:
-                        title = f"{zone.hours} Hour Dose ({zone.height} m)"
-                    else:
-                        title = f"Irradiance ({zone.height} m)"
-                    fig, ax = zone.plot_plane(title=title)
-                    data_dict[zone.name + ".png"] = fig_to_bytes(fig)
+            if zone.calctype != "Zone":
+                data_dict[zone.name + ".csv"] = zone.export()
+                if include_plots:
+                    if zone.calctype == "Plane":
+                        # Save the figure to a BytesIO object
+                        if zone.dose:
+                            title = f"{zone.hours} Hour Dose ({zone.height} m)"
+                        else:
+                            title = f"Irradiance ({zone.height} m)"
+                        fig, ax = zone.plot_plane(title=title)
+                        data_dict[zone.name + ".png"] = fig_to_bytes(fig)
 
         for lamp_id, lamp in self.lamps.items():
             if lamp.filedata is not None:
@@ -260,9 +262,9 @@ class Room:
                 y2=self.y,
                 z1=0,
                 z2=self.z,
-                num_x=int(self.x*20),
-                num_y=int(self.y*20),
-                num_z=int(self.z*20),
+                num_x=int(self.x * 20),
+                num_y=int(self.y * 20),
+                num_z=int(self.z * 20),
                 show_values=False,
             )
         )
@@ -276,8 +278,8 @@ class Room:
                 x2=self.x,
                 y1=0,
                 y2=self.y,
-                num_x=int(self.x*20),
-                num_y=int(self.y*20),
+                num_x=int(self.x * 20),
+                num_y=int(self.y * 20),
                 vert=False,
                 horiz=skin_horiz,
                 fov80=False,
@@ -295,8 +297,8 @@ class Room:
                 x2=self.x,
                 y1=0,
                 y2=self.y,
-                num_x=int(self.x*20),
-                num_y=int(self.y*20),
+                num_x=int(self.x * 20),
+                num_y=int(self.y * 20),
                 vert=eye_vert,
                 horiz=False,
                 fov80=fov80,
