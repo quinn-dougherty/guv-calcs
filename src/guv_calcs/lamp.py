@@ -9,6 +9,17 @@ from scipy.spatial import Delaunay
 from photompy import read_ies_data, plot_ies, total_optical_power
 from .spectrum import Spectrum
 from .trigonometry import to_cartesian, to_polar, attitude
+from ._data import get_tlvs
+
+KRCL_KEYS = ["krypton chloride", "kyrpton-chloride", "kyrpton_chloride", "krcl"]
+LPHG_KEYS = [
+    "low pressure mercury",
+    "low-pressure mercury",
+    "mercury",
+    "lphg",
+    "lp-hg",
+    "lp hg",
+]
 
 
 class Lamp:
@@ -34,7 +45,7 @@ class Lamp:
     aimx, aimy, aimz: floats, default=[0,0,z-1]
         Sets initial aim point of lamp in cartesian space.
     guv_type: str
-        Optional label for type of GUV source. Presently available: 
+        Optional label for type of GUV source. Presently available:
         ["Krypton chloride (222 nm)", "Low-pressure mercury (254 nm)", "Other"]
     wavelength: float
         Optional label for principle GUV wavelength. Set from guv_type if guv_type
@@ -48,9 +59,17 @@ class Lamp:
         provided. If not provided, will be read from the .ies file.
     units: str or int in [1, 2] or None
         `feet` or `meters`. 1 corresponds to feet, 2 to `meters`. If not
-        provided, will be read from .ies file, and length/width will be ignored.
+        provided, will be read from .ies file, and lengt and width parameters
+        will be ignored.
     source_density: int or float, default=1
-
+        parameter that determines the fineness of the source discretization.
+        Grid size follows fibonacci sequence. For an approximately square
+        source, SD=1 => 1x1 grid, SD=2 => 3x3 grid, SD=3 => 5x5 grid. This is
+        to ensure that a center point is always present while ensuring evenness
+        of grid size.
+    relative_map: arraylike
+        A relative intensity map for non-uniform sources. Must be of the same
+        size as the grid generated
     enabled: bool, defualt=True
         Determines if lamp participates in calculations. A lamp may be created
         and added to a room, but disabled.
@@ -101,15 +120,23 @@ class Lamp:
         self.aimx = self.x if aimx is None else aimx
         self.aimy = self.y if aimy is None else aimy
         self.aimz = self.z - 1.0 if aimz is None else aimz
-        
-        # source type
+
+        # source type & wavelength
         self.guv_type = guv_type
-        if "Krypton chloride" in guv_type:
-            self.wavelength = 222
-        elif "Low-pressure mercury" in guv_type:
-            self.wavelength = 254
+        if guv_type is not None:
+            if any([key in guv_type.lower() for key in KRCL_KEYS]):
+                self.wavelength = 222
+            elif any([key in guv_type.lower() for key in LPHG_KEYS]):
+                self.wavelength = 254
+            else:
+                self.wavelength = wavelength
         else:
-            self.wavelength = wavelength 
+            self.wavelength = wavelength
+        if self.wavelength is not None:
+            if not isinstance(self.wavelength, (int, float)):
+                raise TypeError(
+                    f"Wavelength must be int or float, not {type(self.wavelength)}"
+                )
 
         # source values
         self.length = length
@@ -123,9 +150,6 @@ class Lamp:
 
         # aim
         self.aim(self.aimx, self.aimy, self.aimz)  # updates heading and bank
-
-        # calc zone values will be stored here
-        self.max_irradiances = {}
 
         self.spectra_source = spectra_source
         self.spectra = self._load_spectra(spectra_source)
@@ -201,6 +225,23 @@ class Lamp:
     def get_total_power(self):
         """return the lamp's total optical power"""
         return total_optical_power(self.interpdict)
+
+    def get_limits(self, standard=0):
+        """
+        get the threshold limit values for this lamp. Returns tuple
+        (skin_limit, eye_limit) Will use the lamp spectrum if provided;
+        if not provided will use wavelength; if neither is defined, returns
+        (None, None). Standard may be a string in:
+            [`ANSI IES RP 27.1-22`, `IEC 62471-6:2022`]
+        Or an integer corresponding to the index of the desired standard.
+        """
+        if self.spectra is not None:
+            skin_tlv, eye_tlv = get_tlvs(self.spectra, standard)
+        elif self.wavelength is not None:
+            skin_tlv, eye_tlv = get_tlvs(self.wavelength, standard)
+        else:
+            skin_tlv, eye_tlv = None, None
+        return skin_tlv, eye_tlv
 
     def get_cartesian(self, scale=1, sigfigs=9):
         """Return lamp's true position coordinates in cartesian space"""
@@ -554,7 +595,6 @@ class Lamp:
         """
         save just the minimum number of parameters required to re-instantiate the lamp
         Returns dict. If filename is not None, saves dict as json.
-        Does not save calculation data like max_irradiances.
         """
 
         data = {}
