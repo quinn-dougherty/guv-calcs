@@ -5,6 +5,7 @@ from pathlib import Path
 import io
 import csv
 
+
 def parse_loadfile(filedata):
     """
     validate and parse a loadfile
@@ -111,14 +112,16 @@ def feet_to_meters(val):
 
 def meters_to_feet(val):
     return val / 0.3048
-    
-def get_lamp_positions(num_lamps,x,y, num_divisions=100):
+
+
+def get_lamp_positions(num_lamps, x, y, num_divisions=100):
     """
     generate a list of (x,y) positions for a lamp given room dimensions and
     the number of lamps desired
     """
-    lst = [new_lamp_position(i+1, x,y) for i in range(num_lamps)]
+    lst = [new_lamp_position(i + 1, x, y) for i in range(num_lamps)]
     return np.array(lst).T
+
 
 def new_lamp_position(lamp_idx, x, y, num_divisions=100):
     """

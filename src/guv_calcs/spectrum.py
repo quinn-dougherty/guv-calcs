@@ -106,7 +106,7 @@ class Spectrum:
                 csvfile.write(csv_bytes)
         else:
             return csv_bytes
-        
+
     def _log_interp(self, wvs, weight_wvs, weight_values):
         """log10 interpolation for the tlv weights"""
         logterp = np.interp(wvs, weight_wvs, np.log10(weight_values))
@@ -143,7 +143,9 @@ class Spectrum:
         """weight by spectral effectiveness"""
         if standard in self.weights.keys():
             weight_wavelengths, weights_orig = self.weights[standard]
-            weights = self._log_interp(self.wavelengths, weight_wavelengths, weights_orig)
+            weights = self._log_interp(
+                self.wavelengths, weight_wavelengths, weights_orig
+            )
             weighted_intensity = self.intensities * weights
         else:
             warnings.warn(f"{standard} not in available weightings.")
@@ -221,11 +223,13 @@ class Spectrum:
         """normalize the maximum intensity to a value"""
         self._scale(normval / max(self.intensities))
         return self
-    
+
     def get_tlv(self, standard):
         """return the total uv dose over 8 hours for this specific lamp,
         per a particular spectral effectiveness standard. units: mJ/cm2"""
-        weights = self._log_interp(self.wavelengths, *self.weights[standard])  # get weights
+        weights = self._log_interp(
+            self.wavelengths, *self.weights[standard]
+        )  # get weights
         i_new = self.intensities / self.sum()  # scale
         s_lambda = sum_spectrum(self.wavelengths, weights * i_new)
         return 3 / s_lambda
@@ -241,7 +245,9 @@ class Spectrum:
         provided an irradiance value in uW/cm2
         and a spectral effectiveness standard
         """
-        weights = self._log_interp(self.wavelengths, *self.weights[standard])  # get weights
+        weights = self._log_interp(
+            self.wavelengths, *self.weights[standard]
+        )  # get weights
         i_new = self.intensities * irradiance / self.sum()  # scale
         weighted_irradiance = sum_spectrum(self.wavelengths, weights * i_new)
         return 3000 / weighted_irradiance
