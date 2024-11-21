@@ -134,9 +134,8 @@ class Lamp:
             self.wavelength = wavelength
         if self.wavelength is not None:
             if not isinstance(self.wavelength, (int, float)):
-                raise TypeError(
-                    f"Wavelength must be int or float, not {type(self.wavelength)}"
-                )
+                msg = f"Wavelength must be int or float, not {type(self.wavelength)}"
+                raise TypeError(msg)
 
         # source values
         self.length = length
@@ -196,7 +195,7 @@ class Lamp:
         xr, yr, zr = self.aim_point - self.position
         self.heading = np.degrees(np.arctan2(yr, xr))
         self.bank = np.degrees(np.arctan2(np.sqrt(xr ** 2 + yr ** 2), zr) - np.pi)
-        # self.heading = (heading+360)%360
+        # self.heading = (heading+360)%3606
         # self.bank = (bank+360)%360
         # update grid points
         self.grid_points = self._generate_source_points()
@@ -212,6 +211,7 @@ class Lamp:
         # orientation = (orientation + 360) % 360
         self.heading = orientation
         self._recalculate_aim_point(dimensions=dimensions, distance=distance)
+        return self
 
     def set_tilt(self, tilt, dimensions=None, distance=None):
         """
@@ -221,6 +221,7 @@ class Lamp:
         # tilt = (tilt + 360) % 360
         self.bank = tilt
         self._recalculate_aim_point(dimensions=dimensions, distance=distance)
+        return self
 
     def get_total_power(self):
         """return the lamp's total optical power"""

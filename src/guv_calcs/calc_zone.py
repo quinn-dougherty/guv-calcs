@@ -669,10 +669,7 @@ class CalcPlane(CalcZone):
             vmax = self.values.max() if vmax is None else vmax
             extent = [self.x1, self.x2, self.y1, self.y2]
             img = ax.imshow(self.values.T[::-1], extent=extent, vmin=vmin, vmax=vmax)
-            cbar = fig.colorbar(
-                img,
-                pad=0.03,  # orientation=orientation, location=location
-            )
+            cbar = fig.colorbar(img, pad=0.03)
             ax.set_title(title)
             cbar.set_label(self.units, loc="center")
         return fig, ax
