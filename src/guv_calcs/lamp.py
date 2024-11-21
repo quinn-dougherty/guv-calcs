@@ -371,7 +371,7 @@ class Lamp:
             self.keywords = None
             self.coords = None
             self.photometric_coords = None
-            self.spectra = {}
+            self.spectra = None
 
     def _check_filename(self):
         """
