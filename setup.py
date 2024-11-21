@@ -5,7 +5,7 @@ from pathlib import Path
 with open("README.md", "r") as fh:
     long_description = fh.read()
     setup(
-        name="guv-calcs",
+        name="guv_calcs",
         url="https://github.com/jvbelenky/guv-calcs",
         version=get_version(Path(__file__).parent / 'src' / 'guv_calcs' / '_version.py'),
         author="J. Vivian Belenky",
