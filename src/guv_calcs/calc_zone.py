@@ -240,8 +240,6 @@ class CalcZone(object):
                 values = values / 10  # convert from mW/Sr to uW/cm2
 
                 total_values += values
-                # save the max value to the lamp object
-                lamp.max_irradiances[self.zone_id] = total_values.max()
 
                 # add lamp-specific values to dict
                 if self.dose:
