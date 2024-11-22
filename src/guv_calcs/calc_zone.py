@@ -49,6 +49,7 @@ class CalcZone(object):
         name=None,
         offset=None,
         fov80=None,
+        fov_horiz=None,
         vert=None,
         horiz=None,
         dose=None,
@@ -61,6 +62,7 @@ class CalcZone(object):
         self.name = zone_id if name is None else name
         self.offset = True if offset is None else offset
         self.fov80 = False if fov80 is None else fov80
+        self.fov_horiz = 360 if fov_horiz is None else fov_horiz
         self.vert = False if vert is None else vert
         self.horiz = False if horiz is None else horiz
         self.dose = False if dose is None else dose
@@ -199,7 +201,6 @@ class CalcZone(object):
         values[near_idx] = 0
         # redo calculation in a loop
         num_points = len(lamp.grid_points)
-
         for point, val in zip(lamp.grid_points, lamp.relative_map):
             rel_coords = self.coords - point
             Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
@@ -208,9 +209,39 @@ class CalcZone(object):
             near_values = near_values * val / num_points
             values[near_idx] += near_values
         return values
+        
+    def _calculate_horizontal_fov(self, values, lamps):
+        """
+        Vectorized function to compute the largest possible value for all lamps 
+        within a horizontal view field.
+        """
+        
+        # Compute relative coordinates: Shape (num_points, num_lamps, 3)
+        lamp_positions = np.array([lamp.position for lamp in lamps.values()])
+        rel_coords = self.coords[:, None, :] - lamp_positions[None, :, :]  
+        
+        # Calculate horizontal angles (in degrees)
+        angles = np.degrees(np.arctan2(rel_coords[..., 1], rel_coords[..., 0]))
+        normalized_angles = angles % 360 # just in case
+        
+        # Compute pairwise angular differences for all rows
+        expanded_angles = normalized_angles[:, :, None]  # Shape (N, M, 1)
+        diffs = np.abs(expanded_angles - expanded_angles.transpose(0, 2, 1))  # Shape (N, M, M)
+        diffs = np.minimum(diffs, 360 - diffs)  # Wrap angular differences to [0, 180]
+        
+        # Create the adjacency mask for each pair within 180 degrees
+        adjacency = diffs <= self.fov_horiz / 2   # Shape (N, M, M)
+        
+        # Sum the values for all connected components (using the adjacency mask)
+        value_sums = adjacency @ values[:, :, None]  # Matrix multiplication, Shape (N, M, 1)
+        value_sums = value_sums.squeeze(-1)  # Remove the last singleton dimension, Shape (N, M)
+        
+        return np.max(value_sums, axis=1)  # Shape (N,)
 
     def _calculate_single_lamp(self, lamp):
-        """calculate the zone values for a single lamp"""
+        """
+        Calculate the zone values for a single lamp
+        """
         rel_coords = self.coords - lamp.position
         Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
         values = get_intensity(Theta, Phi, lamp.interpdict) / R ** 2
@@ -219,43 +250,43 @@ class CalcZone(object):
 
         Theta0, Phi0, R0 = to_polar(*rel_coords.T)
         if self.fov80:
-            values[Theta0 < 50] = 0
+            values[Theta0 < 50] = 0 # when fov80->fov_vert: change 50 to 90-fov/2
         if self.vert:
             values *= np.sin(np.radians(Theta0))
         if self.horiz:
             values *= np.cos(np.radians(Theta0))
 
         return values
-
-    def calculate_values(self, lamps: list):
+        
+    def calculate_values(self, lamps: dict):
         """
         Calculate and return irradiance values at all coordinate points within the zone.
         """
         total_values = np.zeros(self.coords.shape[0])
-        self.lamp_values = {}
+        lamp_values = {}
         for lamp_id, lamp in lamps.items():
             if lamp.filedata is not None and lamp.enabled:
                 # determine lamp placement + calculate relative coordinates
                 values = self._calculate_single_lamp(lamp)
                 values = values / 10  # convert from mW/Sr to uW/cm2
-
-                total_values += values
-
-                # add lamp-specific values to dict
-                if self.dose:
-                    values = values * 3.6 * self.hours
-                if np.isnan(values.any()):
+                if np.isnan(values.any()): # mask any nans near light source
                     values = np.ma.masked_invalid(values)
-                self.lamp_values[lamp_id] = values.reshape(*self.num_points)
-
-        total_values = total_values.reshape(*self.num_points)
-
-        if np.isnan(total_values.any()):  # mask any nans near light source
-            total_values = np.ma.masked_invalid(total_values)
-        self.values = total_values
+                    
+                total_values += values
+                lamp_values[lamp_id] = values
+                
+        if self.fov_horiz < 360:
+            values = np.array([val for val in lamp_values.values()]).T
+            total_values = self._calculate_horizontal_fov(values, lamps)           
+            
+        # reshape
+        self.values = total_values.reshape(*self.num_points)
+        self.lamp_values = {k:v.reshape(*self.num_points) for k,v in lamp_values.items()}
+        
         # convert to dose
         if self.dose:
             self.values = self.values * 3.6 * self.hours
+            self.lamp_values = {k:v * 3.6 * self.hours for k,v in self.lamp_values.items()}
 
         return self.values
 
@@ -298,6 +329,7 @@ class CalcVol(CalcZone):
         z_spacing=None,
         offset=None,
         fov80=None,
+        fov_horiz=None,
         vert=None,
         horiz=None,
         dose=None,
@@ -312,6 +344,7 @@ class CalcVol(CalcZone):
             name=name,
             offset=offset,
             fov80=fov80,
+            fov_horiz=fov_horiz,
             vert=vert,
             horiz=horiz,
             dose=dose,
@@ -512,6 +545,7 @@ class CalcPlane(CalcZone):
         y_spacing=None,
         offset=None,
         fov80=None,
+        fov_horiz=None,
         vert=None,
         horiz=None,
         dose=None,
@@ -526,6 +560,7 @@ class CalcPlane(CalcZone):
             name=name,
             offset=offset,
             fov80=fov80,
+            fov_horiz=fov_horiz,
             vert=vert,
             horiz=horiz,
             dose=dose,

@@ -302,6 +302,7 @@ class Room:
                 vert=eye_vert,
                 horiz=False,
                 fov80=fov80,
+                fov_horiz=180,
                 dose=True,
                 hours=8,
             )
