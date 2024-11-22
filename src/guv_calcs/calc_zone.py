@@ -48,7 +48,7 @@ class CalcZone(object):
         zone_id,
         name=None,
         offset=None,
-        fov80=None, # legacy!! just here for backwards compatibility
+        fov80=None,  # legacy!! just here for backwards compatibility
         fov_vert=None,
         fov_horiz=None,
         vert=None,
@@ -63,7 +63,7 @@ class CalcZone(object):
         self.name = zone_id if name is None else name
         self.offset = True if offset is None else offset
         if fov80 and fov_vert is None:
-            fov_vert = 80 # set if legacy value is present
+            fov_vert = 80  # set if legacy value is present
         self.fov_vert = 180 if fov_vert is None else fov_vert
         self.fov_horiz = 360 if fov_horiz is None else abs(fov_horiz)
         self.vert = False if vert is None else vert
@@ -213,33 +213,34 @@ class CalcZone(object):
             near_values = near_values * val / num_points
             values[near_idx] += near_values
         return values
-        
+
     def _calculate_horizontal_fov(self, values, lamps):
         """
-        Vectorized function to compute the largest possible value for all lamps 
+        Vectorized function to compute the largest possible value for all lamps
         within a horizontal view field.
         """
-        
+
         # Compute relative coordinates: Shape (num_points, num_lamps, 3)
         lamp_positions = np.array([lamp.position for lamp in lamps.values()])
-        rel_coords = self.coords[:, None, :] - lamp_positions[None, :, :]  
-        
+        rel_coords = self.coords[:, None, :] - lamp_positions[None, :, :]
+
         # Calculate horizontal angles (in degrees)
         angles = np.degrees(np.arctan2(rel_coords[..., 1], rel_coords[..., 0]))
-        normalized_angles = angles % 360 # just in case
-        
+        angles = angles % 360  # Wrap; Shape (N, M)
+        angles = angles[:, :, None]  # Expand; Shape (N, M, 1)
+
         # Compute pairwise angular differences for all rows
-        expanded_angles = normalized_angles[:, :, None]  # Shape (N, M, 1)
-        diffs = np.abs(expanded_angles - expanded_angles.transpose(0, 2, 1))  # Shape (N, M, M)
+        diffs = np.abs(angles - angles.transpose(0, 2, 1))
         diffs = np.minimum(diffs, 360 - diffs)  # Wrap angular differences to [0, 180]
-        
+
         # Create the adjacency mask for each pair within 180 degrees
-        adjacency = diffs <= self.fov_horiz / 2   # Shape (N, M, M)
-        
+        adjacency = diffs <= self.fov_horiz / 2  # Shape (N, M, M)
+
         # Sum the values for all connected components (using the adjacency mask)
-        value_sums = adjacency @ values[:, :, None]  # Matrix multiplication, Shape (N, M, 1)
-        value_sums = value_sums.squeeze(-1)  # Remove the last singleton dimension, Shape (N, M)
-        
+        value_sums = adjacency @ values[:, :, None]  # Shape (N, M, 1)
+        # Remove the last singleton dimension,
+        value_sums = value_sums.squeeze(-1)  # Shape (N, M)
+
         return np.max(value_sums, axis=1)  # Shape (N,)
 
     def _calculate_single_lamp(self, lamp):
@@ -253,17 +254,17 @@ class CalcZone(object):
             values = self._calculate_nearfield(lamp, R, values)
 
         Theta0, Phi0, R0 = to_polar(*rel_coords.T)
-        
+
         # apply vertical field of view
-        values[Theta0 < 90 - self.fov_vert / 2] = 0 
-            
+        values[Theta0 < 90 - self.fov_vert / 2] = 0
+
         if self.vert:
             values *= np.sin(np.radians(Theta0))
         if self.horiz:
             values *= np.cos(np.radians(Theta0))
 
         return values
-        
+
     def calculate_values(self, lamps: dict):
         """
         Calculate and return irradiance values at all coordinate points within the zone.
@@ -275,24 +276,28 @@ class CalcZone(object):
                 # determine lamp placement + calculate relative coordinates
                 values = self._calculate_single_lamp(lamp)
                 values = values / 10  # convert from mW/Sr to uW/cm2
-                if np.isnan(values.any()): # mask any nans near light source
+                if np.isnan(values.any()):  # mask any nans near light source
                     values = np.ma.masked_invalid(values)
-                    
+
                 total_values += values
                 lamp_values[lamp_id] = values
-                
+
         if self.fov_horiz < 360:
             values = np.array([val for val in lamp_values.values()]).T
-            total_values = self._calculate_horizontal_fov(values, lamps)           
-            
+            total_values = self._calculate_horizontal_fov(values, lamps)
+
         # reshape
         self.values = total_values.reshape(*self.num_points)
-        self.lamp_values = {k:v.reshape(*self.num_points) for k,v in lamp_values.items()}
-        
+        self.lamp_values = {
+            k: v.reshape(*self.num_points) for k, v in lamp_values.items()
+        }
+
         # convert to dose
         if self.dose:
             self.values = self.values * 3.6 * self.hours
-            self.lamp_values = {k:v * 3.6 * self.hours for k,v in self.lamp_values.items()}
+            self.lamp_values = {
+                k: v * 3.6 * self.hours for k, v in self.lamp_values.items()
+            }
 
         return self.values
 
