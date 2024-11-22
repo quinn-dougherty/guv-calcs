@@ -48,7 +48,8 @@ class CalcZone(object):
         zone_id,
         name=None,
         offset=None,
-        fov80=None,
+        fov80=None, # legacy!! just here for backwards compatibility
+        fov_vert=None,
         fov_horiz=None,
         vert=None,
         horiz=None,
@@ -61,8 +62,10 @@ class CalcZone(object):
         self.zone_id = zone_id
         self.name = zone_id if name is None else name
         self.offset = True if offset is None else offset
-        self.fov80 = False if fov80 is None else fov80
-        self.fov_horiz = 360 if fov_horiz is None else fov_horiz
+        if fov80 and fov_vert is None:
+            fov_vert = 80 # set if legacy value is present
+        self.fov_vert = 180 if fov_vert is None else fov_vert
+        self.fov_horiz = 360 if fov_horiz is None else abs(fov_horiz)
         self.vert = False if vert is None else vert
         self.horiz = False if horiz is None else horiz
         self.dose = False if dose is None else dose
@@ -99,7 +102,8 @@ class CalcZone(object):
         data["zone_id"] = self.zone_id
         data["name"] = self.name
         data["offset"] = self.offset
-        data["fov80"] = self.fov80
+        data["fov_vert"] = self.fov_vert
+        data["fov_horiz"] = self.fov_horiz
         data["vert"] = self.vert
         data["horiz"] = self.horiz
         data["dose"] = self.dose
@@ -249,8 +253,10 @@ class CalcZone(object):
             values = self._calculate_nearfield(lamp, R, values)
 
         Theta0, Phi0, R0 = to_polar(*rel_coords.T)
-        if self.fov80:
-            values[Theta0 < 50] = 0 # when fov80->fov_vert: change 50 to 90-fov/2
+        
+        # apply vertical field of view
+        values[Theta0 < 90 - self.fov_vert / 2] = 0 
+            
         if self.vert:
             values *= np.sin(np.radians(Theta0))
         if self.horiz:
@@ -329,6 +335,7 @@ class CalcVol(CalcZone):
         z_spacing=None,
         offset=None,
         fov80=None,
+        fov_vert=None,
         fov_horiz=None,
         vert=None,
         horiz=None,
@@ -344,6 +351,7 @@ class CalcVol(CalcZone):
             name=name,
             offset=offset,
             fov80=fov80,
+            fov_vert=fov_vert,
             fov_horiz=fov_horiz,
             vert=vert,
             horiz=horiz,
@@ -545,6 +553,7 @@ class CalcPlane(CalcZone):
         y_spacing=None,
         offset=None,
         fov80=None,
+        fov_vert=None,
         fov_horiz=None,
         vert=None,
         horiz=None,
@@ -560,6 +569,7 @@ class CalcPlane(CalcZone):
             name=name,
             offset=offset,
             fov80=fov80,
+            fov_vert=fov_vert,
             fov_horiz=fov_horiz,
             vert=vert,
             horiz=horiz,
