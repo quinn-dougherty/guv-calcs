@@ -632,6 +632,7 @@ class Lamp:
         data["aimx"] = self.aimx
         data["aimy"] = self.aimy
         data["aimz"] = self.aimz
+        data["intensity_units"] = self.intensity_units
         data["guv_type"] = self.guv_type
         data["wavelength"] = self.wavelength
         data["length"] = self.length
