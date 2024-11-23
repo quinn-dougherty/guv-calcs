@@ -275,7 +275,8 @@ class CalcZone(object):
             if lamp.filedata is not None and lamp.enabled:
                 # determine lamp placement + calculate relative coordinates
                 values = self._calculate_single_lamp(lamp)
-                values = values / 10  # convert from mW/Sr to uW/cm2
+                if lamp.intensity_units.lower() == "mw/sr":
+                    values = values / 10  # convert from mW/Sr to uW/cm2
                 if np.isnan(values.any()):  # mask any nans near light source
                     values = np.ma.masked_invalid(values)
 

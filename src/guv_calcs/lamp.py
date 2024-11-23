@@ -89,6 +89,7 @@ class Lamp:
         aimx=None,
         aimy=None,
         aimz=None,
+        intensity_units=None,
         guv_type=None,
         wavelength=None,
         spectra_source=None,
@@ -120,6 +121,29 @@ class Lamp:
         self.aimx = self.x if aimx is None else aimx
         self.aimy = self.y if aimy is None else aimy
         self.aimz = self.z - 1.0 if aimz is None else aimz
+
+        # units of values, since not directly specified in .ies file and they can vary for GUV fixtures
+        if intensity_units is not None:
+            msg = f"Intensity unit {intensity_units} not recognized. Using default value `mW/Sr`"
+            if isinstance(intensity_units, int):
+                if intensity_units == 0:
+                    self.intensity_units = "mW/sr"
+                elif intensity_units == 1:
+                    self.intensity_units = "uW/cm2"
+                else:
+                    warnings.warn(msg, stacklevel=3)
+                    self.intensity_units = "mW/sr"
+            elif isinstance(intensity_units, str):
+                if intensity_units.lower() in ["mw/sr", "uw/cm2", "uw/cm²"]:
+                    self.intensity_units = intensity_units
+                else:
+                    warnings.warn(msg, stacklevel=3)
+                    self.intensity_units = "mW/sr"
+            else:
+                msg = f"Datatype {type(intensity_units)} for intensity units not recognized. Using default value `mW/Sr`"
+                self.intensity_units = "mW/sr"
+        else:
+            self.intensity_units = "mW/sr"
 
         # source type & wavelength
         self.guv_type = guv_type
