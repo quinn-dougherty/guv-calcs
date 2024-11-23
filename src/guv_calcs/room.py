@@ -69,6 +69,7 @@ class Room:
 
         self.lamps = {}
         self.calc_zones = {}
+        self.calc_state = {}
 
     def to_dict(self):
         data = {}
@@ -206,6 +207,72 @@ class Room:
         else:
             return zip_bytes
 
+    def get_calc_state(self):
+        """
+        Save all the features in the room that, if changed, will require re-calculation
+        """
+        room_state = [
+            self.reflectance_ceiling,
+            self.reflectance_north,
+            self.reflectance_east,
+            self.reflectance_south,
+            self.reflectance_west,
+            self.reflectance_floor,
+            self.units,
+        ]
+
+        lamp_state = {}
+        # save only the features that affect the calculation
+        # maybe think about optimizing it later
+        for key, lamp in self.lamps.items():
+            lamp_state[key] = [
+                lamp.filedata,
+                lamp.x,
+                lamp.y,
+                lamp.z,
+                lamp.angle,
+                lamp.aimx,
+                lamp.aimy,
+                lamp.aimz,
+                lamp.intensity_units,  # can be optimized
+                lamp.spectra_source,
+                lamp.length,  # only for nearfield
+                lamp.width,  # ""
+                lamp.units,  # ""
+                lamp.source_density,  # ""
+                lamp.relative_map,  # ""
+                lamp.enabled,  # can be optimized
+            ]
+
+        zone_state = {}
+        for key, zone in self.calc_zones.items():
+            zone_state[key] = [
+                zone.offset,
+                zone.fov_vert,
+                zone.fov_horiz,  # can be optimized
+                zone.vert,
+                zone.horiz,
+                zone.enabled,
+                zone.x1,
+                zone.x2,
+                zone.x_spacing,
+                zone.num_x,
+                zone.y1,
+                zone.y2,
+                zone.y_spacing,
+                zone.num_y,
+            ]
+            if zone.calctype == "Plane":
+                zone_state[key] += [zone.height]
+            elif zone.calctype == "Volume":
+                zone_state[key] += [zone.z1, zone.z2, zone.z_spacing, zone.num_z]
+
+        calc_state = {}
+        calc_state["room"] = room_state
+        calc_state["lamps"] = lamp_state
+        calc_state["calc_zones"] = zone_state
+        return calc_state
+
     def set_units(self, units):
         """set room units"""
         if units not in ["meters", "feet"]:
@@ -245,12 +312,12 @@ class Room:
             height = 1.9
             skin_horiz = False
             eye_vert = False
-            fov80 = False
+            fov_vert = 180
         else:
             height = 1.8
             skin_horiz = True
             eye_vert = True
-            fov80 = True
+            fov_vert = 80
 
         self.add_calc_zone(
             CalcVol(
@@ -282,7 +349,6 @@ class Room:
                 num_y=int(self.y * 20),
                 vert=False,
                 horiz=skin_horiz,
-                fov80=False,
                 dose=True,
                 hours=8,
             )
@@ -301,7 +367,7 @@ class Room:
                 num_y=int(self.y * 20),
                 vert=eye_vert,
                 horiz=False,
-                fov80=fov80,
+                fov_vert=fov_vert,
                 fov_horiz=180,
                 dose=True,
                 hours=8,
@@ -374,11 +440,14 @@ class Room:
         for name, zone in self.calc_zones.items():
             if zone.enabled:
                 zone.calculate_values(lamps=self.lamps)
+
+        self.calc_state = self.get_calc_state()
         return self
 
     def calculate_by_id(self, zone_id):
         """calculate just the calc zone selected"""
         self.calc_zones[zone_id].calculate_values(lamps=self.lamps)
+        self.calc_state = self.get_calc_state()
         return self
 
     def _set_color(self, select_id, label, enabled):

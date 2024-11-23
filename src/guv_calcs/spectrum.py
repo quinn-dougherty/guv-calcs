@@ -95,7 +95,6 @@ class Spectrum:
         return spec
 
     def to_csv(self, fname=None):
-        """"""
         rows = [list(self.to_dict().keys())]
         vals = [self.wavelengths, self.intensities]
         vals += list(self.weighted_intensities.values())

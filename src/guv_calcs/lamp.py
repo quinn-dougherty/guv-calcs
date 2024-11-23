@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay
-from photompy import read_ies_data, plot_ies, total_optical_power
+from photompy import read_ies_data, write_ies_data, plot_ies, total_optical_power
 from .spectrum import Spectrum
 from .trigonometry import to_cartesian, to_polar, attitude
 from ._data import get_tlvs
@@ -95,6 +95,7 @@ class Lamp:
         spectra_source=None,
         length=None,
         width=None,
+        height=None,
         units=None,
         source_density=None,
         relative_map=None,
@@ -164,6 +165,7 @@ class Lamp:
         # source values
         self.length = length
         self.width = width
+        self.height = height
         self.units = units
         self.source_density = 1 if source_density is None else source_density
         self.relative_map = relative_map
@@ -445,6 +447,7 @@ class Lamp:
 
             self.length = self.lampdict["length"]
             self.width = self.lampdict["width"]
+            self.height = self.lampdict["height"]
 
         self.photometric_distance = max(self.width, self.length) * 10
         self.grid_points = self._generate_source_points()
@@ -454,8 +457,22 @@ class Lamp:
         if len(self.relative_map) != len(self.grid_points):
             self.relative_map = np.ones(len(self.grid_points))
 
-        self.input_watts = self.lampdict["input_watts"]
-        self.keywords = self.lampdict["keywords"]
+        # self.input_watts = self.lampdict["input_watts"]
+        # self.keywords = self.lampdict["keywords"]
+
+    def _update_lampdict(self):
+        """
+        update the lampdict object for writing a new ies file
+        TODO: maybe include multiplier somehow?
+        """
+        if self.units == "feet":
+            self.lampdict["units_type"] = 1
+        elif self.units == "meters":
+            self.lampdict["units_type"] = 2
+
+        self.lampdict["length"] = self.length
+        self.lampdict["width"] = self.width
+        self.lampdict["height"] = self.height
 
     def _orient(self):
         """
@@ -567,9 +584,8 @@ class Lamp:
             normal = direction / np.linalg.norm(direction)
 
             # Generate two vectors orthogonal to the normal
-            if np.allclose(
-                normal, [1, 0, 0]
-            ):  # if normal is close to x-axis, use y and z to define the plane
+            if np.allclose(normal, [1, 0, 0]):
+                # if normal is close to x-axis, use y and z to define the plane
                 u = np.array([0, 1, 0])
             else:
                 u = np.cross(normal, [1, 0, 0])
@@ -605,11 +621,23 @@ class Lamp:
                 data["spectra_source"][k] = np.array(lst)
         return cls(**{k: v for k, v in data.items() if k in keys})
 
-    def save_ies(self, fname=None):
-        if isinstance(self.filedata, str):
-            iesbytes = self.filedata.encode("utf-8")
-        elif isinstance(self.filedata, bytes):
-            iesbytes = self.filedata
+    def save_ies(self, fname=None, original=True):
+        """TODO: change this function to use the write_ies_file fuinction from photompy"""
+        if original:
+            if isinstance(self.filedata, str):
+                iesbytes = self.filedata.encode("utf-8")
+            elif isinstance(self.filedata, bytes):
+                iesbytes = self.filedata
+            else:
+                msg = "Filedata may be malformed. Cannot save native .ies file."
+                warnings.warn(msg, stacklevel=3)
+                self._update_lampdict()
+                iesbytes = write_ies_data(self.lampdict, filename=fname)
+        else:
+            self._update_lampdict()
+            iesbytes = write_ies_data(self.lampdict, filename=fname)
+
+        # write to file if provided, otherwise
         if fname is not None:
             with open(fname, "wb") as file:
                 file.write(iesbytes)
