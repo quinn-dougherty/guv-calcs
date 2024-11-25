@@ -621,21 +621,15 @@ class Lamp:
                 data["spectra_source"][k] = np.array(lst)
         return cls(**{k: v for k, v in data.items() if k in keys})
 
-    def save_ies(self, fname=None, original=True):
-        """TODO: change this function to use the write_ies_file fuinction from photompy"""
+    def save_ies(self, fname=None, original=False):
+        """
+        Save the current lamp paramters as an .ies file; alternatively, save the original ies file.
+        """
         if original:
-            if isinstance(self.filedata, str):
-                iesbytes = self.filedata.encode("utf-8")
-            elif isinstance(self.filedata, bytes):
-                iesbytes = self.filedata
-            else:
-                msg = "Filedata may be malformed. Cannot save native .ies file."
-                warnings.warn(msg, stacklevel=3)
-                self._update_lampdict()
-                iesbytes = write_ies_data(self.lampdict, filename=fname)
+            iesbytes = write_ies_data(self.lampdict, valkey="original_vals")
         else:
             self._update_lampdict()
-            iesbytes = write_ies_data(self.lampdict, filename=fname)
+            iesbytes = write_ies_data(self.lampdict, valkey="original_vals")
 
         # write to file if provided, otherwise
         if fname is not None:

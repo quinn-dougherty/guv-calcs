@@ -245,27 +245,29 @@ class Room:
             ]
 
         zone_state = {}
+
         for key, zone in self.calc_zones.items():
-            zone_state[key] = [
-                zone.offset,
-                zone.fov_vert,
-                zone.fov_horiz,  # can be optimized
-                zone.vert,
-                zone.horiz,
-                zone.enabled,
-                zone.x1,
-                zone.x2,
-                zone.x_spacing,
-                zone.num_x,
-                zone.y1,
-                zone.y2,
-                zone.y_spacing,
-                zone.num_y,
-            ]
-            if zone.calctype == "Plane":
-                zone_state[key] += [zone.height]
-            elif zone.calctype == "Volume":
-                zone_state[key] += [zone.z1, zone.z2, zone.z_spacing, zone.num_z]
+            if zone.calctype != "Zone":
+                zone_state[key] = [
+                    zone.offset,
+                    zone.fov_vert,
+                    zone.fov_horiz,  # can be optimized
+                    zone.vert,
+                    zone.horiz,
+                    zone.enabled,
+                    zone.x1,
+                    zone.x2,
+                    zone.x_spacing,
+                    zone.num_x,
+                    zone.y1,
+                    zone.y2,
+                    zone.y_spacing,
+                    zone.num_y,
+                ]
+                if zone.calctype == "Plane":
+                    zone_state[key] += [zone.height]
+                elif zone.calctype == "Volume":
+                    zone_state[key] += [zone.z1, zone.z2, zone.z_spacing, zone.num_z]
 
         calc_state = {}
         calc_state["room"] = room_state
