@@ -31,7 +31,7 @@ class Lamp:
     Arguments
     -------------------
     lamp_id: str
-        A unique identifier for the lamp. Only required parameter.
+        A unique identifier for the lamp object.
     name: str, default=None
         Non-unique display name for the lamp. If None set by lamp_id
     filename: Path, str
@@ -54,9 +54,10 @@ class Lamp:
         Optional. Data source for spectra. May be a filepath, a binary stream,
         or a dict where the first value contains values of wavelengths, and
         the second value contains values of relative intensity.
-    length, width: floats, default=[None, None]
-        length (or height, or y-axis extent) of the source, in the units
-        provided. If not provided, will be read from the .ies file.
+    width, length, depth: floats, default=[None, None]
+        x-axis and y-axis source extent, plus fixture depth in the units
+        provided. If not provided, will be read from the .ies file. Note that
+        the ies file interface labels `depth` as `height` instead.
     units: str or int in [1, 2] or None
         `feet` or `meters`. 1 corresponds to feet, 2 to `meters`. If not
         provided, will be read from .ies file, and lengt and width parameters
@@ -78,7 +79,7 @@ class Lamp:
 
     def __init__(
         self,
-        lamp_id,
+        lamp_id=None,
         name=None,
         filename=None,
         filedata=None,
@@ -93,9 +94,9 @@ class Lamp:
         guv_type=None,
         wavelength=None,
         spectra_source=None,
-        length=None,
         width=None,
-        height=None,
+        length=None,
+        depth=None,
         units=None,
         source_density=None,
         relative_map=None,
@@ -162,13 +163,13 @@ class Lamp:
                 msg = f"Wavelength must be int or float, not {type(self.wavelength)}"
                 raise TypeError(msg)
 
-        # source values
-        self.length = length
+        # source values        
         self.width = width
-        self.height = height
+        self.length = length
+        self.depth = depth
         self.units = units
         self.source_density = 1 if source_density is None else source_density
-        self.relative_map = relative_map
+        self.relative_map = self._load_relmap(relative_map)
 
         self.grid_points = None  # populated from ies data
         self.photometric_distance = None  # ditto
@@ -187,7 +188,22 @@ class Lamp:
         # filename is just a label, filedata controls everything.
         if self.filedata is not None:
             self._load()
-            self._orient()
+            self._orient()          
+    
+            
+    @classmethod
+    def from_dict(cls, data):
+        """initialize class from dict"""
+        keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
+        if data["spectra"] is not None:
+            data["spectra_source"] = {}
+            for k, v in data["spectra"].items():
+                if isinstance(v, str):
+                    lst = list(map(float, v.split(", ")))
+                elif isinstance(v, list):
+                    lst = v
+                data["spectra_source"][k] = np.array(lst)
+        return cls(**{k: v for k, v in data.items() if k in keys})
 
     def move(self, x=None, y=None, z=None):
         """Designate lamp position in cartesian space"""
@@ -221,11 +237,23 @@ class Lamp:
         xr, yr, zr = self.aim_point - self.position
         self.heading = np.degrees(np.arctan2(yr, xr))
         self.bank = np.degrees(np.arctan2(np.sqrt(xr ** 2 + yr ** 2), zr) - np.pi)
-        # self.heading = (heading+360)%3606
-        # self.bank = (bank+360)%360
         # update grid points
         self.grid_points = self._generate_source_points()
         return self
+        
+    def transform(self, coords, scale=1):
+        """
+        Transforms the given coordinates based on the lamp's orientation and position.
+        Applies rotation, then aiming, then scaling, then translation.
+        Scale parameter should generally only be used for photometric_coords
+        """
+        coords = np.array(attitude(coords.T, roll=0, pitch=0, yaw=self.angle)).T
+        coords = np.array(
+            attitude(coords.T, roll=0, pitch=self.bank, yaw=self.heading)
+        ).T
+        coords = (coords.T / scale).T + self.position
+        return coords
+
 
     def set_orientation(self, orientation, dimensions=None, distance=None):
         """
@@ -248,6 +276,21 @@ class Lamp:
         self.bank = tilt
         self._recalculate_aim_point(dimensions=dimensions, distance=distance)
         return self
+        
+    def set_source_density(self, source_density):
+        """change source discretization"""
+        self.source_density = source_density
+        self.grid_points = _generate_source_points()
+        
+    def set_source_width(self,width):
+        """change x-axis extent of lamp emissive surface"""
+        self.width = width
+        self.grid_points = _generate_source_points()
+        
+    def set_source_length(self, length):
+        """change y-axis extent of lamp emissive surface"""
+        self.length = length        
+        self.grid_points = _generate_source_points()
 
     def get_total_power(self):
         """return the lamp's total optical power"""
@@ -278,25 +321,152 @@ class Lamp:
         """Return lamp's true position coordinates in polar space"""
         cartesian = self.transform(self.coords) - self.position
         return np.array(to_polar(*cartesian.T)).round(sigfigs)
+        
+    
 
-    def transform(self, coords, scale=1):
+    def reload(self, filename=None, filedata=None):
         """
-        Transforms the given coordinates based on the lamp's orientation and position.
-        Applies rotation, then aiming, then scaling, then translation.
-        Scale parameter should generally only be used for photometric_coords
+        replace the ies file without erasing any position/rotation/eing information
+        can be used to load an ies file after initialization
         """
-        # in case user has updated x y and z
-        coords = np.array(attitude(coords.T, roll=0, pitch=0, yaw=self.angle)).T
-        coords = np.array(
-            attitude(coords.T, roll=0, pitch=self.bank, yaw=self.heading)
-        ).T
-        coords = (coords.T / scale).T + self.position
-        return coords
 
+        self.filename = filename
+        self.filedata = filedata
+        # if filename is a path, filedata is filename
+        self._check_filename
+
+        if self.filedata is not None:
+            self._load()
+            self._orient()
+        else:
+            self.lampdict = None
+            self.valdict = None
+            self.thetas = None
+            self.phis = None
+            self.values = None
+            self.interpdict = None
+            self.units = None
+            self.dimensions = None
+            self.input_watts = None
+            self.keywords = None
+            self.coords = None
+            self.photometric_coords = None
+            self.spectra = None
+      
+    def load_spectra(self, spectra_source):
+        """external method for loading spectra after lamp object has been instantiated"""
+        self.spectra = self._load_spectra(spectra_source)
+         
+    
+    def load_relmap(self, relative_map):
+        """external method for loading relative intensity map after lamp object has been instantiated"""
+        self.rel_map = self._load_relmap(relative_map)
+        
+    def save_ies(self, fname=None, original=False):
+        """
+        Save the current lamp paramters as an .ies file; alternatively, save the original ies file.
+        """
+        if original:
+            iesbytes = write_ies_data(self.lampdict, valkey="original_vals")
+        else:
+            self._update_lampdict()
+            iesbytes = write_ies_data(self.lampdict, valkey="original_vals")
+
+        # write to file if provided, otherwise
+        if fname is not None:
+            with open(fname, "wb") as file:
+                file.write(iesbytes)
+        else:
+            return iesbytes
+
+    def save_lamp(self, filename=None):
+        """
+        save just the minimum number of parameters required to re-instantiate the lamp
+        Returns dict. If filename is not None, saves dict as json.
+        """
+
+        data = {}
+        data["lamp_id"] = self.lamp_id
+        data["name"] = self.name
+        data["x"] = self.x
+        data["y"] = self.y
+        data["z"] = self.z
+        data["angle"] = self.angle
+        data["aimx"] = self.aimx
+        data["aimy"] = self.aimy
+        data["aimz"] = self.aimz
+        data["intensity_units"] = self.intensity_units
+        data["guv_type"] = self.guv_type
+        data["wavelength"] = self.wavelength
+        data["width"] = self.width
+        data["length"] = self.length
+        data["depth"] = self.depth
+        data["units"] = self.units
+        data["source_density"] = self.source_density
+        data["relative_map"] = self.relative_map
+
+        data["filename"] = self.filename        
+        # if isinstance(self.filedata, bytes):
+            # filedata = self.filedata.decode("utf-8")
+        # elif isinstance(self.filedata, str) or self.filedata is None:
+            # filedata = self.filedata
+        # else:
+            # raise TypeError(f"Filedata must be str or bytes, not {type(self.filedata)}")
+        data["filedata"] = self.save_ies()
+
+        if self.spectra is not None:
+            spectra_dict = self.spectra.to_dict(as_string=True)
+            keys = list(spectra_dict.keys())[0:2]  # keep the first two keys only
+            data["spectra"] = {key: spectra_dict[key] for key in keys}
+        else:
+            data["spectra"] = None
+
+        if filename is not None:
+            with open(filename, "w") as json_file:
+                json.dump(data, json_file, indent=4)
+
+        return data
+        
     def plot_ies(self, title=""):
         """standard polar plot of an ies file"""
         fig, ax = plot_ies(fdata=self.valdict, title=title)
         return fig, ax
+        
+    def plot_grid_points(self, fig=None,ax=None,title=None,figsize=(6,4)):
+        """plot the discretization of the emissive surface"""
+        
+        if fig is None:
+            if ax is None:
+                fig, ax = plt.subplots()
+            else:
+                fig = plt.gcf()
+        else:
+            if ax is None:
+                ax = fig.axes[0]
+                
+        ax.scatter(*self.grid_points.T[0:2])
+        xlim = np.unique(self.corners.T[0])
+        ylim = np.unique(self.corners.T[1])
+        if len(xlim)==2:
+            ax.set_xlim(xlim)
+        if len(ylim)==2:
+            ax.set_ylim(ylim)
+        if title is None:
+            title = 'Source density = '+str(self.source_density)
+        ax.set_title(title)    
+        ax.set_aspect('equal', adjustable='box')
+        return fig, ax
+                
+    def plot_relative_map(self,fig=None,ax=None,title="",figsize=(6,4)):
+        """plot the relative intensity map of the emissive surface"""
+        if fig is None:
+            if ax is None:
+                fig, ax = plt.subplots()
+            else:
+                fig = plt.gcf()
+        else:
+            if ax is None:
+                ax = fig.axes[0]
 
     def plot_web(
         self,
@@ -371,35 +541,6 @@ class Lamp:
         ax.set_zlabel("z")
         return fig, ax
 
-    def reload(self, filename=None, filedata=None):
-        """
-        replace the ies file without erasing any position/rotation/eing information
-        can be used to load an ies file after initialization
-        """
-
-        self.filename = filename
-        self.filedata = filedata
-        # if filename is a path, filedata is filename
-        self._check_filename
-
-        if self.filedata is not None:
-            self._load()
-            self._orient()
-        else:
-            self.lampdict = None
-            self.valdict = None
-            self.thetas = None
-            self.phis = None
-            self.values = None
-            self.interpdict = None
-            self.units = None
-            self.dimensions = None
-            self.input_watts = None
-            self.keywords = None
-            self.coords = None
-            self.photometric_coords = None
-            self.spectra = None
-
     def _check_filename(self):
         """
         determine datasource
@@ -431,9 +572,9 @@ class Lamp:
         self.values = self.valdict["values"]
         self.interpdict = self.lampdict["interp_vals"]
 
-        if not all([self.length, self.width, self.units]):
-            if any([self.length, self.width, self.units]):
-                msg = "Length, width, and units arguments will be ignored and set from the .ies file instead."
+        if not all([self.width, self.length, self.units]):
+            if any([self.width, self.length, self.units]):
+                msg = "Width, length, and units arguments will be ignored and set from the .ies file instead."
                 warnings.warn(msg, stacklevel=2)
             units_type = self.lampdict["units_type"]
             if units_type == 1:
@@ -445,9 +586,9 @@ class Lamp:
                 warnings.warn(msg, stacklevel=2)
                 self.units = "meters"
 
-            self.length = self.lampdict["length"]
             self.width = self.lampdict["width"]
-            self.height = self.lampdict["height"]
+            self.length = self.lampdict["length"]
+            self.depth = self.lampdict["height"]
 
         self.photometric_distance = max(self.width, self.length) * 10
         self.grid_points = self._generate_source_points()
@@ -470,9 +611,9 @@ class Lamp:
         elif self.units == "meters":
             self.lampdict["units_type"] = 2
 
-        self.lampdict["length"] = self.length
         self.lampdict["width"] = self.width
-        self.lampdict["height"] = self.height
+        self.lampdict["length"] = self.length
+        self.lampdict["height"] = self.depth
 
     def _orient(self):
         """
@@ -502,14 +643,32 @@ class Lamp:
             spectra = None
         else:
             spectra = None
-            warnings.warn(
-                f"Datatype {type(spectra_source)} not recognized spectral data source"
-            )
-        return spectra
-
-    def load_spectra(self, spectra_source):
-        self.spectra = self._load_spectra(spectra_source)
-
+            msg = f"Datatype {type(spectra_source)} not recognized spectral data source"
+            warnings.warn(msg, stacklevel=3)
+        return spectra     
+        
+    def _load_relmap(self, arg):
+        """check filetype and return correct relative_map as array"""
+        if arg is None:
+            rel_map = None
+        elif isinstance(arg, (str,pathlib.Path)):
+            # check if this is a file
+            if Path(arg).is_file():
+                rel_map = np.genfromtxt(Path(arg), delimiter=',')
+            else:
+                msg = f"File {arg} not found. relative_map will not be used."
+                warnings.warn(msg, stacklevel=3)
+                rel_map = None
+        elif isinstance(arg, bytes):
+            rel_map = np.frombuffer(arg)
+        elif isinstance(arg, (list, np.array)):
+            rel_map = np.array(arg)
+        else:
+            msg =f"Argument type {type(arg)} for argument relative_map. relative_map will not be used."
+            warnings.warn(msg,stacklevel=3)
+            rel_map = None
+        return rel_map
+        
     def _recalculate_aim_point(self, dimensions=None, distance=None):
         """
         internal method to call if setting tilt/bank or orientation/heading
@@ -549,33 +708,33 @@ class Lamp:
 
         # generate the points
 
-        if all([self.length, self.width, self.source_density]):
+        if all([self.width, self.length, self.source_density]):
             num_points = self.source_density + self.source_density - 1
-            num_points_u = num_points * int(round(self.width / self.length))
-            num_points_v = num_points * int(round(self.length / self.width))
+            num_points_v = max(num_points, num_points * int(round(self.width / self.length)))
+            num_points_u = max(num_points, num_points * int(round(self.length / self.width)))
             if num_points_u % 2 == 0:
                 num_points_u += 1
             if num_points_v % 2 == 0:
                 num_points_v += 1
 
             # spacing = min(self.length, self.width) / num_points
-            spacing_u = self.width / num_points_u
-            spacing_v = self.length / num_points_v
+            spacing_v = self.width / num_points_v
+            spacing_u = self.length / num_points_u
 
             # If there's only one point, place it at the center
-            if num_points_u == 1:
-                u_points = np.array([0])  # Single point at the center of the width
-            else:
-                startu = -self.width / 2 + spacing_u / 2
-                stopu = self.width / 2 - spacing_u / 2
-                u_points = np.linspace(startu, stopu, num_points_u)
-
             if num_points_v == 1:
-                v_points = np.array([0])  # Single point at the center of the length
+                v_points = np.array([0])  # Single point at the center of the width
             else:
-                startv = -self.length / 2 + spacing_v / 2
-                stopv = self.length / 2 - spacing_v / 2
+                startv = -self.width / 2 + spacing_v / 2
+                stopv = self.width / 2 - spacing_v / 2
                 v_points = np.linspace(startv, stopv, num_points_v)
+
+            if num_points_u == 1:
+                u_points = np.array([0])  # Single point at the center of the length
+            else:
+                startu = -self.length / 2 + spacing_u / 2
+                stopu = self.length / 2 - spacing_u / 2
+                u_points = np.linspace(startu, stopu, num_points_u)
             uu, vv = np.meshgrid(u_points, v_points)
 
             # get the normal plane to the aim point
@@ -601,85 +760,20 @@ class Lamp:
             grid_points = grid_points[
                 ::-1
             ]  # reverse so that the 'upper left' point is first
+            
+            self.corners = np.array([
+                self.position + self.width/2 + self.length/2,
+                self.position + self.width/2 - self.length/2,
+                self.position - self.width/2 + self.length/2,
+                self.position - self.width/2 - self.length/2
+            ])
 
         else:
             grid_points = self.position
+            self.corners = np.array([self.position]*4)
 
         return grid_points
 
-    @classmethod
-    def from_dict(cls, data):
-        """initialize class from dict"""
-        keys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
-        if data["spectra"] is not None:
-            data["spectra_source"] = {}
-            for k, v in data["spectra"].items():
-                if isinstance(v, str):
-                    lst = list(map(float, v.split(", ")))
-                elif isinstance(v, list):
-                    lst = v
-                data["spectra_source"][k] = np.array(lst)
-        return cls(**{k: v for k, v in data.items() if k in keys})
+    
 
-    def save_ies(self, fname=None, original=False):
-        """
-        Save the current lamp paramters as an .ies file; alternatively, save the original ies file.
-        """
-        if original:
-            iesbytes = write_ies_data(self.lampdict, valkey="original_vals")
-        else:
-            self._update_lampdict()
-            iesbytes = write_ies_data(self.lampdict, valkey="original_vals")
-
-        # write to file if provided, otherwise
-        if fname is not None:
-            with open(fname, "wb") as file:
-                file.write(iesbytes)
-        else:
-            return iesbytes
-
-    def save_lamp(self, filename=None):
-        """
-        save just the minimum number of parameters required to re-instantiate the lamp
-        Returns dict. If filename is not None, saves dict as json.
-        """
-
-        data = {}
-        data["lamp_id"] = self.lamp_id
-        data["name"] = self.name
-        data["x"] = self.x
-        data["y"] = self.y
-        data["z"] = self.z
-        data["angle"] = self.angle
-        data["aimx"] = self.aimx
-        data["aimy"] = self.aimy
-        data["aimz"] = self.aimz
-        data["intensity_units"] = self.intensity_units
-        data["guv_type"] = self.guv_type
-        data["wavelength"] = self.wavelength
-        data["length"] = self.length
-        data["width"] = self.width
-        data["units"] = self.units
-        data["source_density"] = self.source_density
-
-        data["filename"] = self.filename
-        if isinstance(self.filedata, bytes):
-            filedata = self.filedata.decode("utf-8")
-        elif isinstance(self.filedata, str) or self.filedata is None:
-            filedata = self.filedata
-        else:
-            raise TypeError(f"Filedata must be str or bytes, not {type(self.filedata)}")
-        data["filedata"] = filedata
-
-        if self.spectra is not None:
-            spectra_dict = self.spectra.to_dict(as_string=True)
-            keys = list(spectra_dict.keys())[0:2]  # keep the first two keys only
-            data["spectra"] = {key: spectra_dict[key] for key in keys}
-        else:
-            data["spectra"] = None
-
-        if filename is not None:
-            with open(filename, "w") as json_file:
-                json.dump(data, json_file, indent=4)
-
-        return data
+    
