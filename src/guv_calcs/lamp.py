@@ -1,4 +1,5 @@
 from pathlib import Path
+from importlib import resources
 import inspect
 import json
 import pathlib
@@ -11,7 +12,26 @@ from .spectrum import Spectrum
 from .trigonometry import to_cartesian, to_polar, attitude
 from ._data import get_tlvs
 
-KRCL_KEYS = ["krypton chloride", "kyrpton-chloride", "kyrpton_chloride", "krcl"]
+VALID_LAMPS = [
+    "beacon",
+    "lumenizer_zone",
+    "sterilray",
+    "ushio_b1",
+    "ushio_b1.5",
+    "uvpro222_b1",
+    "uvpro222_b2",
+    "visium",
+]
+
+KRCL_KEYS = [
+    "krypton chloride",
+    "krypton-chloride",
+    "krypton_chloride",
+    "krcl",
+    "kr-cl",
+    "kr cl"
+]
+
 LPHG_KEYS = [
     "low pressure mercury",
     "low-pressure mercury",
@@ -203,6 +223,67 @@ class Lamp:
                     lst = v
                 data["spectra_source"][k] = np.array(lst)
         return cls(**{k: v for k, v in data.items() if k in keys})
+
+    @classmethod
+    def from_keyword(
+        cls,
+        key,
+        lamp_id=None,
+        name=None,
+        x=None,
+        y=None,
+        z=None,
+        angle=None,
+        aimx=None,
+        aimy=None,
+        aimz=None,
+        intensity_units=None,
+        guv_type=None,
+        wavelength=None,
+        width=None,
+        length=None,
+        depth=None,
+        units=None,
+        source_density=None,
+        relative_map=None,
+        enabled=None,
+    ):
+
+        if key.lower() in VALID_LAMPS:
+            path = "guv_calcs.data.lamp_data"
+            fname = key.lower() + ".ies"
+            spec_fname = key.lower() + ".csv"
+            filename = resources.files(path).joinpath(fname)
+            spectra_source = resources.files(path).joinpath(spec_fname)
+        else:
+            msg = f"{key} is not a valid lamp key. Photometric and spectral data will not be loaded."
+            warnings.warn(msg, stacklevel=3)
+            filename = None
+            spectra_source = None
+
+        return cls(
+            lamp_id=lamp_id,
+            name=name,
+            filename=filename,
+            x=x,
+            y=y,
+            z=z,
+            angle=angle,
+            aimx=aimx,
+            aimy=aimy,
+            aimz=aimz,
+            intensity_units=intensity_units,
+            guv_type=guv_type,
+            wavelength=wavelength,
+            spectra_source=spectra_source,
+            width=width,
+            length=length,
+            depth=depth,
+            units=units,
+            source_density=source_density,
+            relative_map=relative_map,
+            enabled=enabled,
+        )
 
     def move(self, x=None, y=None, z=None):
         """Designate lamp position in cartesian space"""
@@ -471,7 +552,8 @@ class Lamp:
             img = ax.imshow(self.relative_map, extent=extent)
         else:
             img = ax.imshow(self.relative_map)
-        fig.colorbar(img, pad=0.03)
+        cbar = fig.colorbar(img, pad=0.03)
+        cbar.set_label("Surface relative intensity", loc="center")
 
         return fig, ax
 
