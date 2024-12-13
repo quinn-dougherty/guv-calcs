@@ -29,7 +29,7 @@ KRCL_KEYS = [
     "krypton_chloride",
     "krcl",
     "kr-cl",
-    "kr cl"
+    "kr cl",
 ]
 
 LPHG_KEYS = [
@@ -479,7 +479,7 @@ class Lamp:
         data["depth"] = self.depth
         data["units"] = self.units
         data["source_density"] = self.source_density
-        data["relative_map"] = self.relative_map
+        data["relative_map"] = list(self.relative_map)
 
         data["filename"] = self.filename
         # if isinstance(self.filedata, bytes):
@@ -488,7 +488,7 @@ class Lamp:
         # filedata = self.filedata
         # else:
         # raise TypeError(f"Filedata must be str or bytes, not {type(self.filedata)}")
-        data["filedata"] = self.save_ies()
+        data["filedata"] = self.save_ies().decode("utf-8")
 
         if self.spectra is not None:
             spectra_dict = self.spectra.to_dict(as_string=True)
@@ -496,7 +496,7 @@ class Lamp:
             data["spectra"] = {key: spectra_dict[key] for key in keys}
         else:
             data["spectra"] = None
-
+            
         if filename is not None:
             with open(filename, "w") as json_file:
                 json.dump(data, json_file, indent=4)
