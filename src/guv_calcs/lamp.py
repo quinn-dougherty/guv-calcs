@@ -445,8 +445,8 @@ class Lamp:
         if original:
             iesbytes = write_ies_data(self.lampdict, valkey="original_vals")
         else:
-            self._update_lampdict()
-            iesbytes = write_ies_data(self.lampdict, valkey="original_vals")
+            updated_lampdict = self.get_lampdict()
+            iesbytes = write_ies_data(updated_lampdict, valkey="original_vals")
 
         # write to file if provided, otherwise
         if fname is not None:
@@ -689,19 +689,22 @@ class Lamp:
         # self.input_watts = self.lampdict["input_watts"]
         # self.keywords = self.lampdict["keywords"]
 
-    def _update_lampdict(self):
+    def get_lampdict(self):
         """
         update the lampdict object for writing a new ies file
         TODO: maybe include multiplier somehow?
         """
+        
+        lampdict = self.lampdict.copy()
         if self.units == "feet":
-            self.lampdict["units_type"] = 1
+            lampdict["units_type"] = 1
         elif self.units == "meters":
-            self.lampdict["units_type"] = 2
+            lampdict["units_type"] = 2
 
-        self.lampdict["width"] = self.width
-        self.lampdict["length"] = self.length
-        self.lampdict["height"] = self.depth
+        lampdict["width"] = self.width
+        lampdict["length"] = self.length
+        lampdict["height"] = self.depth
+        return lampdict
 
     def _orient(self):
         """
