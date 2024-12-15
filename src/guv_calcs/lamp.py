@@ -205,6 +205,13 @@ class Lamp:
         self.filedata = filedata
         self._check_filename()
 
+        # values that will be filled in if there is filedata available
+        self.lampdict = None
+        self.thetas = None
+        self.phis = None
+        self.values = None
+
+
         # filename is just a label, filedata controls everything.
         if self.filedata is not None:
             self._load()
@@ -373,7 +380,7 @@ class Lamp:
 
     def get_total_power(self):
         """return the lamp's total optical power"""
-        return total_optical_power(self.interpdict)
+        return total_optical_power(self.lampdict["interp_vals"])
 
     def get_limits(self, standard=0):
         """
@@ -417,11 +424,9 @@ class Lamp:
             self._orient()
         else:
             self.lampdict = None
-            self.valdict = None
             self.thetas = None
             self.phis = None
             self.values = None
-            self.interpdict = None
             self.units = None
             self.dimensions = None
             self.input_watts = None
@@ -442,18 +447,21 @@ class Lamp:
         """
         Save the current lamp paramters as an .ies file; alternatively, save the original ies file.
         """
-        if original:
-            iesbytes = write_ies_data(self.lampdict, valkey="original_vals")
-        else:
-            updated_lampdict = self.get_lampdict()
-            iesbytes = write_ies_data(updated_lampdict, valkey="original_vals")
+        if self.lampdict is not None:
+            if original:
+                iesbytes = write_ies_data(self.lampdict, valkey="original_vals")
+            else:
+                updated_lampdict = self.get_lampdict()
+                iesbytes = write_ies_data(updated_lampdict, valkey="original_vals")
 
-        # write to file if provided, otherwise
-        if fname is not None:
-            with open(fname, "wb") as file:
-                file.write(iesbytes)
+            # write to file if provided, otherwise
+            if fname is not None:
+                with open(fname, "wb") as file:
+                    file.write(iesbytes)
+            else:
+                return iesbytes
         else:
-            return iesbytes
+            return None
 
     def save_lamp(self, filename=None):
         """
@@ -479,16 +487,12 @@ class Lamp:
         data["depth"] = self.depth
         data["units"] = self.units
         data["source_density"] = self.source_density
-        data["relative_map"] = list(self.relative_map)
+        data["relative_map"] = list(self.relative_map) if self.relative_map is not None else None
 
         data["filename"] = self.filename
-        # if isinstance(self.filedata, bytes):
-        # filedata = self.filedata.decode("utf-8")
-        # elif isinstance(self.filedata, str) or self.filedata is None:
-        # filedata = self.filedata
-        # else:
-        # raise TypeError(f"Filedata must be str or bytes, not {type(self.filedata)}")
-        data["filedata"] = self.save_ies().decode("utf-8")
+        filedata = self.save_ies()
+        data["filedata"] = filedata.decode() if filedata is not None else None
+        
 
         if self.spectra is not None:
             spectra_dict = self.spectra.to_dict(as_string=True)
@@ -496,7 +500,7 @@ class Lamp:
             data["spectra"] = {key: spectra_dict[key] for key in keys}
         else:
             data["spectra"] = None
-            
+
         if filename is not None:
             with open(filename, "w") as json_file:
                 json.dump(data, json_file, indent=4)
@@ -505,7 +509,7 @@ class Lamp:
 
     def plot_ies(self, title=""):
         """standard polar plot of an ies file"""
-        fig, ax = plot_ies(fdata=self.valdict, title=title)
+        fig, ax = plot_ies(fdata=self.lampdict["full_vals"], title=title)
         return fig, ax
 
     def plot_grid_points(self, fig=None, ax=None, title="", figsize=(6, 4)):
@@ -653,12 +657,11 @@ class Lamp:
         """
         Loads lamp data from an IES file and initializes photometric properties.
         """
+        
         self.lampdict = read_ies_data(self.filedata)
-        self.valdict = self.lampdict["full_vals"]
-        self.thetas = self.valdict["thetas"]
-        self.phis = self.valdict["phis"]
-        self.values = self.valdict["values"]
-        self.interpdict = self.lampdict["interp_vals"]
+        self.thetas = self.lampdict["full_vals"]["thetas"]
+        self.phis = self.lampdict["full_vals"]["phis"]
+        self.values = self.lampdict["full_vals"]["values"]
 
         if not all([self.width, self.length, self.units]):
             if any([self.width, self.length, self.units]):
@@ -694,7 +697,7 @@ class Lamp:
         update the lampdict object for writing a new ies file
         TODO: maybe include multiplier somehow?
         """
-        
+
         lampdict = self.lampdict.copy()
         if self.units == "feet":
             lampdict["units_type"] = 1

@@ -212,7 +212,8 @@ class CalcZone(object):
             rel_coords = self.coords - point
             Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
             Theta_n, Phi_n, R_n = Theta[near_idx], Phi[near_idx], R[near_idx]
-            near_values = get_intensity(Theta_n, Phi_n, lamp.interpdict) / R_n ** 2
+            interpdict = lamp.lampdict["interp_vals"]
+            near_values = get_intensity(Theta_n, Phi_n, interpdict) / R_n ** 2
             near_values = near_values * val / num_points
             values[near_idx] += near_values
         return values
@@ -224,7 +225,9 @@ class CalcZone(object):
         """
 
         # Compute relative coordinates: Shape (num_points, num_lamps, 3)
-        lamp_positions = np.array([lamp.position for lamp in lamps.values()])
+        lamp_positions = np.array(
+            [lamp.position for lamp in lamps.values() if lamp.enabled]
+        )
         rel_coords = self.coords[:, None, :] - lamp_positions[None, :, :]
 
         # Calculate horizontal angles (in degrees)
@@ -252,7 +255,8 @@ class CalcZone(object):
         """
         rel_coords = self.coords - lamp.position
         Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
-        values = get_intensity(Theta, Phi, lamp.interpdict) / R ** 2
+        interpdict = lamp.lampdict["interp_vals"]
+        values = get_intensity(Theta, Phi, interpdict) / R ** 2
         if lamp.source_density > 0:
             values = self._calculate_nearfield(lamp, R, values)
 
@@ -272,23 +276,27 @@ class CalcZone(object):
         """
         Calculate and return irradiance values at all coordinate points within the zone.
         """
+
+        valid_lamps = {
+            k: v for k, v in lamps.items() if v.enabled and v.filedata is not None
+        }
+
         total_values = np.zeros(self.coords.shape[0])
         lamp_values = {}
-        for lamp_id, lamp in lamps.items():
-            if lamp.filedata is not None and lamp.enabled:
-                # determine lamp placement + calculate relative coordinates
-                values = self._calculate_single_lamp(lamp)
-                if lamp.intensity_units.lower() == "mw/sr":
-                    values = values / 10  # convert from mW/Sr to uW/cm2
-                if np.isnan(values.any()):  # mask any nans near light source
-                    values = np.ma.masked_invalid(values)
+        for lamp_id, lamp in valid_lamps.items():
+            # determine lamp placement + calculate relative coordinates
+            values = self._calculate_single_lamp(lamp)
+            if lamp.intensity_units.lower() == "mw/sr":
+                values = values / 10  # convert from mW/Sr to uW/cm2
+            if np.isnan(values.any()):  # mask any nans near light source
+                values = np.ma.masked_invalid(values)
 
-                total_values += values
-                lamp_values[lamp_id] = values
+            total_values += values
+            lamp_values[lamp_id] = values
 
-        if self.fov_horiz < 360:
+        if self.fov_horiz < 360 and len(valid_lamps) > 0:
             values = np.array([val for val in lamp_values.values()]).T
-            total_values = self._calculate_horizontal_fov(values, lamps)
+            total_values = self._calculate_horizontal_fov(values, valid_lamps)
 
         # reshape
         self.values = total_values.reshape(*self.num_points)
