@@ -434,12 +434,16 @@ class CalcVol(CalcZone):
         self._update()
 
     def set_spacing(self, x_spacing=None, y_spacing=None, z_spacing=None):
+        """
+        set the spacing desired in the dimension
+        """
         self.x_spacing = self.x_spacing if x_spacing is None else abs(x_spacing)
         self.y_spacing = self.y_spacing if y_spacing is None else abs(y_spacing)
         self.z_spacing = self.z_spacing if z_spacing is None else abs(z_spacing)
         numx = int(abs(self.x2 - self.x1) / self.x_spacing)
         numy = int(abs(self.y2 - self.y1) / self.y_spacing)
         numz = int(abs(self.z2 - self.z1) / self.z_spacing)
+
         if numx == 0:
             msg = f"x_spacing too large. Minimum spacing:{self.x2-self.x1}"
             warnings.warn(msg, stacklevel=3)
@@ -473,6 +477,11 @@ class CalcVol(CalcZone):
         if self.num_z == 0:
             warnings.warn("Number of z points must be at least 1")
             self.num_z += 1
+            
+        self.x_spacing = abs((self.x2 - self.x1) / round(self.num_x))
+        self.y_spacing = abs((self.y2 - self.y1) / round(self.num_y))
+        self.z_spacing = abs((self.z2 - self.z1) / round(self.num_z))
+        
         self._update()
         return self
 
@@ -676,8 +685,10 @@ class CalcPlane(CalcZone):
         if self.num_y == 0:
             warnings.warn("Number of y points must be at least 1")
             self.num_y += 1
-        self.x_spacing = abs((self.x2 - self.x1) / round(self.num_y))
-        self.y_spacing = abs((self.y2 - self.y1) / round(self.num_x))
+        
+        self.x_spacing = abs((self.x2 - self.x1) / round(self.num_x))
+        self.y_spacing = abs((self.y2 - self.y1) / round(self.num_y))
+        
         self._update()
         return self
 
