@@ -6,7 +6,9 @@ import pathlib
 import warnings
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from scipy.spatial import Delaunay
+from scipy.interpolate import RegularGridInterpolator
 from photompy import read_ies_data, write_ies_data, plot_ies, total_optical_power
 from .spectrum import Spectrum
 from .trigonometry import to_cartesian, to_polar, attitude
@@ -88,7 +90,7 @@ class Lamp:
         source, SD=1 => 1x1 grid, SD=2 => 3x3 grid, SD=3 => 5x5 grid. This is
         to ensure that a center point is always present while ensuring evenness
         of grid size.
-    relative_map: arraylike
+    intensity_map: arraylike
         A relative intensity map for non-uniform sources. Must be of the same
         size as the grid generated
     enabled: bool, defualt=True
@@ -119,7 +121,7 @@ class Lamp:
         depth=None,
         units=None,
         source_density=None,
-        relative_map=None,
+        intensity_map=None,
         enabled=None,
     ):
 
@@ -127,11 +129,11 @@ class Lamp:
         TODO:
             probably __init__ needs to change initialization strategy. some kind of from_file?
             unfortunately this object is initialized with two files...maybe that is an issue
-
+            possibly need to make all the surface emission properties into a separate class
         """
 
-        self.lamp_id = lamp_id
-        self.name = lamp_id if name is None else name
+        self.lamp_id = str(lamp_id)
+        self.name = lamp_id if name is None else str(name)
         self.enabled = True if enabled is None else enabled
         # position
         self.x = 0.0 if x is None else x
@@ -143,29 +145,10 @@ class Lamp:
         self.aimx = self.x if aimx is None else aimx
         self.aimy = self.y if aimy is None else aimy
         self.aimz = self.z - 1.0 if aimz is None else aimz
+        self.aim_point = np.array([self.aimx, self.aimy, self.aimz])
 
-        # units of values, since not directly specified in .ies file and they can vary for GUV fixtures
-        if intensity_units is not None:
-            msg = f"Intensity unit {intensity_units} not recognized. Using default value `mW/Sr`"
-            if isinstance(intensity_units, int):
-                if intensity_units == 0:
-                    self.intensity_units = "mW/sr"
-                elif intensity_units == 1:
-                    self.intensity_units = "uW/cm2"
-                else:
-                    warnings.warn(msg, stacklevel=3)
-                    self.intensity_units = "mW/sr"
-            elif isinstance(intensity_units, str):
-                if intensity_units.lower() in ["mw/sr", "uw/cm2", "uw/cm²"]:
-                    self.intensity_units = intensity_units
-                else:
-                    warnings.warn(msg, stacklevel=3)
-                    self.intensity_units = "mW/sr"
-            else:
-                msg = f"Datatype {type(intensity_units)} for intensity units not recognized. Using default value `mW/Sr`"
-                self.intensity_units = "mW/sr"
-        else:
-            self.intensity_units = "mW/sr"
+        # mW/sr or uW/cm2 typically; not directly specified in .ies file and they can vary for GUV fixtures
+        self.intensity_units = self._set_intensity_units(intensity_units)
 
         # source type & wavelength
         self.guv_type = guv_type
@@ -174,7 +157,7 @@ class Lamp:
                 self.wavelength = 222
             elif any([key in guv_type.lower() for key in LPHG_KEYS]):
                 self.wavelength = 254
-            else:
+            else:  # set from wavelength if guv_type not recognized
                 self.wavelength = wavelength
         else:
             self.wavelength = wavelength
@@ -188,15 +171,18 @@ class Lamp:
         self.length = length
         self.depth = depth
         self.units = units
+        self.surface_points = None
+        self.num_points_width = None
+        self.num_points_length = None
+        self.photometric_distance = None
         self.source_density = 1 if source_density is None else source_density
-        self.relative_map = self._load_relmap(relative_map)
+        self.intensity_map = self._load_intensity_map(intensity_map)
+        self._update_surface_params()
 
-        self.grid_points = None  # populated from ies data
-        self.photometric_distance = None  # ditto
+        # update heading and bank
+        self.aim(self.aimx, self.aimy, self.aimz)
 
-        # aim
-        self.aim(self.aimx, self.aimy, self.aimz)  # updates heading and bank
-
+        # spectra
         self.spectra_source = spectra_source
         self.spectra = self._load_spectra(spectra_source)
 
@@ -210,7 +196,6 @@ class Lamp:
         self.thetas = None
         self.phis = None
         self.values = None
-
 
         # filename is just a label, filedata controls everything.
         if self.filedata is not None:
@@ -252,7 +237,7 @@ class Lamp:
         depth=None,
         units=None,
         source_density=None,
-        relative_map=None,
+        intensity_map=None,
         enabled=None,
     ):
 
@@ -288,7 +273,7 @@ class Lamp:
             depth=depth,
             units=units,
             source_density=source_density,
-            relative_map=relative_map,
+            intensity_map=intensity_map,
             enabled=enabled,
         )
 
@@ -306,7 +291,7 @@ class Lamp:
         # update position
         self.position = position
         self.x, self.y, self.z = self.position
-        self.grid_points = self._generate_source_points()
+        self.surface_points = self._generate_surface_points()
         return self
 
     def rotate(self, angle):
@@ -325,7 +310,7 @@ class Lamp:
         self.heading = np.degrees(np.arctan2(yr, xr))
         self.bank = np.degrees(np.arctan2(np.sqrt(xr ** 2 + yr ** 2), zr) - np.pi)
         # update grid points
-        self.grid_points = self._generate_source_points()
+        self.surface_points = self._generate_surface_points()
         return self
 
     def transform(self, coords, scale=1):
@@ -366,17 +351,17 @@ class Lamp:
     def set_source_density(self, source_density):
         """change source discretization"""
         self.source_density = source_density
-        self.grid_points = self._generate_source_points()
+        self._update_surface_params()
 
     def set_source_width(self, width):
         """change x-axis extent of lamp emissive surface"""
         self.width = width
-        self.grid_points = self._generate_source_points()
+        self._update_surface_params()
 
     def set_source_length(self, length):
         """change y-axis extent of lamp emissive surface"""
         self.length = length
-        self.grid_points = self._generate_source_points()
+        self._update_surface_params()
 
     def get_total_power(self):
         """return the lamp's total optical power"""
@@ -439,9 +424,9 @@ class Lamp:
         """external method for loading spectra after lamp object has been instantiated"""
         self.spectra = self._load_spectra(spectra_source)
 
-    def load_relmap(self, relative_map):
+    def load_intensity_map(self, intensity_map):
         """external method for loading relative intensity map after lamp object has been instantiated"""
-        self.rel_map = self._load_relmap(relative_map)
+        self.intensity_map = self._load_intensity_map(intensity_map)
 
     def save_ies(self, fname=None, original=False):
         """
@@ -487,12 +472,13 @@ class Lamp:
         data["depth"] = self.depth
         data["units"] = self.units
         data["source_density"] = self.source_density
-        data["relative_map"] = list(self.relative_map) if self.relative_map is not None else None
+        data["intensity_map"] = (
+            list(self.intensity_map) if self.intensity_map is not None else None
+        )
 
         data["filename"] = self.filename
         filedata = self.save_ies()
         data["filedata"] = filedata.decode() if filedata is not None else None
-        
 
         if self.spectra is not None:
             spectra_dict = self.spectra.to_dict(as_string=True)
@@ -512,7 +498,7 @@ class Lamp:
         fig, ax = plot_ies(fdata=self.lampdict["full_vals"], title=title)
         return fig, ax
 
-    def plot_grid_points(self, fig=None, ax=None, title="", figsize=(6, 4)):
+    def plot_surface_points(self, fig=None, ax=None, title="", figsize=(6, 4)):
         """plot the discretization of the emissive surface"""
 
         if fig is None:
@@ -524,7 +510,9 @@ class Lamp:
             if ax is None:
                 ax = fig.axes[0]
 
-        ax.scatter(*self.grid_points.T[0:2])
+        vv, uu = self._generate_raw_points()
+        points = np.array([vv.flatten(), uu.flatten()[::-1]])
+        ax.scatter(*points)
         if self.width:
             ax.set_xlim(-self.width / 2, self.width / 2)
         if self.length:
@@ -535,8 +523,11 @@ class Lamp:
         ax.set_aspect("equal", adjustable="box")
         return fig, ax
 
-    def plot_relative_map(self, fig=None, ax=None, title="", figsize=(6, 4)):
+    def plot_intensity_map(
+        self, fig=None, ax=None, title="", figsize=(6, 4), show_cbar=True
+    ):
         """plot the relative intensity map of the emissive surface"""
+
         if fig is None:
             if ax is None:
                 fig, ax = plt.subplots()
@@ -553,13 +544,43 @@ class Lamp:
                 -self.length / 2,
                 self.length / 2,
             ]
-            img = ax.imshow(self.relative_map, extent=extent)
+            img = ax.imshow(self.intensity_map, extent=extent)
         else:
-            img = ax.imshow(self.relative_map)
-        cbar = fig.colorbar(img, pad=0.03)
-        cbar.set_label("Surface relative intensity", loc="center")
+            img = ax.imshow(self.intensity_map)
+        if show_cbar:
+            cbar = fig.colorbar(img, pad=0.03)
+            cbar.set_label("Surface relative intensity", loc="center")
 
         return fig, ax
+
+    def plot_surface(self, fig_width=10):
+        """
+        convenience pltoting function that incorporates both the grid points
+        and relative map plotting functions
+        """
+        width = self.width if self.width is not None else 1
+        length = self.length if self.length is not None else 1
+
+        fig_length = fig_width / (width / length * 2)
+        fig, ax = plt.subplots(1, 2, figsize=(fig_width, min(max(fig_length, 2), 50)))
+
+        self.plot_surface_points(fig=fig, ax=ax[0], title="Source grid points")
+        self.plot_intensity_map(
+            fig=fig, ax=ax[1], show_cbar=False, title="Relative intensity map"
+        )
+
+        axins = inset_axes(
+            ax[1],
+            width="5%",
+            height="100%",
+            loc="lower left",
+            bbox_to_anchor=(1.1, 0.0, 1, 1),
+            bbox_transform=ax[1].transAxes,
+            borderpad=0,
+        )
+
+        fig.colorbar(ax[1].get_images()[0], cax=axins)
+        return fig
 
     def plot_web(
         self,
@@ -657,7 +678,7 @@ class Lamp:
         """
         Loads lamp data from an IES file and initializes photometric properties.
         """
-        
+
         self.lampdict = read_ies_data(self.filedata)
         self.thetas = self.lampdict["full_vals"]["thetas"]
         self.phis = self.lampdict["full_vals"]["phis"]
@@ -681,16 +702,7 @@ class Lamp:
             self.length = self.lampdict["length"]
             self.depth = self.lampdict["height"]
 
-        self.photometric_distance = max(self.width, self.length) * 10
-        self.grid_points = self._generate_source_points()
-
-        if self.relative_map is None:
-            self.relative_map = np.ones(len(self.grid_points))
-        if len(self.relative_map) != len(self.grid_points):
-            self.relative_map = np.ones(len(self.grid_points))
-
-        # self.input_watts = self.lampdict["input_watts"]
-        # self.keywords = self.lampdict["keywords"]
+        self._update_surface_params()
 
     def get_lampdict(self):
         """
@@ -725,6 +737,31 @@ class Lamp:
         xp, yp, zp = to_cartesian(tflat, pflat, self.values.flatten())
         self.photometric_coords = np.array([xp, yp, zp]).T
 
+    def _set_intensity_units(self, arg):
+        """determine the units of the radiant intensity"""
+        if arg is not None:
+            msg = f"Intensity unit {arg} not recognized. Using default value `mW/sr`"
+            if isinstance(arg, int):
+                if arg == 0:
+                    intensity_units = "mW/sr"
+                elif arg == 1:
+                    intensity_units = "uW/cm2"
+                else:
+                    warnings.warn(msg, stacklevel=3)
+                    intensity_units = "mW/sr"
+            elif isinstance(intensity_units, str):
+                if arg.lower() in ["mw/sr", "uw/cm2", "uw/cm²"]:
+                    intensity_units = arg
+                else:
+                    warnings.warn(msg, stacklevel=3)
+                    intensity_units = "mW/sr"
+            else:
+                msg = f"Datatype {type(arg)} for intensity units not recognized. Using default value `mW/Sr`"
+                intensity_units = "mW/sr"
+        else:
+            intensity_units = "mW/sr"
+        return intensity_units
+
     def _load_spectra(self, spectra_source):
         """initialize a Spectrum object from the source"""
         if isinstance(spectra_source, dict):
@@ -741,8 +778,8 @@ class Lamp:
             warnings.warn(msg, stacklevel=3)
         return spectra
 
-    def _load_relmap(self, arg):
-        """check filetype and return correct relative_map as array"""
+    def _load_intensity_map(self, arg):
+        """check filetype and return correct intensity_map as array"""
         if arg is None:
             rel_map = None
         elif isinstance(arg, (str, pathlib.Path)):
@@ -750,15 +787,15 @@ class Lamp:
             if Path(arg).is_file():
                 rel_map = np.genfromtxt(Path(arg), delimiter=",")
             else:
-                msg = f"File {arg} not found. relative_map will not be used."
+                msg = f"File {arg} not found. intensity_map will not be used."
                 warnings.warn(msg, stacklevel=3)
                 rel_map = None
         elif isinstance(arg, bytes):
             rel_map = np.frombuffer(arg)
-        elif isinstance(arg, (list, np.array)):
+        elif isinstance(arg, (list, np.ndarray)):
             rel_map = np.array(arg)
         else:
-            msg = f"Argument type {type(arg)} for argument relative_map. relative_map will not be used."
+            msg = f"Argument type {type(arg)} for argument intensity_map. intensity_map will not be used."
             warnings.warn(msg, stacklevel=3)
             rel_map = None
         return rel_map
@@ -789,10 +826,22 @@ class Lamp:
             distance = min([d for d in distances])
         self.aim_point = self.position + np.array([dx, dy, dz]) * distance
         self.aimx, self.aimy, self.aimz = self.aim_point
-        self.grid_points = self._generate_source_points()
+        self._update_surface_params()
 
-    def _generate_raw_points(self):
-        """generate grid points, prior to transforming them"""
+    def _update_surface_params(self):
+        """
+        update all emissive surface parameters--surface grid points,
+        relative intensity map, and photometric distance
+        """
+        self.surface_points = self._generate_surface_points()
+        self.intensity_map = self._generate_intensity_map()
+        if all([self.width, self.length, self.units]):
+            self.photometric_distance = max(self.width, self.length) * 10
+        else:
+            self.photometric_distance = None
+
+    def _get_num_points(self):
+        """calculate the number of u and v points"""
         num_points = self.source_density + self.source_density - 1
         num_points_v = max(
             num_points, num_points * int(round(self.width / self.length))
@@ -804,6 +853,11 @@ class Lamp:
             num_points_u += 1
         if num_points_v % 2 == 0:
             num_points_v += 1
+
+        return num_points_u, num_points_v
+
+    def _generate_raw_points(self, num_points_u, num_points_v):
+        """generate the points on the surface of the lamp, prior to transforming them"""
 
         # spacing = min(self.length, self.width) / num_points
         spacing_v = self.width / num_points_v
@@ -824,9 +878,9 @@ class Lamp:
             stopu = self.length / 2 - spacing_u / 2
             u_points = np.linspace(startu, stopu, num_points_u)
 
-        return np.meshgrid(v_points, u_points)
+        return u_points, v_points
 
-    def _generate_source_points(self):
+    def _generate_surface_points(self):
         """
         generate the points with which the calculations should be performed.
         If the source is approximately square and source_density is 1, only
@@ -839,7 +893,11 @@ class Lamp:
 
         if all([self.width, self.length, self.source_density]):
 
-            vv, uu = self._generate_raw_points()
+            num_points_u, num_points_v = self._get_num_points()
+            # points pre-transformation
+            u_points, v_points = self._generate_raw_points(num_points_u, num_points_v)
+
+            vv, uu = np.meshgrid(v_points, u_points)
             # get the normal plane to the aim point
             # Normalize the direction vector (normal vector)
             direction = self.position - self.aim_point
@@ -857,21 +915,52 @@ class Lamp:
             v = np.cross(normal, u)
             v = v / np.linalg.norm(v)  # ensure it's unit length
             # Calculate the 3D coordinates of the points, with an overall shift by the original point
-            grid_points = (
+            surface_points = (
                 self.position + np.outer(uu.flatten(), u) + np.outer(vv.flatten(), v)
             )
             # reverse so that the 'upper left' point is first
-            grid_points = grid_points[::-1]
-
-            # self.corners = np.array([
-            # self.position + self.width/2*v + self.length/2*u,
-            # self.position + self.width/2*v - self.length/2*u,
-            # self.position - self.width/2*v + self.length/2*u,
-            # self.position - self.width/2*v - self.length/2*u
-            # ])
+            surface_points = surface_points[::-1]
+            self.num_points_width = num_points_v
+            self.num_points_length = num_points_u
 
         else:
-            grid_points = self.position
-            # self.corners = np.array([self.position]*4)
+            surface_points = self.position
+            self.num_points_length = 1
+            self.num_points_width = 1
 
-        return grid_points
+        return surface_points
+
+    def _generate_intensity_map(self):
+        """if the relative map is None or ones, generate"""
+
+        if self.intensity_map is None:
+            # if no relative intensity map is provided
+            intensity_map = np.ones((self.num_points_length, self.num_points_width))
+        elif self.intensity_map.shape == (
+            self.num_points_length,
+            self.num_points_width,
+        ):
+            # intensity map does not need updating
+            intensity_map = self.intensity_map
+        else:
+            # reshape the provided relative map to the current coordinates
+            # make interpolator based on current intensity map
+            num_points_u, num_points_v = self.intensity_map.shape
+            x_orig, y_orig = self._generate_raw_points(num_points_u, num_points_v)
+            interpolator = RegularGridInterpolator(
+                (x_orig, y_orig),
+                self.intensity_map,
+                bounds_error=False,
+                fill_value=None,
+            )
+
+            x_new, y_new = self._generate_raw_points(
+                self.num_points_length, self.num_points_width
+            )
+            # x_new, y_new = np.unique(self.surface_points.T[0]), np.unique(self.surface_points.T[1])
+            x_new_grid, y_new_grid = np.meshgrid(x_new, y_new)
+            # Create points for interpolation and extrapolation
+            points_new = np.array([x_new_grid.ravel(), y_new_grid.ravel()]).T
+            intensity_map = interpolator(points_new).reshape(len(x_new), len(y_new)).T
+
+        return intensity_map
