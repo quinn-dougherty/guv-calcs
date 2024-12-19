@@ -208,7 +208,7 @@ class CalcZone(object):
         values[near_idx] = 0
         # redo calculation in a loop
         num_points = len(lamp.grid_points)
-        for point, val in zip(lamp.grid_points, lamp.relative_map):
+        for point, val in zip(lamp.grid_points, lamp.intensity_map):
             rel_coords = self.coords - point
             Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
             Theta_n, Phi_n, R_n = Theta[near_idx], Phi[near_idx], R[near_idx]
@@ -477,11 +477,11 @@ class CalcVol(CalcZone):
         if self.num_z == 0:
             warnings.warn("Number of z points must be at least 1")
             self.num_z += 1
-            
+
         self.x_spacing = abs((self.x2 - self.x1) / round(self.num_x))
         self.y_spacing = abs((self.y2 - self.y1) / round(self.num_y))
         self.z_spacing = abs((self.z2 - self.z1) / round(self.num_z))
-        
+
         self._update()
         return self
 
@@ -685,10 +685,10 @@ class CalcPlane(CalcZone):
         if self.num_y == 0:
             warnings.warn("Number of y points must be at least 1")
             self.num_y += 1
-        
+
         self.x_spacing = abs((self.x2 - self.x1) / round(self.num_x))
         self.y_spacing = abs((self.y2 - self.y1) / round(self.num_y))
-        
+
         self._update()
         return self
 

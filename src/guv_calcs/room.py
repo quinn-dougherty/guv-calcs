@@ -240,7 +240,7 @@ class Room:
                 lamp.width,  # ""
                 lamp.units,  # ""
                 lamp.source_density,  # ""
-                lamp.relative_map,  # ""
+                lamp.intensity_map,  # ""
                 lamp.enabled,  # can be optimized
             ]
 

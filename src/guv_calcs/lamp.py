@@ -176,7 +176,8 @@ class Lamp:
         self.num_points_length = None
         self.photometric_distance = None
         self.source_density = 1 if source_density is None else source_density
-        self.intensity_map = self._load_intensity_map(intensity_map)
+        self.intensity_map_orig = self._load_intensity_map(intensity_map)
+        self.intensity_map = self.intensity_map_orig
         self._update_surface_params()
 
         # update heading and bank
@@ -426,7 +427,9 @@ class Lamp:
 
     def load_intensity_map(self, intensity_map):
         """external method for loading relative intensity map after lamp object has been instantiated"""
-        self.intensity_map = self._load_intensity_map(intensity_map)
+        self.intensity_map_orig = self._load_intensity_map(intensity_map)
+        self.intensity_map = self.intensity_map_orig
+        self._update_surface_params()
 
     def save_ies(self, fname=None, original=False):
         """
@@ -510,7 +513,8 @@ class Lamp:
             if ax is None:
                 ax = fig.axes[0]
 
-        vv, uu = self._generate_raw_points()
+        u_points, v_points = self._generate_raw_points(self.num_points_length, self.num_points_width)
+        vv, uu = np.meshgrid(v_points, u_points)
         points = np.array([vv.flatten(), uu.flatten()[::-1]])
         ax.scatter(*points)
         if self.width:
@@ -527,7 +531,6 @@ class Lamp:
         self, fig=None, ax=None, title="", figsize=(6, 4), show_cbar=True
     ):
         """plot the relative intensity map of the emissive surface"""
-
         if fig is None:
             if ax is None:
                 fig, ax = plt.subplots()
@@ -781,24 +784,24 @@ class Lamp:
     def _load_intensity_map(self, arg):
         """check filetype and return correct intensity_map as array"""
         if arg is None:
-            rel_map = None
+            intensity_map = None
         elif isinstance(arg, (str, pathlib.Path)):
             # check if this is a file
             if Path(arg).is_file():
-                rel_map = np.genfromtxt(Path(arg), delimiter=",")
+                intensity_map = np.genfromtxt(Path(arg), delimiter=",")
             else:
                 msg = f"File {arg} not found. intensity_map will not be used."
                 warnings.warn(msg, stacklevel=3)
-                rel_map = None
+                intensity_map = None
         elif isinstance(arg, bytes):
-            rel_map = np.frombuffer(arg)
+            intensity_map = np.genfromtxt(arg.decode('utf-8').splitlines(), delimiter=',')
         elif isinstance(arg, (list, np.ndarray)):
-            rel_map = np.array(arg)
+            intensity_map = np.array(arg)
         else:
             msg = f"Argument type {type(arg)} for argument intensity_map. intensity_map will not be used."
             warnings.warn(msg, stacklevel=3)
-            rel_map = None
-        return rel_map
+            intensity_map = None
+        return intensity_map
 
     def _recalculate_aim_point(self, dimensions=None, distance=None):
         """
@@ -944,12 +947,12 @@ class Lamp:
             intensity_map = self.intensity_map
         else:
             # reshape the provided relative map to the current coordinates
-            # make interpolator based on current intensity map
-            num_points_u, num_points_v = self.intensity_map.shape
+            # make interpolator based on original intensity map
+            num_points_u, num_points_v = self.intensity_map_orig.shape
             x_orig, y_orig = self._generate_raw_points(num_points_u, num_points_v)
             interpolator = RegularGridInterpolator(
                 (x_orig, y_orig),
-                self.intensity_map,
+                self.intensity_map_orig,
                 bounds_error=False,
                 fill_value=None,
             )
@@ -962,5 +965,8 @@ class Lamp:
             # Create points for interpolation and extrapolation
             points_new = np.array([x_new_grid.ravel(), y_new_grid.ravel()]).T
             intensity_map = interpolator(points_new).reshape(len(x_new), len(y_new)).T
+            
+            # normalize
+            intensity_map = intensity_map / intensity_map.mean()
 
         return intensity_map
