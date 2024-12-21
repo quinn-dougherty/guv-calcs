@@ -31,6 +31,12 @@ class CalcZone(object):
     offset: bool, default=True
     fov80: bool, default=False
         apply 80 degree field of view filtering - used for calculating eye limits
+        Legacy property. To be removed.
+    fov_vert: float
+        vertical field of view filtering. For calculating eye limits
+    fov_horiz: float
+        horizontal field of view filtering. Useful for not double-counting lamps
+        pointed in opposite direction
     vert: bool, default=False
         calculate vertical irradiance only
     horiz: bool, default=False
@@ -45,7 +51,7 @@ class CalcZone(object):
 
     def __init__(
         self,
-        zone_id,
+        zone_id=None,
         name=None,
         offset=None,
         fov80=None,  # legacy!! just here for backwards compatibility
@@ -57,9 +63,8 @@ class CalcZone(object):
         hours=None,
         enabled=None,
         show_values=None,
-        values=None,
     ):
-        self.zone_id = zone_id
+        self.zone_id = str(zone_id)
         self.name = zone_id if name is None else name
         self.offset = True if offset is None else offset
         if fov80 and fov_vert is None:
@@ -86,6 +91,9 @@ class CalcZone(object):
         self.z1 = None
         self.z2 = None
         self.height = None
+        self.num_x = None
+        self.num_y = None
+        self.num_z = None
         self.x_spacing = None
         self.y_spacing = None
         self.z_spacing = None
@@ -94,7 +102,7 @@ class CalcZone(object):
         self.yp = None
         self.zp = None
         self.coords = None
-        self.values = values
+        self.values = None
 
     def save_zone(self, filename=None):
 
@@ -207,8 +215,8 @@ class CalcZone(object):
         # set current values to zero
         values[near_idx] = 0
         # redo calculation in a loop
-        num_points = len(lamp.grid_points)
-        for point, val in zip(lamp.grid_points, lamp.intensity_map):
+        num_points = len(lamp.surface_points)
+        for point, val in zip(lamp.surface_points, lamp.intensity_map.reshape(-1)):
             rel_coords = self.coords - point
             Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
             Theta_n, Phi_n, R_n = Theta[near_idx], Phi[near_idx], R[near_idx]
@@ -257,7 +265,7 @@ class CalcZone(object):
         Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
         interpdict = lamp.lampdict["interp_vals"]
         values = get_intensity(Theta, Phi, interpdict) / R ** 2
-        if lamp.source_density > 0:
+        if lamp.source_density > 0 and lamp.photometric_distance:
             values = self._calculate_nearfield(lamp, R, values)
 
         Theta0, Phi0, R0 = to_polar(*rel_coords.T)
@@ -376,7 +384,6 @@ class CalcVol(CalcZone):
             hours=hours,
             enabled=enabled,
             show_values=show_values,
-            values=values,
         )
         self.calctype = "Volume"
         self.x1 = 0 if x1 is None else x1
@@ -587,7 +594,6 @@ class CalcPlane(CalcZone):
         hours=None,
         enabled=None,
         show_values=None,
-        values=None,
     ):
 
         super().__init__(
@@ -603,7 +609,6 @@ class CalcPlane(CalcZone):
             hours=hours,
             enabled=enabled,
             show_values=show_values,
-            values=values,
         )
         self.calctype = "Plane"
         self.height = 1.9 if height is None else height

@@ -475,9 +475,11 @@ class Lamp:
         data["depth"] = self.depth
         data["units"] = self.units
         data["source_density"] = self.source_density
-        data["intensity_map"] = (
-            list(self.intensity_map) if self.intensity_map is not None else None
-        )
+
+        if self.intensity_map_orig is None:
+            data["intensity_map"] = None
+        else:
+            data["intensity_map"] = self.intensity_map_orig.tolist()
 
         data["filename"] = self.filename
         filedata = self.save_ies()
@@ -513,7 +515,9 @@ class Lamp:
             if ax is None:
                 ax = fig.axes[0]
 
-        u_points, v_points = self._generate_raw_points(self.num_points_length, self.num_points_width)
+        u_points, v_points = self._generate_raw_points(
+            self.num_points_length, self.num_points_width
+        )
         vv, uu = np.meshgrid(v_points, u_points)
         points = np.array([vv.flatten(), uu.flatten()[::-1]])
         ax.scatter(*points)
@@ -553,7 +557,7 @@ class Lamp:
         if show_cbar:
             cbar = fig.colorbar(img, pad=0.03)
             cbar.set_label("Surface relative intensity", loc="center")
-
+        ax.set_title(title)
         return fig, ax
 
     def plot_surface(self, fig_width=10):
@@ -561,13 +565,13 @@ class Lamp:
         convenience pltoting function that incorporates both the grid points
         and relative map plotting functions
         """
-        width = self.width if self.width is not None else 1
-        length = self.length if self.length is not None else 1
+        width = self.width if self.width else 1
+        length = self.length if self.length else 1
 
         fig_length = fig_width / (width / length * 2)
         fig, ax = plt.subplots(1, 2, figsize=(fig_width, min(max(fig_length, 2), 50)))
 
-        self.plot_surface_points(fig=fig, ax=ax[0], title="Source grid points")
+        self.plot_surface_points(fig=fig, ax=ax[0], title="Surface grid points")
         self.plot_intensity_map(
             fig=fig, ax=ax[1], show_cbar=False, title="Relative intensity map"
         )
@@ -752,7 +756,7 @@ class Lamp:
                 else:
                     warnings.warn(msg, stacklevel=3)
                     intensity_units = "mW/sr"
-            elif isinstance(intensity_units, str):
+            elif isinstance(arg, str):
                 if arg.lower() in ["mw/sr", "uw/cm2", "uw/cm²"]:
                     intensity_units = arg
                 else:
@@ -794,7 +798,9 @@ class Lamp:
                 warnings.warn(msg, stacklevel=3)
                 intensity_map = None
         elif isinstance(arg, bytes):
-            intensity_map = np.genfromtxt(arg.decode('utf-8').splitlines(), delimiter=',')
+            intensity_map = np.genfromtxt(
+                arg.decode("utf-8").splitlines(), delimiter=","
+            )
         elif isinstance(arg, (list, np.ndarray)):
             intensity_map = np.array(arg)
         else:
@@ -935,10 +941,12 @@ class Lamp:
 
     def _generate_intensity_map(self):
         """if the relative map is None or ones, generate"""
-
         if self.intensity_map is None:
             # if no relative intensity map is provided
             intensity_map = np.ones((self.num_points_length, self.num_points_width))
+        elif self.num_points_length == 1 and self.num_points_width == 1:
+            # only a single grid point
+            intensity_map = np.ones((1, 1))
         elif self.intensity_map.shape == (
             self.num_points_length,
             self.num_points_width,
@@ -946,27 +954,33 @@ class Lamp:
             # intensity map does not need updating
             intensity_map = self.intensity_map
         else:
-            # reshape the provided relative map to the current coordinates
-            # make interpolator based on original intensity map
-            num_points_u, num_points_v = self.intensity_map_orig.shape
-            x_orig, y_orig = self._generate_raw_points(num_points_u, num_points_v)
-            interpolator = RegularGridInterpolator(
-                (x_orig, y_orig),
-                self.intensity_map_orig,
-                bounds_error=False,
-                fill_value=None,
-            )
+            if self.intensity_map_orig is None:
+                intensity_map = np.ones((self.num_points_length, self.num_points_width))
 
-            x_new, y_new = self._generate_raw_points(
-                self.num_points_length, self.num_points_width
-            )
-            # x_new, y_new = np.unique(self.surface_points.T[0]), np.unique(self.surface_points.T[1])
-            x_new_grid, y_new_grid = np.meshgrid(x_new, y_new)
-            # Create points for interpolation and extrapolation
-            points_new = np.array([x_new_grid.ravel(), y_new_grid.ravel()]).T
-            intensity_map = interpolator(points_new).reshape(len(x_new), len(y_new)).T
-            
-            # normalize
-            intensity_map = intensity_map / intensity_map.mean()
+            else:
+                # reshape the provided relative map to the current coordinates
+                # make interpolator based on original intensity map
+                num_points_u, num_points_v = self.intensity_map_orig.shape
+                x_orig, y_orig = self._generate_raw_points(num_points_u, num_points_v)
+                interpolator = RegularGridInterpolator(
+                    (x_orig, y_orig),
+                    self.intensity_map_orig,
+                    bounds_error=False,
+                    fill_value=None,
+                )
+
+                x_new, y_new = self._generate_raw_points(
+                    self.num_points_length, self.num_points_width
+                )
+                # x_new, y_new = np.unique(self.surface_points.T[0]), np.unique(self.surface_points.T[1])
+                x_new_grid, y_new_grid = np.meshgrid(x_new, y_new)
+                # Create points for interpolation and extrapolation
+                points_new = np.array([x_new_grid.ravel(), y_new_grid.ravel()]).T
+                intensity_map = (
+                    interpolator(points_new).reshape(len(x_new), len(y_new)).T
+                )
+
+                # normalize
+                intensity_map = intensity_map / intensity_map.mean()
 
         return intensity_map

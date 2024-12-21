@@ -51,7 +51,7 @@ class Room:
         self.set_dimensions()
 
         self.standard = (
-            "ANSI IES RP 27.1-22 (America)" if standard is None else standard
+            "ANSI IES RP 27.1-22 (ACGIH Limits)" if standard is None else standard
         )
 
         self.reflectance_ceiling = (
