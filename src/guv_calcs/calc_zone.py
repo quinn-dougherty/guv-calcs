@@ -211,12 +211,14 @@ class CalcZone(object):
         calculate the values within the photometric distance
         over a discretized source
         """
-        near_idx = np.where(R < lamp.photometric_distance)
+        near_idx = np.where(R < lamp.surface.photometric_distance)
         # set current values to zero
         values[near_idx] = 0
         # redo calculation in a loop
-        num_points = len(lamp.surface_points)
-        for point, val in zip(lamp.surface_points, lamp.intensity_map.reshape(-1)):
+        num_points = len(lamp.surface.surface_points)
+        for point, val in zip(
+            lamp.surface.surface_points, lamp.surface.intensity_map.reshape(-1)
+        ):
             rel_coords = self.coords - point
             Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
             Theta_n, Phi_n, R_n = Theta[near_idx], Phi[near_idx], R[near_idx]
@@ -265,7 +267,7 @@ class CalcZone(object):
         Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
         interpdict = lamp.lampdict["interp_vals"]
         values = get_intensity(Theta, Phi, interpdict) / R ** 2
-        if lamp.source_density > 0 and lamp.photometric_distance:
+        if lamp.surface.source_density > 0 and lamp.surface.photometric_distance:
             values = self._calculate_nearfield(lamp, R, values)
 
         Theta0, Phi0, R0 = to_polar(*rel_coords.T)
