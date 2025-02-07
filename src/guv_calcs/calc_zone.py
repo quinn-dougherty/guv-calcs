@@ -580,6 +580,7 @@ class CalcPlane(CalcZone):
         y1=None,
         y2=None,
         height=None,
+        surface='floor',
         num_x=None,
         num_y=None,
         x_spacing=None,
@@ -612,6 +613,7 @@ class CalcPlane(CalcZone):
         )
         self.calctype = "Plane"
         self.height = 1.9 if height is None else height
+        self.surface = surface
         self.x1 = 0 if x1 is None else x1
         self.x2 = 6 if x2 is None else x2
         self.y1 = 0 if y1 is None else y1
@@ -720,13 +722,24 @@ class CalcPlane(CalcZone):
 
         self.points = [xpoints, ypoints]
         self.xp, self.yp = self.points
-
         X, Y = [grid.reshape(-1) for grid in np.meshgrid(*self.points, indexing="ij")]
-        xy_coords = np.array([np.array((x0, y0)) for x0, y0 in zip(X, Y)])
-        zs = np.ones(xy_coords.shape[0]) * self.height
+        
+        if self.surface in ['floor', 'ceiling']:
+            Z = np.full(X.shape, self.height)
+        elif self.surface in ['east','west']:    
+            Z = X
+            X = np.full(X.shape, self.height)
+        elif self.surface in ['south','north']:
+            Z = Y
+            Y = np.full(Y.shape, self.height)
 
-        self.coords = np.stack([xy_coords.T[0], xy_coords.T[1], zs]).T
-        self.coords = np.unique(self.coords, axis=0)
+        self.coords = np.stack([X.flatten(), Y.flatten(), Z.flatten()], axis=-1)
+
+        # xy_coords = np.array([np.array((x0, y0)) for x0, y0 in zip(X, Y)])
+        # zs = np.ones(xy_coords.shape[0]) * self.height
+
+        # self.coords = np.stack([xy_coords.T[0], xy_coords.T[1], zs]).T
+        # self.coords = np.unique(self.coords, axis=0)
 
         self.num_points = np.array([len(self.xp), len(self.yp)])
 
