@@ -276,7 +276,7 @@ class CalcZone(object):
         if self.vert:
             values *= np.sin(np.radians(Theta0))
         if self.horiz:
-            values *= np.cos(np.radians(Theta0))
+            values *= abs(np.cos(np.radians(Theta0)))
 
         return values
 
