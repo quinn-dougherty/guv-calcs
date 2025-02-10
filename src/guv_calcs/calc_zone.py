@@ -257,7 +257,7 @@ class CalcZone(object):
 
         return np.max(value_sums, axis=1)  # Shape (N,)
 
-    def _calculate_single_lamp(self, lamp):
+    def _calculate_single_lamp(self, lamp, ref_manager=None):
         """
         Calculate the zone values for a single lamp
         """
@@ -278,9 +278,13 @@ class CalcZone(object):
         if self.horiz:
             values *= abs(np.cos(np.radians(Theta0)))
 
+        # calculate reflectance
+        if ref_manager is not None:
+            values += ref_manager.calculate_reflectance(self)
+
         return values
 
-    def calculate_values(self, lamps: dict):
+    def calculate_values(self, lamps, ref_manager=None):
         """
         Calculate and return irradiance values at all coordinate points within the zone.
         """
@@ -293,7 +297,8 @@ class CalcZone(object):
         lamp_values = {}
         for lamp_id, lamp in valid_lamps.items():
             # determine lamp placement + calculate relative coordinates
-            values = self._calculate_single_lamp(lamp)
+            values = self._calculate_single_lamp(lamp, ref_manager)
+
             if lamp.intensity_units.lower() == "mw/sr":
                 values = values / 10  # convert from mW/Sr to uW/cm2
             if np.isnan(values.any()):  # mask any nans near light source
@@ -408,7 +413,7 @@ class CalcVol(CalcZone):
         else:
             self.x_spacing = default_x
             if x_spacing is not None:
-                msg = "Passed x_spacing value will be ignored, num_x used instead"
+                msg = f"Passed x_spacing value will be ignored for calc zone {self.zone_id}, num_x used instead"
                 warnings.warn(msg, stacklevel=3)
 
         if num_y is None:
@@ -417,7 +422,7 @@ class CalcVol(CalcZone):
         else:
             self.y_spacing = default_y
             if y_spacing is not None:
-                msg = "Passed y_spacing value will be ignored, num_y used instead"
+                msg = f"Passed y_spacing value will be ignored for calc zone {self.zone_id}, num_y used instead"
                 warnings.warn(msg, stacklevel=3)
 
         if num_z is None:
@@ -426,7 +431,7 @@ class CalcVol(CalcZone):
         else:
             self.z_spacing = default_z
             if z_spacing is not None:
-                msg = "Passed z_spacing value will be ignored, num_z used instead"
+                msg = f"Passed z_spacing value will be ignored for calc zone {self.zone_id}, num_z used instead"
                 warnings.warn(msg, stacklevel=3)
 
         self._update()
@@ -580,7 +585,7 @@ class CalcPlane(CalcZone):
         y1=None,
         y2=None,
         height=None,
-        surface='floor',
+        ref_surface="xy",
         num_x=None,
         num_y=None,
         x_spacing=None,
@@ -613,11 +618,18 @@ class CalcPlane(CalcZone):
         )
         self.calctype = "Plane"
         self.height = 1.9 if height is None else height
-        self.surface = surface
+
         self.x1 = 0 if x1 is None else x1
         self.x2 = 6 if x2 is None else x2
         self.y1 = 0 if y1 is None else y1
         self.y2 = 4 if y2 is None else y2
+
+        if not isinstance(ref_surface, str):
+            raise TypeError("ref_surface must be a string in [`xy`,`xz`,`yz`]")
+        if ref_surface.lower() not in ["xy", "xz", "yz"]:
+            raise ValueError("ref_surface must be a string in [`xy`,`xz`,`yz`]")
+
+        self.ref_surface = "xy" if ref_surface is None else ref_surface.lower()
 
         self.num_x = 30 if num_x is None else abs(num_x)
         self.num_y = 30 if num_y is None else abs(num_y)
@@ -632,7 +644,7 @@ class CalcPlane(CalcZone):
         else:
             self.x_spacing = default_x
             if x_spacing is not None:
-                msg = "Passed x_spacing value will be ignored, num_x used instead"
+                msg = f"Passed x_spacing value will be ignored for calc zone {self.zone_id}, num_x used instead"
                 warnings.warn(msg, stacklevel=3)
         if num_y is None:
             self.y_spacing = default_y if y_spacing is None else abs(y_spacing)
@@ -640,7 +652,7 @@ class CalcPlane(CalcZone):
         else:
             self.y_spacing = default_y
             if y_spacing is not None:
-                msg = "Passed y_spacing value will be ignored, num_y used instead"
+                msg = f"Passed y_spacing value will be ignored for calc zone {self.zone_id}, num_y used instead"
                 warnings.warn(msg, stacklevel=3)
         self._update()
 
@@ -723,15 +735,15 @@ class CalcPlane(CalcZone):
         self.points = [xpoints, ypoints]
         self.xp, self.yp = self.points
         X, Y = [grid.reshape(-1) for grid in np.meshgrid(*self.points, indexing="ij")]
-        
-        if self.surface in ['floor', 'ceiling']:
+
+        if self.ref_surface in ["xy"]:
             Z = np.full(X.shape, self.height)
-        elif self.surface in ['east','west']:    
-            Z = X
-            X = np.full(X.shape, self.height)
-        elif self.surface in ['south','north']:
+        elif self.ref_surface in ["xz"]:
             Z = Y
             Y = np.full(Y.shape, self.height)
+        elif self.ref_surface in ["yz"]:
+            Z = X
+            X = np.full(X.shape, self.height)
 
         self.coords = np.stack([X.flatten(), Y.flatten(), Z.flatten()], axis=-1)
 

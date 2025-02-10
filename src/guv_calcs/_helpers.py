@@ -1,7 +1,7 @@
 import json
 import pathlib
-import numpy as np
 from pathlib import Path
+import numpy as np
 import io
 import csv
 
@@ -11,18 +11,30 @@ def parse_loadfile(filedata):
     validate and parse a loadfile
     """
 
-    try:
-        dct = json.loads(filedata)
-    except json.JSONDecodeError:
-        path = Path(filedata)
-        if path.is_file():
-            if path.suffix.lower() != ".guv":
-                raise ValueError("Please provide a valid .guv file")
-            with open(filedata, "r") as json_file:
-                dct = json.load(json_file)
-        else:
-            raise FileNotFoundError("Please provide a valid .guv file")
+    if isinstance(filedata, (str, bytes or bytearray)):
+        try:
+            dct = json.loads(filedata)
+        except json.JSONDecodeError:
+            path = Path(filedata)
+            dct = load_file(path)
+    elif isinstance(filedata, pathlib.PosixPath):
+        dct = load_file(filedata)
 
+    return dct
+
+
+def load_file(path):
+    """load json from a"""
+    if path.is_file():
+        if path.suffix.lower() != ".guv":
+            raise ValueError("Please provide a valid .guv file")
+        with open(path, "r") as json_file:
+            try:
+                dct = json.load(json_file)
+            except json.JSONDecodeError:
+                raise ValueError(".guv file is malformed")
+    else:
+        raise FileNotFoundError("Please provide a valid .guv file")
     return dct
 
 

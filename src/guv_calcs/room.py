@@ -11,6 +11,7 @@ from .calc_zone import CalcZone, CalcPlane, CalcVol
 from ._data import get_version
 from ._helpers import parse_loadfile, check_savefile, fig_to_bytes
 from .room_plotter import RoomPlotter
+from .reflectance import ReflectanceManager
 
 
 class Room:
@@ -29,12 +30,9 @@ class Room:
         z=None,
         units=None,
         standard=None,
-        reflectance_ceiling=None,
-        reflectance_north=None,
-        reflectance_east=None,
-        reflectance_south=None,
-        reflectance_west=None,
-        reflectance_floor=None,
+        reflectances=None,
+        reflectance_x_spacing=None,
+        reflectance_y_spacing=None,
         air_changes=None,
         ozone_decay_constant=None,
     ):
@@ -51,29 +49,32 @@ class Room:
         self.standard = (
             "ANSI IES RP 27.1-22 (ACGIH Limits)" if standard is None else standard
         )
-
-        self.reflectance_ceiling = (
-            0 if reflectance_ceiling is None else reflectance_ceiling
-        )
-        self.reflectance_north = 0 if reflectance_north is None else reflectance_north
-        self.reflectance_east = 0 if reflectance_east is None else reflectance_east
-        self.reflectance_south = 0 if reflectance_south is None else reflectance_south
-        self.reflectance_west = 0 if reflectance_west is None else reflectance_west
-        self.reflectance_floor = 0 if reflectance_floor is None else reflectance_floor
-        self.air_changes = 1.0 if air_changes is None else air_changes
         self.ozone_decay_constant = (
             2.7 if ozone_decay_constant is None else ozone_decay_constant
         )
+        self.air_changes = 1.0 if air_changes is None else air_changes
+
+        self.ref_manager = ReflectanceManager(
+            self,
+            reflectances,
+            reflectance_x_spacing,
+            reflectance_y_spacing,
+        )
+        self.plotter = RoomPlotter(self)
 
         self.lamps = {}
         self.calc_zones = {}
         self.calc_state = {}
 
-        self.plotter = RoomPlotter(self)
+    def set_reflectance(self, R, wall_id=None):
+        self.ref_manager.set_reflectance(R=R, wall_id=wall_id)
+        return self
 
-    def plotly(self, fig=None, select_id=None, title=""):
-        """return a plotly figure of all the room's components"""
-        return self.plotter.plotly(fig=fig, select_id=select_id, title=title)
+    def set_reflectance_spacing(self, x_spacing=None, y_spacing=None, wall_id=None):
+        self.ref_manager.set_spacing(
+            x_spacing=x_spacing, y_spacing=y_spacing, wall_id=wall_id
+        )
+        return self
 
     def to_dict(self):
         data = {}
@@ -81,12 +82,9 @@ class Room:
         data["y"] = self.y
         data["z"] = self.z
         data["units"] = self.units
-        data["reflectance_ceiling"] = self.reflectance_ceiling
-        data["reflectance_north"] = self.reflectance_north
-        data["reflectance_east"] = self.reflectance_east
-        data["reflectance_south"] = self.reflectance_south
-        data["reflectance_west"] = self.reflectance_west
-        data["reflectance_floor"] = self.reflectance_floor
+        data["reflectance"] = self.ref_manager.reflectances
+        data["reflectance_x_spacing"] = self.ref_manager.x_spacings
+        data["reflectance_y_spacing"] = self.ref_manager.y_spacings
         data["standard"] = self.standard
         data["air_changes"] = self.air_changes
         data["ozone_decay_constant"] = self.ozone_decay_constant
@@ -97,7 +95,7 @@ class Room:
         return data
 
     def save(self, fname=None):
-
+        """save all relevant parameters to a json file"""
         savedata = {}
         version = get_version(Path(__file__).parent / "_version.py")
         savedata["guv-calcs_version"] = version
@@ -216,12 +214,12 @@ class Room:
         Save all the features in the room that, if changed, will require re-calculation
         """
         room_state = [
-            self.reflectance_ceiling,
-            self.reflectance_north,
-            self.reflectance_east,
-            self.reflectance_south,
-            self.reflectance_west,
-            self.reflectance_floor,
+            self.ref_manager.reflectances["ceiling"],
+            self.ref_manager.reflectances["north"],
+            self.ref_manager.reflectances["east"],
+            self.ref_manager.reflectances["south"],
+            self.ref_manager.reflectances["west"],
+            self.ref_manager.reflectances["floor"],
             self.units,
         ]
 
@@ -335,9 +333,9 @@ class Room:
                 y2=self.y,
                 z1=0,
                 z2=self.z,
-                num_x=min(int(self.x * 20), 80),
-                num_y=min(int(self.y * 20), 80),
-                num_z=min(int(self.z * 20), 80),
+                num_x=min(int(self.x * 20), 50),
+                num_y=min(int(self.y * 20), 50),
+                num_z=min(int(self.z * 20), 50),
                 show_values=False,
             )
         )
@@ -442,9 +440,12 @@ class Room:
         """
         Triggers the calculation of lighting values in each calculation zone based on the current lamps in the room.
         """
+
+        self.ref_manager.calculate_incidence()
+
         for name, zone in self.calc_zones.items():
             if zone.enabled:
-                zone.calculate_values(lamps=self.lamps)
+                zone.calculate_values(lamps=self.lamps, ref_manager=self.ref_manager)
 
         self.calc_state = self.get_calc_state()
         return self
@@ -454,3 +455,7 @@ class Room:
         self.calc_zones[zone_id].calculate_values(lamps=self.lamps)
         self.calc_state = self.get_calc_state()
         return self
+
+    def plotly(self, fig=None, select_id=None, title=""):
+        """return a plotly figure of all the room's components"""
+        return self.plotter.plotly(fig=fig, select_id=select_id, title=title)
