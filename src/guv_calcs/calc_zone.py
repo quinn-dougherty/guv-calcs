@@ -397,7 +397,8 @@ class CalcVol(CalcZone):
         self.y2 = 4 if y2 is None else y2
         self.z1 = 0 if z1 is None else z1
         self.z2 = 2.7 if z2 is None else z2
-
+        self.dimensions = ((self.x1,self.y1,self.z1),(self.x2,self.y2,self.z2))
+        
         self.num_x = 30 if num_x is None else abs(num_x)
         self.num_y = 30 if num_y is None else abs(num_y)
         self.num_z = 10 if num_z is None else abs(num_z)
@@ -442,7 +443,8 @@ class CalcVol(CalcZone):
         self.y1 = self.y1 if y1 is None else y1
         self.y2 = self.y2 if y2 is None else y2
         self.z1 = self.z1 if z1 is None else z1
-        self.z2 = self.z2 if z2 is None else z2
+        self.z2 = self.z2 if z2 is None else z2        
+        self.dimensions = ((self.x1,self.y1,self.z1),(self.x2,self.y2,self.z2))
         self._update()
 
     def set_spacing(self, x_spacing=None, y_spacing=None, z_spacing=None):
@@ -623,6 +625,7 @@ class CalcPlane(CalcZone):
         self.x2 = 6 if x2 is None else x2
         self.y1 = 0 if y1 is None else y1
         self.y2 = 4 if y2 is None else y2
+        self.dimensions = ((self.x1,self.y1),(self.x2,self.y2))
 
         if not isinstance(ref_surface, str):
             raise TypeError("ref_surface must be a string in [`xy`,`xz`,`yz`]")
@@ -670,6 +673,7 @@ class CalcPlane(CalcZone):
         self.x2 = self.x2 if x2 is None else x2
         self.y1 = self.y1 if y1 is None else y1
         self.y2 = self.y2 if y2 is None else y2
+        self.dimensions = ((self.x1,self.y1),(self.x2,self.y2))
         self._update()
         return self
 

@@ -107,7 +107,13 @@ class ReflectanceManager:
             height = self.room.x
             ref_surface = "yz"
         return x1, x2, y1, y2, height, ref_surface
-
+    
+    def update_dimensions(self):
+        for wall, surface in self.surfaces.items():
+            x1, x2, y1, y2, height, _ = self._get_surface_dimensions(wall)
+            surface.plane.height = height
+            surface.plane.set_dimensions(x1, x2, y1, y2)
+            
     def calculate_incidence(self):
         """calculate the incident irradiances"""
         for wall, R in self.reflectances.items():
@@ -121,11 +127,8 @@ class ReflectanceManager:
             if surface.R > 0:
                 surface.calculate_reflectance(calc_zone)
                 values = surface.zone_values[calc_zone.zone_id]
-                # print('1',values.mean())
                 values = values.reshape(total_values.shape)
-                # print('2',values.mean())
                 total_values += values * surface.R
-                # print('3',total_values.mean())
         return total_values
 
 
@@ -174,11 +177,13 @@ class ReflectiveSurface:
         angles = np.arccos(cos_theta)
 
         grid_element_size = self.plane.x_spacing * self.plane.y_spacing
-
         # no I don't know why this factor of 10 is here but it makes the math work out
-        values = (
-            I_r * 10 / (np.pi) * np.cos(angles) * grid_element_size / distances ** 2
-        )
+        nom = I_r * abs(np.cos(angles)) * grid_element_size * 10
+        denom = np.pi * distances ** 2
+        values = nom/denom
+        # # clean nans
+        # if np.isnan(values.any()):  
+            # values = np.ma.masked_invalid(values)
 
         # apply angle-based differences
         Theta0, Phi0, R0 = to_polar(*differences.reshape(-1, 3).T)

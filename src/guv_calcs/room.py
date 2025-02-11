@@ -44,7 +44,6 @@ class Room:
         self.x = default_dimensions[0] if x is None else x
         self.y = default_dimensions[1] if y is None else y
         self.z = default_dimensions[2] if z is None else z
-        self.set_dimensions()
 
         self.standard = (
             "ANSI IES RP 27.1-22 (ACGIH Limits)" if standard is None else standard
@@ -61,6 +60,8 @@ class Room:
             reflectance_y_spacing,
         )
         self.plotter = RoomPlotter(self)
+        
+        self.set_dimensions()
 
         self.lamps = {}
         self.calc_zones = {}
@@ -214,12 +215,9 @@ class Room:
         Save all the features in the room that, if changed, will require re-calculation
         """
         room_state = [
-            self.ref_manager.reflectances["ceiling"],
-            self.ref_manager.reflectances["north"],
-            self.ref_manager.reflectances["east"],
-            self.ref_manager.reflectances["south"],
-            self.ref_manager.reflectances["west"],
-            self.ref_manager.reflectances["floor"],
+            self.ref_manager.reflectances.copy(),
+            self.ref_manager.x_spacings.copy(),
+            self.ref_manager.y_spacings.copy(),
             self.units,
         ]
 
@@ -291,6 +289,8 @@ class Room:
         self.z = self.z if z is None else z
         self.dimensions = (self.x, self.y, self.z)
         self.volume = self.x * self.y * self.z
+        
+        self.ref_manager.update_dimensions()
         return self
 
     def get_units(self):
