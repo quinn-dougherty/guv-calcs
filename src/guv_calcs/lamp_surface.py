@@ -139,6 +139,12 @@ class LampSurface:
             msg = f"Argument type {type(arg)} for argument intensity_map is invalid. intensity_map will not be used."
             warnings.warn(msg, stacklevel=3)
             intensity_map = None
+        # clean nans
+        if intensity_map is not None:
+            if np.isnan(intensity_map).any():
+                msg = "File contains invalid values. Intensity map will not be used."
+                warnings.warn(msg, stacklevel=3)
+                intensity_map = None
         return intensity_map
 
     def _get_num_points(self):

@@ -509,7 +509,7 @@ class Lamp:
     def plot_spectra(self, **kwargs):
         """see LampPlotter.plot_spectra and Spectrum.plot"""
         return self.plotter.plot_spectra(**kwargs)
-    
+
     def plot_surface(self, **kwargs):
         """see LampSurface.plot_surface"""
         return self.surface.plot_surface(**kwargs)
