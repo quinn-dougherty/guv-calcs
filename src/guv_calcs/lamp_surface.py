@@ -109,6 +109,7 @@ class LampSurface:
 
     def _load_intensity_map(self, arg):
         """check filetype and return correct intensity_map as array"""
+        
         if arg is None:
             intensity_map = None
         elif isinstance(arg, (str, pathlib.Path)):
@@ -120,13 +121,18 @@ class LampSurface:
                 warnings.warn(msg, stacklevel=3)
                 intensity_map = None
         elif isinstance(arg, bytes):
-            intensity_map = np.genfromtxt(
-                arg.decode("utf-8").splitlines(), delimiter=","
-            )
+            try:
+                intensity_map = np.genfromtxt(
+                    arg.decode("utf-8").splitlines(), delimiter=","
+                )
+            except UnicodeDecodeError:
+                msg = "Could not read intensity map file. Intensity map will not be used."
+                warnings.warn(msg, stacklevel=3)
+                intensity_map = None
         elif isinstance(arg, (list, np.ndarray)):
             intensity_map = np.array(arg)
         else:
-            msg = f"Argument type {type(arg)} for argument intensity_map. intensity_map will not be used."
+            msg = f"Argument type {type(arg)} for argument intensity_map is invalid. intensity_map will not be used."
             warnings.warn(msg, stacklevel=3)
             intensity_map = None
         return intensity_map

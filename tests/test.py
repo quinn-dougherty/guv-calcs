@@ -45,7 +45,7 @@ for val in [1,2,3]:
                 spectra_source="src/guv_calcs/data/lamp_data/uvpro222_b1.csv",
                 angle=270,
                 source_density=val,
-                relative_map=rel_map if val==3 else None
+                intensity_map=rel_map if val==3 else None
                 ).move(1,1,1)
     zone = CalcPlane("test", 
             height = 0.95,
