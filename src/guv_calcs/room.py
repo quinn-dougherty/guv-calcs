@@ -60,7 +60,7 @@ class Room:
             reflectance_y_spacing,
         )
         self.plotter = RoomPlotter(self)
-        
+
         self.set_dimensions()
 
         self.lamps = {}
@@ -301,7 +301,7 @@ class Room:
         self.z = self.z if z is None else z
         self.dimensions = (self.x, self.y, self.z)
         self.volume = self.x * self.y * self.z
-        
+
         self.ref_manager.update_dimensions()
         return self
 

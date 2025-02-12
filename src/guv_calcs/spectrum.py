@@ -271,7 +271,6 @@ class Spectrum:
             will not be used. if
         weights: bool or str
             If not False or None,
-
         """
 
         if fig is None:
