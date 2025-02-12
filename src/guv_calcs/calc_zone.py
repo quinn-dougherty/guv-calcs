@@ -569,6 +569,8 @@ class CalcVol(CalcZone):
             rows += [""]
             if self.values is None:
                 rows += [[""] * num_x] * num_y
+            elif self.values.shape != (num_x, num_y, num_z):
+                rows += [[""] * num_x] * num_y
             else:
                 rows += self.values.T[i].tolist()
         return rows
@@ -794,6 +796,8 @@ class CalcPlane(CalcZone):
 
         rows = [[""] + self.points[0].tolist()]
         if self.values is None:
+            vals = [[""] * num_y] * num_x
+        elif self.values.shape != (num_x, num_y):
             vals = [[""] * num_y] * num_x
         else:
             vals = self.values
