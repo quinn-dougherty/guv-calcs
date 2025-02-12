@@ -5,11 +5,10 @@ import json
 import pathlib
 import warnings
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.spatial import Delaunay
-from photompy import read_ies_data, write_ies_data, plot_ies, total_optical_power
+from photompy import read_ies_data, write_ies_data, total_optical_power
 from .spectrum import Spectrum
 from .lamp_surface import LampSurface
+from .lamp_plotter import LampPlotter
 from .trigonometry import to_cartesian, to_polar, attitude
 from ._data import get_tlvs
 
@@ -183,6 +182,9 @@ class Lamp:
         # spectra
         self.spectra_source = spectra_source
         self.spectra = self._load_spectra(spectra_source)
+
+        # plotting
+        self.plotter = LampPlotter(self)
 
         # load file and coordinates
         self.filename = filename
@@ -490,82 +492,17 @@ class Lamp:
 
         return data
 
-    def plot_ies(self, title=""):
-        """standard polar plot of an ies file"""
-        fig, ax = plot_ies(fdata=self.lampdict["full_vals"], title=title)
-        return fig, ax
+    def plot_ies(self, **kwargs):
+        """see LampPlotter.plot_ies"""
+        return self.plotter.plot_ies(**kwargs)
 
-    def plot_web(
-        self,
-        elev=30,
-        azim=-60,
-        title="",
-        figsize=(6, 4),
-        color="#cc61ff",
-        alpha=0.4,
-        xlim=None,
-        ylim=None,
-        zlim=None,
-    ):
-        """plot photometric web, where distance r is set by the irradiance value"""
-        scale = self.values.max()
-        x, y, z = self.transform(self.photometric_coords, scale=scale).T
-        Theta, Phi, R = to_polar(*self.photometric_coords.T)
-        tri = Delaunay(np.column_stack((Theta.flatten(), Phi.flatten())))
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111, projection="3d")
-        ax.plot_trisurf(x, y, z, triangles=tri.simplices, color=color, alpha=alpha)
-        if self.aim_point is not None:
-            ax.plot(
-                *np.array((self.aim_point, self.position)).T,
-                linestyle="--",
-                color="black",
-                alpha=0.7,
-            )
-        ax.set_title(title)
-        if xlim is not None:
-            ax.set_xlim(xlim)
-        if ylim is not None:
-            ax.set_ylim(ylim)
-        if zlim is not None:
-            ax.set_zlim(zlim)
-        ax.view_init(azim=azim, elev=elev)
-        return fig, ax
+    def plot_web(self, **kwargs):
+        """see LampPlotter.plot_web"""
+        return self.plotter.plot_web(**kwargs)
 
-    def plot_3d(
-        self,
-        elev=45,
-        azim=-45,
-        title="",
-        figsize=(6, 4),
-        alpha=0.7,
-        cmap="rainbow",
-        fig=None,
-        ax=None,
-    ):
-        """
-        plot in cartesian 3d space of the true positions of the irradiance values
-        mostly a convenience visualization function. Generally irradiance values
-        should use a polar plot.
-        """
-        x, y, z = self.transform(self.coords).T
-        intensity = self.values.flatten()
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111, projection="3d")
-        ax.scatter(x, y, z, c=intensity, cmap="rainbow", alpha=alpha)
-        if self.aim_point is not None:
-            ax.plot(
-                *np.array((self.aim_point, self.position)).T,
-                linestyle="--",
-                color="black",
-                alpha=0.7,
-            )
-        ax.set_title(title)
-        ax.view_init(azim=azim, elev=elev)
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
-        ax.set_zlabel("z")
-        return fig, ax
+    def plot_3d(self, **kwargs):
+        """see LampPlotter.plot_3d"""
+        return self.plotter.plot_3d(**kwargs)
 
     def _check_filename(self):
         """
