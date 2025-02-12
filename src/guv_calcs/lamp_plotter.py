@@ -12,17 +12,21 @@ class LampPlotter:
 
     def __init__(self, lamp):
         self.lamp = lamp
+        self.spectra = self.lamp.spectra
 
     def plot_ies(self, title=""):
         """standard polar plot of an ies file"""
-        fig, ax = plot_ies(fdata=self.lamp.lampdict["full_vals"], title=title)
+        if self.lamp.filedata is not None:
+            fig, ax = plot_ies(fdata=self.lamp.lampdict["full_vals"], title=title)
+        else:
+            fig, ax = plt.subplots(subplot_kw={"projection": "polar"})
         return fig, ax
 
     def plot_web(
         self,
+        title="",
         elev=30,
         azim=-60,
-        title="",
         figsize=(6, 4),
         color="#cc61ff",
         alpha=0.4,
@@ -31,20 +35,24 @@ class LampPlotter:
         zlim=None,
     ):
         """plot photometric web, where distance r is set by the irradiance value"""
-        scale = self.lamp.values.max()
-        x, y, z = self.lamp.transform(self.lamp.photometric_coords, scale=scale).T
-        Theta, Phi, R = to_polar(*self.lamp.photometric_coords.T)
-        tri = Delaunay(np.column_stack((Theta.flatten(), Phi.flatten())))
+
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111, projection="3d")
-        ax.plot_trisurf(x, y, z, triangles=tri.simplices, color=color, alpha=alpha)
-        if self.lamp.aim_point is not None:
-            ax.plot(
-                *np.array((self.lamp.aim_point, self.lamp.position)).T,
-                linestyle="--",
-                color="black",
-                alpha=0.7,
-            )
+
+        if self.lamp.filedata is not None:
+            scale = self.lamp.values.max()
+            x, y, z = self.lamp.transform(self.lamp.photometric_coords, scale=scale).T
+            Theta, Phi, R = to_polar(*self.lamp.photometric_coords.T)
+            tri = Delaunay(np.column_stack((Theta.flatten(), Phi.flatten())))
+
+            ax.plot_trisurf(x, y, z, triangles=tri.simplices, color=color, alpha=alpha)
+            if self.lamp.aim_point is not None:
+                ax.plot(
+                    *np.array((self.lamp.aim_point, self.lamp.position)).T,
+                    linestyle="--",
+                    color="black",
+                    alpha=0.7,
+                )
         ax.set_title(title)
         if xlim is not None:
             ax.set_xlim(xlim)
@@ -57,9 +65,9 @@ class LampPlotter:
 
     def plot_3d(
         self,
+        title="",
         elev=45,
         azim=-45,
-        title="",
         figsize=(6, 4),
         alpha=0.7,
         cmap="rainbow",
@@ -71,21 +79,65 @@ class LampPlotter:
         mostly a convenience visualization function. Generally irradiance values
         should use a polar plot.
         """
-        x, y, z = self.lamp.transform(self.lamp.coords).T
-        intensity = self.lamp.values.flatten()
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111, projection="3d")
-        ax.scatter(x, y, z, c=intensity, cmap="rainbow", alpha=alpha)
-        if self.lamp.aim_point is not None:
-            ax.plot(
-                *np.array((self.lamp.aim_point, self.lamp.position)).T,
-                linestyle="--",
-                color="black",
-                alpha=0.7,
-            )
+        if self.lamp.filedata is not None:
+            x, y, z = self.lamp.transform(self.lamp.coords).T
+            intensity = self.lamp.values.flatten()
+
+            ax.scatter(x, y, z, c=intensity, cmap="rainbow", alpha=alpha)
+            if self.lamp.aim_point is not None:
+                ax.plot(
+                    *np.array((self.lamp.aim_point, self.lamp.position)).T,
+                    linestyle="--",
+                    color="black",
+                    alpha=0.7,
+                )
         ax.set_title(title)
         ax.view_init(azim=azim, elev=elev)
         ax.set_xlabel("x")
         ax.set_ylabel("y")
         ax.set_zlabel("z")
+        return fig, ax
+
+    def plot_spectra(
+        self,
+        title="",
+        fig=None,
+        ax=None,
+        figsize=(6.4, 4.8),
+        yscale="linear",
+        label=None,
+        weights=False,
+    ):
+
+        """
+        see Spectrum.plot for details
+        Some code is duplicated to maintain api compatibility
+        """
+        if fig is None:
+            if ax is None:
+                fig, ax = plt.subplots()
+            else:
+                fig = plt.gcf()
+        else:
+            if ax is None:
+                ax = fig.axes[0]
+
+        if self.spectra is not None:
+            fig, ax = self.spectra.plot(
+                title=title,
+                fig=fig,
+                ax=ax,
+                figsize=figsize,
+                yscale=yscale,
+                label=label,
+                weights=weights,
+            )
+
+        ax.grid(True, which="both", ls="--", c="gray", alpha=0.3)
+        ax.set_xlabel("Wavelength [nm]")
+        ax.set_ylabel("Relative intensity [%]")
+        ax.set_yscale(yscale)
+        ax.set_title(title)
         return fig, ax

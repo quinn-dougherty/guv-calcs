@@ -196,6 +196,8 @@ class Lamp:
         self.thetas = None
         self.phis = None
         self.values = None
+        self.coords = None
+        self.photometric_coords = None
 
         # filename is just a label, filedata controls everything.
         if self.filedata is not None:
@@ -503,6 +505,14 @@ class Lamp:
     def plot_3d(self, **kwargs):
         """see LampPlotter.plot_3d"""
         return self.plotter.plot_3d(**kwargs)
+
+    def plot_spectra(self, **kwargs):
+        """see LampPlotter.plot_spectra and Spectrum.plot"""
+        return self.plotter.plot_spectra(**kwargs)
+    
+    def plot_surface(self, **kwargs):
+        """see LampSurface.plot_surface"""
+        return self.surface.plot_surface(**kwargs)
 
     def _check_filename(self):
         """
