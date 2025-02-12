@@ -31,8 +31,8 @@ class Room:
         units=None,
         standard=None,
         reflectances=None,
-        reflectance_x_spacing=None,
-        reflectance_y_spacing=None,
+        reflectance_x_spacings=None,
+        reflectance_y_spacings=None,
         air_changes=None,
         ozone_decay_constant=None,
     ):
@@ -56,8 +56,8 @@ class Room:
         self.ref_manager = ReflectanceManager(
             self,
             reflectances,
-            reflectance_x_spacing,
-            reflectance_y_spacing,
+            reflectance_x_spacings,
+            reflectance_y_spacings,
         )
         self.plotter = RoomPlotter(self)
 
@@ -83,7 +83,7 @@ class Room:
         data["y"] = self.y
         data["z"] = self.z
         data["units"] = self.units
-        data["reflectance"] = self.ref_manager.reflectances
+        data["reflectances"] = self.ref_manager.reflectances
         data["reflectance_x_spacing"] = self.ref_manager.x_spacings
         data["reflectance_y_spacing"] = self.ref_manager.y_spacings
         data["standard"] = self.standard
