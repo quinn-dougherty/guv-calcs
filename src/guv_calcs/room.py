@@ -225,6 +225,16 @@ class Room:
         # save only the features that affect the calculation
         # maybe think about optimizing it later
         for key, lamp in self.lamps.items():
+            intensity_map_orig = (
+                lamp.surface.intensity_map_orig.sum()
+                if lamp.surface.intensity_map_orig is not None
+                else None
+            )
+            intensity_map = (
+                lamp.surface.intensity_map.sum()
+                if lamp.surface.intensity_map is not None
+                else None
+            )
             lamp_state[key] = [
                 lamp.filedata,
                 lamp.x,
@@ -236,11 +246,13 @@ class Room:
                 lamp.aimz,
                 lamp.intensity_units,  # can be optimized
                 lamp.spectra_source,
-                lamp.length,  # only for nearfield
-                lamp.width,  # ""
-                lamp.units,  # ""
-                lamp.source_density,  # ""
-                lamp.intensity_map,  # ""
+                lamp.surface.length,  # only for nearfield
+                lamp.surface.width,  # ""
+                lamp.surface.depth,
+                lamp.surface.units,  # ""
+                lamp.surface.source_density,  # ""
+                intensity_map_orig,
+                intensity_map,  # ""
                 lamp.enabled,  # can be optimized
             ]
 

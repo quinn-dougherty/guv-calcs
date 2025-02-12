@@ -1,5 +1,6 @@
 from .room import Room
 from .lamp import Lamp
+from .lamp_surface import LampSurface
 from .calc_zone import CalcVol, CalcPlane
 from .spectrum import Spectrum, sum_spectrum
 from .trigonometry import to_polar, to_cartesian, attitude
@@ -19,6 +20,7 @@ from ._version import __version__
 __all__ = [
     "Room",
     "Lamp",
+    "LampSurface",
     "CalcVol",
     "CalcPlane",
     "Spectrum",
