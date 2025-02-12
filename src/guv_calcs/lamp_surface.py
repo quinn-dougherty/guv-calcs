@@ -31,7 +31,9 @@ class LampSurface:
         self.aim_point = aim_point
 
         self.source_density = 1 if source_density is None else source_density
+        # store original for future operations
         self.intensity_map_orig = self._load_intensity_map(intensity_map)
+        # this is the working copy
         self.intensity_map = self.intensity_map_orig
 
         self.surface_points = None
