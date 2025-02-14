@@ -215,7 +215,7 @@ class Room:
         Save all the features in the room that, if changed, will require re-calculation
         """
         room_state = [
-            self.ref_manager.reflectances.copy(),
+            # self.ref_manager.reflectances.copy(),
             self.ref_manager.x_spacings.copy(),
             self.ref_manager.y_spacings.copy(),
             self.units,
