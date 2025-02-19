@@ -427,7 +427,7 @@ class Lamp:
     def load_intensity_map(self, intensity_map):
         """external method for loading relative intensity map after lamp object has been instantiated"""
         self.surface.load_intensity_map(intensity_map)
-        
+
     def copy(self, lamp_id):
         """copy the lamp object with a new ID"""
         lamp = copy.deepcopy(self)
