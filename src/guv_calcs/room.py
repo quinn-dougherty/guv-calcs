@@ -6,6 +6,7 @@ import json
 import zipfile
 import io
 import numpy as np
+from collections.abc import Iterable
 from .lamp import Lamp
 from .calc_zone import CalcZone, CalcPlane, CalcVol
 from ._data import get_version
@@ -66,6 +67,7 @@ class Room:
         self.lamps = {}
         self.calc_zones = {}
         self.calc_state = {}
+        self.update_state = {}
 
     def set_reflectance(self, R, wall_id=None):
         self.ref_manager.set_reflectance(R=R, wall_id=wall_id)
@@ -218,7 +220,6 @@ class Room:
             # self.ref_manager.reflectances.copy(),
             self.ref_manager.x_spacings.copy(),
             self.ref_manager.y_spacings.copy(),
-            self.units,
         ]
 
         lamp_state = {}
@@ -244,8 +245,7 @@ class Room:
                 lamp.aimx,
                 lamp.aimy,
                 lamp.aimz,
-                lamp.intensity_units,  # can be optimized
-                lamp.spectra_source,
+                # lamp.spectra_source,
                 lamp.surface.length,  # only for nearfield
                 lamp.surface.width,  # ""
                 lamp.surface.depth,
@@ -253,7 +253,7 @@ class Room:
                 lamp.surface.source_density,  # ""
                 intensity_map_orig,
                 intensity_map,  # ""
-                lamp.enabled,  # can be optimized
+                # lamp.enabled,  # can be optimized
             ]
 
         zone_state = {}
@@ -262,11 +262,6 @@ class Room:
             if zone.calctype != "Zone":
                 zone_state[key] = [
                     zone.offset,
-                    zone.fov_vert,
-                    zone.fov_horiz,  # can be optimized
-                    zone.vert,
-                    zone.horiz,
-                    zone.enabled,
                     zone.x1,
                     zone.x2,
                     zone.x_spacing,
@@ -286,6 +281,41 @@ class Room:
         calc_state["lamps"] = lamp_state
         calc_state["calc_zones"] = zone_state
         return calc_state
+
+    def get_update_state(self):
+        """
+        Save all the features in the room that should NOT trigger
+        a recalculation, only an update
+        """
+
+        room_state = [
+            self.ref_manager.reflectances.copy(),
+            self.units,
+        ]
+
+        lamp_state = {}
+        for key, lamp in self.lamps.items():
+            lamp_state[key] = [
+                lamp.intensity_units,
+                lamp.enabled,
+            ]
+        zone_state = {}
+
+        for key, zone in self.calc_zones.items():
+            if zone.calctype != "Zone":
+                zone_state[key] = [
+                    zone.fov_vert,
+                    zone.fov_horiz,
+                    zone.vert,
+                    zone.horiz,
+                    zone.enabled,
+                ]
+
+        update_state = {}
+        update_state["room"] = room_state
+        update_state["lamps"] = lamp_state
+        update_state["calc_zones"] = zone_state
+        return update_state
 
     def set_units(self, units):
         """set room units"""
@@ -426,6 +456,8 @@ class Room:
         """
         Adds a lamp to the room if it fits within the room's boundaries.
         """
+        if not isinstance(lamp, Lamp):
+            raise TypeError(f"Must be type Lamp, not {type(lamp)}")
         self.check_lamp_position(lamp)
         self.lamps[lamp.lamp_id] = lamp
         return self
@@ -439,8 +471,37 @@ class Room:
         """
         Adds a calculation zone to the room if it fits within the room's boundaries.
         """
+        if not isinstance(calc_zone, (CalcZone, CalcPlane, CalcVol)):
+            raise TypeError(
+                f"Must be CalcZone, CalcPlane, or CalcVol not {type(calc_zone)}"
+            )
         self.check_zone_position(calc_zone)
         self.calc_zones[calc_zone.zone_id] = calc_zone
+        return self
+
+    def add(self, *args):
+        """
+        Add objects to the Room.
+        
+        - If an object is a Lamp, it is added as a lamp.
+        - If an object is a CalcZone, CalcPlane, or CalcVol, it is added as a calculation zone.
+        - If an object is iterable, it is recursively processed.
+        - Otherwise, a warning is printed.
+        """
+        
+        for obj in args:
+            if isinstance(obj, Lamp):
+                self.add_lamp(obj)
+            elif isinstance(obj, (CalcZone, CalcPlane, CalcVol)):
+                self.add_calc_zone(obj)
+            elif isinstance(obj,dict):
+                self.add(*obj.values())
+            elif isinstance(obj, Iterable) and not isinstance(obj, (str, bytes)):
+                self.add(*obj)  # Recursively process other iterables
+            else:
+                msg = f"Cannot add object of type {type(obj).__name__} to Room."
+                warnings.warn(msg, stacklevel=3)
+
         return self
 
     def remove_calc_zone(self, zone_id):
@@ -448,24 +509,45 @@ class Room:
         del self.calc_zones[zone_id]
         return self
 
-    def calculate(self):
+    def calculate(self, hard=False):
         """
-        Triggers the calculation of lighting values in each calculation zone based on the current lamps in the room.
+        Triggers the calculation of lighting values in each calculation zone
+        based on the current lamps in the room.
+
+        If no updates have been made since the last calculate call that would
+        require a full recalculation, either only an update will be performed
+        or no recalculation will occur.
+
+        If `hard` is True, this behavior is overriden and the full
+        recalculation will be performed
         """
 
-        self.ref_manager.calculate_incidence()
+        RECALCULATE = hard or (self.calc_state != self.get_calc_state())
+        UPDATE = (self.update_state != self.get_update_state())
 
+        valid_lamps = {
+            k: v for k, v in self.lamps.items() if v.enabled and v.filedata is not None
+        }
         for name, zone in self.calc_zones.items():
             if zone.enabled:
-                zone.calculate_values(lamps=self.lamps, ref_manager=self.ref_manager)
+                if RECALCULATE:
+                    zone.calculate_values(
+                        lamps=valid_lamps, ref_manager=self.ref_manager
+                    )
+                elif UPDATE:
+                    zone.update_values(lamps=valid_lamps, ref_manager=self.ref_manager)
 
         self.calc_state = self.get_calc_state()
-        return self
+        self.update_state = self.get_update_state()
 
-    def calculate_by_id(self, zone_id):
+    def calculate_by_id(self, zone_id, hard=False):
         """calculate just the calc zone selected"""
-        self.calc_zones[zone_id].calculate_values(lamps=self.lamps)
+        valid_lamps = {
+            k: v for k, v in self.lamps.items() if v.enabled and v.filedata is not None
+        }
+        self.calc_zones[zone_id].calculate_values(lamps=valid_lamps)
         self.calc_state = self.get_calc_state()
+        self.update_state = self.get_update_state()
         return self
 
     def plotly(self, fig=None, select_id=None, title=""):

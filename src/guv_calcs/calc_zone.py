@@ -103,6 +103,9 @@ class CalcZone(object):
         self.zp = None
         self.coords = None
         self.values = None
+        self.reflected_values = None
+        self.lamp_values = {}
+        self.lamp_values_base = {}
 
     def save_zone(self, filename=None):
 
@@ -259,7 +262,7 @@ class CalcZone(object):
 
         return np.max(value_sums, axis=1)  # Shape (N,)
 
-    def _calculate_single_lamp(self, lamp, ref_manager=None):
+    def _calculate_single_lamp(self, lamp):
         """
         Calculate the zone values for a single lamp
         """
@@ -270,8 +273,18 @@ class CalcZone(object):
         if lamp.surface.source_density > 0 and lamp.surface.photometric_distance:
             values = self._calculate_nearfield(lamp, R, values)
 
-        Theta0, Phi0, R0 = to_polar(*rel_coords.T)
+        if np.isnan(values.any()):  # mask any nans near light source
+            values = np.ma.masked_invalid(values)
 
+        return values
+
+    def _update_single_lamp(self, lamp, values):
+        """
+        update the values of a single lamp based on the calc zone properties,
+        but which don't require a full recalculation
+        """
+        rel_coords = self.coords - lamp.position
+        Theta0, Phi0, R0 = to_polar(*rel_coords.T)
         # apply vertical field of view
         values[Theta0 < 90 - self.fov_vert / 2] = 0
 
@@ -280,44 +293,66 @@ class CalcZone(object):
         if self.horiz:
             values *= abs(np.cos(np.radians(Theta0)))
 
-        # calculate reflectance
-        if ref_manager is not None:
-            values += ref_manager.calculate_reflectance(self)
+        if lamp.intensity_units.lower() == "mw/sr":
+            values = values / 10  # convert from mW/Sr to uW/cm2
 
         return values
 
-    def calculate_values(self, lamps, ref_manager=None):
+    def _calculate_lamps(self, lamps):
         """
-        Calculate and return irradiance values at all coordinate points within the zone.
+        calculate only the base values, dependent only on lamp data and calc zone
+        coordinates
+
+        updates the lamp_values_base property
+        """
+        self.lamp_values_base = {}  # refresh the lamp list
+        for lamp_id, lamp in lamps.items():
+            # calculate values based on lamp position and calc zone coordinates
+            base_values = self._calculate_single_lamp(lamp)
+            self.lamp_values_base[lamp_id] = base_values
+        return self.lamp_values_base
+
+    def _update_lamps(self, lamps):
+        """update the lamp_values property from the lamp_values_base property"""
+        self.lamp_values = {}  # refresh the lamp list
+        for lamp_id, lamp in lamps.items():
+            base_values = self.lamp_values_base[lamp_id]
+            values = self._update_single_lamp(lamp, base_values)
+            self.lamp_values[lamp_id] = values
+        return self.lamp_values
+
+    def update_values(self, lamps, ref_manager=None):
+        """
+        (Relatively) cheaply update the values property
+        Called from within the main calculate_values but may also be called externally
+
+        run this if a property has changed that does not require a full recalculation
+        includes: vert, horiz, fov_vert, reflectance, dose
         """
 
-        valid_lamps = {
-            k: v for k, v in lamps.items() if v.enabled and v.filedata is not None
-        }
+        self.lamp_values = self._update_lamps(lamps)
 
-        total_values = np.zeros(self.coords.shape[0])
-        lamp_values = {}
-        for lamp_id, lamp in valid_lamps.items():
-            # determine lamp placement + calculate relative coordinates
-            values = self._calculate_single_lamp(lamp, ref_manager)
+        # this should be implemented inside the reflectance module separately
+        # or possibly entirely restructured since both lamps and reflective surfaces
+        # will contribute to the eye dose
 
-            if lamp.intensity_units.lower() == "mw/sr":
-                values = values / 10  # convert from mW/Sr to uW/cm2
-            if np.isnan(values.any()):  # mask any nans near light source
-                values = np.ma.masked_invalid(values)
+        values = np.array([val for val in self.lamp_values.values()])
+        if self.fov_horiz < 360 and len(lamps) > 1:
+            self.base_values = self._calculate_horizontal_fov(values.T, lamps)
+        else:
+            self.base_values = values.sum(axis=0)
 
-            total_values += values
-            lamp_values[lamp_id] = values
-
-        if self.fov_horiz < 360 and len(valid_lamps) > 0:
-            values = np.array([val for val in lamp_values.values()]).T
-            total_values = self._calculate_horizontal_fov(values, valid_lamps)
+        if ref_manager is not None:
+            self.reflected_values = ref_manager.sum_reflectance(self)
 
         # reshape
-        self.values = total_values.reshape(*self.num_points)
         self.lamp_values = {
-            k: v.reshape(*self.num_points) for k, v in lamp_values.items()
+            k: v.reshape(*self.num_points) for k, v in self.lamp_values.items()
         }
+        self.base_values = self.base_values.reshape(*self.num_points)
+
+        # add in reflected values
+        self.values = self.base_values + self.reflected_values
 
         # convert to dose
         if self.dose:
@@ -328,8 +363,27 @@ class CalcZone(object):
 
         return self.values
 
-    def export(self, fname=None):
+    def calculate_values(self, lamps, ref_manager=None):
+        """
+        Calculate and return irradiance values at all coordinate points within the zone.
+        Expensive! only to be run if necessary
+        """
 
+        self.lamp_values_base = self._calculate_lamps(lamps)
+
+        if ref_manager is not None:
+            # calculate reflectance -- may be expensive!
+            ref_manager.calculate_reflectance(self)
+
+        self.values = self.update_values(lamps, ref_manager)
+        return self.values
+
+    def export(self, fname=None):
+        """
+        export the calculation zone's results to a .csv file
+        if the spacing has been updated but the values not recalculated,
+        exported values will be blank.
+        """
         try:
             rows = self._write_rows()  # implemented in subclass
             csv_bytes = rows_to_bytes(rows)
@@ -341,6 +395,19 @@ class CalcZone(object):
                 return csv_bytes
         except NotImplementedError:
             pass
+            
+    def copy(self, zone_id):
+        """
+        return a copy of this CalcZone with the same attributes and a new zone_id
+        """
+        zone = copy.deepcopy(self)
+        zone.zone_id = zone_id
+        # clear calculated values
+        zone.values = None
+        zone.reflected_values = None
+        zone.lamp_values = {}
+        zone.lamp_values_base = {}
+        return zone
 
 
 class CalcVol(CalcZone):
@@ -438,6 +505,8 @@ class CalcVol(CalcZone):
                 warnings.warn(msg, stacklevel=3)
 
         self._update()
+        self.values = np.zeros(self.num_points)
+        self.reflected_values = np.zeros(self.num_points)
 
     def set_dimensions(self, x1=None, x2=None, y1=None, y2=None, z1=None, z2=None):
         self.x1 = self.x1 if x1 is None else x1
@@ -661,7 +730,10 @@ class CalcPlane(CalcZone):
             if y_spacing is not None:
                 msg = f"Passed y_spacing value will be ignored for calc zone {self.zone_id}, num_y used instead"
                 warnings.warn(msg, stacklevel=3)
+
         self._update()
+        self.values = np.zeros(self.num_points)
+        self.reflected_values = np.zeros(self.num_points)
 
     def set_height(self, height):
         """set height of calculation plane. currently we only support vertical planes"""

@@ -4,6 +4,7 @@ import inspect
 import json
 import pathlib
 import warnings
+import copy
 import numpy as np
 from photompy import read_ies_data, write_ies_data, total_optical_power
 from .spectrum import Spectrum
@@ -426,6 +427,12 @@ class Lamp:
     def load_intensity_map(self, intensity_map):
         """external method for loading relative intensity map after lamp object has been instantiated"""
         self.surface.load_intensity_map(intensity_map)
+        
+    def copy(self, lamp_id):
+        """copy the lamp object with a new ID"""
+        lamp = copy.deepcopy(self)
+        lamp.lamp_id = lamp_id
+        return lamp
 
     def save_ies(self, fname=None, original=False):
         """
