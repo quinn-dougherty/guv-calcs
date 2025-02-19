@@ -4,6 +4,24 @@ from .trigonometry import to_polar
 
 
 class ReflectanceManager:
+    """
+    Class for managing reflective surfaces and their interactions
+
+    Attributes:
+    room: guv_calcs.Room
+        instance of the parent class
+    reflectances: dict { str: float}
+        dict with keys [`floor`, `ceiling`, `south`, `north`, `east`, `west`]
+        and float values between 0 and 1. All values default 0.0
+    x_spacings: dict { str: float}
+        dict with same keys as `reflectances` and float values greater than 0.
+        All values default 0.5. Determines spacing in the relative x direction
+    u_spacings: dict { str: float}
+        dict with same keys as `reflectances` and float values greater than 0.
+        All values default 0.5. Determines spacing in the relative y direction
+
+    """
+
     def __init__(
         self,
         room,
@@ -13,6 +31,7 @@ class ReflectanceManager:
     ):
 
         self.room = room
+        self.calc_zone_values = {}
 
         keys = ["floor", "ceiling", "south", "north", "east", "west"]
         default_reflectances = {surface: 0.0 for surface in keys}
@@ -26,6 +45,7 @@ class ReflectanceManager:
         self._initialize_surfaces()
 
     def set_reflectance(self, R, wall_id=None):
+        """set reflectance by wall_id or, if wall_if is None, to all walls"""
         keys = self.reflectances.keys()
         if wall_id is None:
             # set this value for all walls
@@ -43,6 +63,7 @@ class ReflectanceManager:
             self.reflectances[key] = val.R
 
     def set_spacing(self, x_spacing=None, y_spacing=None, wall_id=None):
+        """set x and y spacing by wall_id or, if wall_if is None, to all walls"""
         keys = self.x_spacings.keys()
         if wall_id is None:
             # set this value for all walls
@@ -60,9 +81,6 @@ class ReflectanceManager:
         for key, val in self.surfaces.items():
             self.x_spacings[key] = val.plane.x_spacing
             self.y_spacings[key] = val.plane.y_spacing
-
-    def set_y_spacing(self, y_spacing, wall_id=None):
-        self._set_val(self.y_spacings, y_spacing, wall_id)
 
     def _initialize_surfaces(self):
 
@@ -82,6 +100,7 @@ class ReflectanceManager:
             self.surfaces[wall] = ReflectiveSurface(R=reflectance, plane=plane)
 
     def _get_surface_dimensions(self, wall):
+        """retrieve the dimensions of a particular wall based on its id"""
         if wall == "floor":
             x1, x2, y1, y2 = 0, self.room.x, 0, self.room.y
             height = 0
@@ -109,18 +128,19 @@ class ReflectanceManager:
         return x1, x2, y1, y2, height, ref_surface
 
     def update_dimensions(self):
+        """update the wall dimensions based on changes to the Room parent class"""
         for wall, surface in self.surfaces.items():
             x1, x2, y1, y2, height, _ = self._get_surface_dimensions(wall)
             surface.plane.height = height
             surface.plane.set_dimensions(x1, x2, y1, y2)
 
     def calculate_incidence(self):
-        """calculate the incident irradiances"""
+        """calculate the incident irradiances on all reflective walls"""
         for wall, R in self.reflectances.items():
             if R > 0:
                 self.surfaces[wall].calculate_incidence(self.room.lamps)
 
-    def calculate_reflectance(self, calc_zone):
+    def calculate_reflectance_old(self, calc_zone):
         """calculate the reflectance contribution to a calc zone from each surface"""
         total_values = np.zeros(calc_zone.coords.shape[0])
         for key, surface in self.surfaces.items():
@@ -131,8 +151,37 @@ class ReflectanceManager:
                 total_values += values * surface.R
         return total_values
 
+    def calculate_reflectance(self, calc_zone):
+        """calculate the reflectance contribution to a calc zone from each surface"""
+
+        threshold = calc_zone.values.mean() * 0.01  # 1% of total value
+
+        total_values = {}
+        for wall, surface in self.surfaces.items():
+            if surface.plane.values is not None:
+                if surface.R * surface.plane.values.mean() > threshold:
+                    surface.calculate_reflectance(calc_zone)
+                    values = surface.zone_values[calc_zone.zone_id]
+                    total_values[wall] = values
+        self.calc_zone_values[calc_zone.zone_id] = total_values
+
+        return total_values
+
+    def get_total_reflectance(self, calc_zone):
+        """sum over all surfaces to get the total reflected values for that calc zone"""
+        dct = self.calc_zone_values[calc_zone.zone_id]
+        values = np.zeros(calc_zone.num_points)
+        for key, val in dct.items():
+            values += val * self.reflectances[key]
+        return values
+
 
 class ReflectiveSurface:
+    """
+    Class that represents a single reflective surface defined by a calculation
+    zone and a float value R between 0 and 1.
+    """
+
     def __init__(self, R, plane):
 
         if not isinstance(R, float):
@@ -177,13 +226,14 @@ class ReflectiveSurface:
         angles = np.arccos(cos_theta)
 
         grid_element_size = self.plane.x_spacing * self.plane.y_spacing
-        # no I don't know why this factor of 10 is here but it makes the math work out
-        nom = I_r * abs(np.cos(angles)) * grid_element_size * 10
+
+        nom = I_r * abs(np.cos(angles)) * grid_element_size
         denom = np.pi * distances ** 2
         values = nom / denom
-        # # clean nans
-        # if np.isnan(values.any()):
-        # values = np.ma.masked_invalid(values)
+
+        # clean nans
+        if np.isnan(values).any():
+            values = np.ma.masked_invalid(values)
 
         # apply angle-based differences
         Theta0, Phi0, R0 = to_polar(*differences.reshape(-1, 3).T)
