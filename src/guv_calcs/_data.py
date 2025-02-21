@@ -47,6 +47,7 @@ def get_disinfection_table(fluence=None, wavelength=None, room=None):
     df = df[df["Medium"] == "Aerosol"]
 
     newkeys = []
+    
 
     if wavelength is not None:
         valid_wavelengths = df["wavelength [nm]"].unique()
@@ -57,7 +58,6 @@ def get_disinfection_table(fluence=None, wavelength=None, room=None):
     else:
         newkeys += ["wavelength [nm]"]
         df["wavelength [nm]"] = df["wavelength [nm]"].astype(int)
-
     if fluence is not None:
         if isinstance(fluence, dict):
             df, fluence = _filter_wavelengths(df, fluence)
@@ -217,9 +217,9 @@ def _generate_title(df, fluence_dict):
             title += "/CADR"
         title += f" from {guv_types}"
         if isinstance(fluence_dict, dict) and len(fluence_dict) > 1:
-            title += f"\nwith average fluence rates: [{fluences}] uW/cm2"
+            title += f"\nwith average fluence rates: [{fluences}] uW/cm²"
         else:
-            title += f" with average fluence rate {fluences} uW/cm2"
+            title += f" with average fluence rate {fluences} uW/cm²"
     else:
         title += f"K1 susceptibility values for {guv_types}"
     return title

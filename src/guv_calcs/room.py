@@ -12,6 +12,7 @@ from .calc_zone import CalcZone, CalcPlane, CalcVol
 from ._data import get_version
 from ._helpers import parse_loadfile, check_savefile, fig_to_bytes
 from .room_plotter import RoomPlotter
+from .disinfection_calculator import DisinfectionCalculator
 from .reflectance import ReflectanceManager
 
 
@@ -61,6 +62,7 @@ class Room:
             reflectance_y_spacings,
         )
         self.plotter = RoomPlotter(self)
+        self.disinfection = DisinfectionCalculator(self)
 
         self.set_dimensions()
 
@@ -349,6 +351,19 @@ class Room:
         self.volume = self.x * self.y * self.z
         return self.volume
 
+    def get_disinfection_table(self, zone_id="WholeRoomFluence"):
+        """
+        Return a dataframe of the expected disinfection rates, based on the room state
+        """
+        df, fluence_dict = self.disinfection.get_disinfection_table(zone)
+        return df
+        
+    def get_disinfection_plot(self, zone_id="WholeRoomFluence"):
+        """
+        Return a violin plot of the expected disinfection rates, based on the room state
+        """
+        return self.disinfection.get_disinfection_plot(zone_id)
+
     def add_standard_zones(self):
         """
         convenience function. Add skin and eye limit calculation planes,
@@ -482,19 +497,19 @@ class Room:
     def add(self, *args):
         """
         Add objects to the Room.
-        
+
         - If an object is a Lamp, it is added as a lamp.
         - If an object is a CalcZone, CalcPlane, or CalcVol, it is added as a calculation zone.
         - If an object is iterable, it is recursively processed.
         - Otherwise, a warning is printed.
         """
-        
+
         for obj in args:
             if isinstance(obj, Lamp):
                 self.add_lamp(obj)
             elif isinstance(obj, (CalcZone, CalcPlane, CalcVol)):
                 self.add_calc_zone(obj)
-            elif isinstance(obj,dict):
+            elif isinstance(obj, dict):
                 self.add(*obj.values())
             elif isinstance(obj, Iterable) and not isinstance(obj, (str, bytes)):
                 self.add(*obj)  # Recursively process other iterables
@@ -523,7 +538,7 @@ class Room:
         """
 
         RECALCULATE = hard or (self.calc_state != self.get_calc_state())
-        UPDATE = (self.update_state != self.get_update_state())
+        UPDATE = self.update_state != self.get_update_state()
 
         valid_lamps = {
             k: v for k, v in self.lamps.items() if v.enabled and v.filedata is not None
