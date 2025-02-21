@@ -355,7 +355,7 @@ class Room:
         """
         Return a dataframe of the expected disinfection rates, based on the room state
         """
-        df, fluence_dict = self.disinfection.get_disinfection_table(zone)
+        df, _ = self.disinfection.get_disinfection_table(zone_id)
         return df
         
     def get_disinfection_plot(self, zone_id="WholeRoomFluence"):
@@ -544,7 +544,7 @@ class Room:
             k: v for k, v in self.lamps.items() if v.enabled and v.filedata is not None
         }
         for name, zone in self.calc_zones.items():
-            if zone.enabled:
+            if zone.enabled and len(valid_lamps)>1:
                 if RECALCULATE:
                     zone.calculate_values(
                         lamps=valid_lamps, ref_manager=self.ref_manager
@@ -554,6 +554,7 @@ class Room:
 
         self.calc_state = self.get_calc_state()
         self.update_state = self.get_update_state()
+        return self
 
     def calculate_by_id(self, zone_id, hard=False):
         """calculate just the calc zone selected"""

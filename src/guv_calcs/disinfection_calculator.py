@@ -1,6 +1,6 @@
 import warnings
 import numpy as np
-from ._data import get_disinfection_table, plot_disinfection_data
+from ._data import get_disinfection_table, plot_disinfection_data, get_full_disinfection_table
 
 
 class DisinfectionCalculator:
@@ -38,7 +38,9 @@ class DisinfectionCalculator:
             new_keys = ["Link"] + [key for key in df.keys() if "Link" not in key]
             df = df[new_keys]
         else:
-            raise ValueError("fluence_dict is blank")
+            msg = "Fluence value not available; returning full disinfection data table."
+            warnings.warn(msg,stacklevel=3)
+            df = get_full_disinfection_table()
 
         return df, fluence_dict
 
@@ -48,7 +50,6 @@ class DisinfectionCalculator:
         to in a given calculation zone
         """
         lamp_wavelengths = self._get_lamp_wavelength_dict(zone)
-        print(lamp_wavelengths)
         fluence_dict = {}
         for label, lamp_ids in lamp_wavelengths.items():
             vals = np.zeros(zone.values.shape)
@@ -61,6 +62,12 @@ class DisinfectionCalculator:
     def _get_lamp_wavelength_dict(self, zone):
         """assign lamps to each unique wavelength contributing to the zone"""
         lamp_types = self._get_lamp_types(zone)
+        if len(zone.lamp_values)==0:
+            msg = f"Calc zone {zone.zone_id} has no associated lamps."
+            warnings.warn(msg)
+        elif len(lamp_types)==0:
+            msg = f"Calc zone {zone.zone_id} has no associated lamps with an associated wavelength."
+        
         lamp_wavelengths = {}
         for wavelength in lamp_types:
             val = [
