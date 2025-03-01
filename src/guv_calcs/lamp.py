@@ -199,6 +199,7 @@ class Lamp:
         self.values = None
         self.coords = None
         self.photometric_coords = None
+        self.calc_state = None
 
         # filename is just a label, filedata controls everything.
         if self.filedata is not None:
@@ -362,6 +363,37 @@ class Lamp:
     def set_length(self, length):
         """change y-axis extent of lamp emissive surface"""
         self.surface.set_length(length)
+
+    def get_calc_state(self):
+        """
+        return a set of paramters that, if changed, indicate that
+        this lamp must be recalculated
+        """
+        # this needs summed to make comparison not fail, might need to investigate later
+        intensity_map_orig = (
+            self.surface.intensity_map_orig.sum()
+            if self.surface.intensity_map_orig is not None
+            else None
+        )
+        return [
+            self.filedata,
+            self.x,
+            self.y,
+            self.z,
+            self.angle,
+            self.aimx,
+            self.aimy,
+            self.aimz,
+            self.surface.length,  # only for nearfield
+            self.surface.width,  # ""
+            self.surface.depth,
+            self.surface.units,  # ""
+            self.surface.source_density,  # ""
+            intensity_map_orig,
+        ]
+
+    def get_update_state(self):
+        return [self.intensity_units]
 
     def get_total_power(self):
         """return the lamp's total optical power"""

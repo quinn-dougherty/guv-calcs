@@ -218,70 +218,27 @@ class Room:
         """
         Save all the features in the room that, if changed, will require re-calculation
         """
-        room_state = [
-            # self.ref_manager.reflectances.copy(),
+
+        room_state = [  # temp..this should be put with the ref_manager eventually
             self.ref_manager.x_spacings.copy(),
             self.ref_manager.y_spacings.copy(),
         ]
 
         lamp_state = {}
-        # save only the features that affect the calculation
-        # maybe think about optimizing it later
         for key, lamp in self.lamps.items():
-            intensity_map_orig = (
-                lamp.surface.intensity_map_orig.sum()
-                if lamp.surface.intensity_map_orig is not None
-                else None
-            )
-            intensity_map = (
-                lamp.surface.intensity_map.sum()
-                if lamp.surface.intensity_map is not None
-                else None
-            )
-            lamp_state[key] = [
-                lamp.filedata,
-                lamp.x,
-                lamp.y,
-                lamp.z,
-                lamp.angle,
-                lamp.aimx,
-                lamp.aimy,
-                lamp.aimz,
-                # lamp.spectra_source,
-                lamp.surface.length,  # only for nearfield
-                lamp.surface.width,  # ""
-                lamp.surface.depth,
-                lamp.surface.units,  # ""
-                lamp.surface.source_density,  # ""
-                intensity_map_orig,
-                intensity_map,  # ""
-                # lamp.enabled,  # can be optimized
-            ]
+            if lamp.enabled:
+                lamp_state[key] = lamp.get_calc_state()
 
         zone_state = {}
-
         for key, zone in self.calc_zones.items():
-            if zone.calctype != "Zone":
-                zone_state[key] = [
-                    zone.offset,
-                    zone.x1,
-                    zone.x2,
-                    zone.x_spacing,
-                    zone.num_x,
-                    zone.y1,
-                    zone.y2,
-                    zone.y_spacing,
-                    zone.num_y,
-                ]
-                if zone.calctype == "Plane":
-                    zone_state[key] += [zone.height]
-                elif zone.calctype == "Volume":
-                    zone_state[key] += [zone.z1, zone.z2, zone.z_spacing, zone.num_z]
+            if zone.calctype != "Zone" and zone.enabled:
+                zone_state[key] = zone.get_calc_state()
 
         calc_state = {}
         calc_state["room"] = room_state
         calc_state["lamps"] = lamp_state
         calc_state["calc_zones"] = zone_state
+
         return calc_state
 
     def get_update_state(self):
@@ -297,26 +254,18 @@ class Room:
 
         lamp_state = {}
         for key, lamp in self.lamps.items():
-            lamp_state[key] = [
-                lamp.intensity_units,
-                lamp.enabled,
-            ]
-        zone_state = {}
+            lamp_state[key] = lamp.get_update_state()
 
+        zone_state = {}
         for key, zone in self.calc_zones.items():
             if zone.calctype != "Zone":
-                zone_state[key] = [
-                    zone.fov_vert,
-                    zone.fov_horiz,
-                    zone.vert,
-                    zone.horiz,
-                    zone.enabled,
-                ]
+                zone_state[key] = zone.get_update_state()
 
         update_state = {}
         update_state["room"] = room_state
         update_state["lamps"] = lamp_state
         update_state["calc_zones"] = zone_state
+
         return update_state
 
     def set_units(self, units):
@@ -357,7 +306,7 @@ class Room:
         """
         df, _ = self.disinfection.get_disinfection_table(zone_id)
         return df
-        
+
     def get_disinfection_plot(self, zone_id="WholeRoomFluence"):
         """
         Return a violin plot of the expected disinfection rates, based on the room state
@@ -524,6 +473,12 @@ class Room:
         del self.calc_zones[zone_id]
         return self
 
+    def _get_valid_lamps(self):
+        """return"""
+        return {
+            k: v for k, v in self.lamps.items() if v.enabled and v.filedata is not None
+        }
+
     def calculate(self, hard=False):
         """
         Triggers the calculation of lighting values in each calculation zone
@@ -537,23 +492,31 @@ class Room:
         recalculation will be performed
         """
 
-        RECALCULATE = hard or (self.calc_state != self.get_calc_state())
-        UPDATE = self.update_state != self.get_update_state()
+        new_calc_state = self.get_calc_state()
+        new_update_state = self.get_update_state()
 
-        valid_lamps = {
-            k: v for k, v in self.lamps.items() if v.enabled and v.filedata is not None
-        }
+        LAMP_RECALC = self.calc_state.get("lamps") != new_calc_state.get("lamps")
+        REF_RECALC = self.calc_state.get("room") != new_calc_state.get("room")
+
+        # calculate incidence on the surfaces if the reflectances or lamps have changed
+        if LAMP_RECALC or REF_RECALC or hard:
+            self.ref_manager.calculate_incidence(hard=hard)
+
+        valid_lamps = self._get_valid_lamps()
         for name, zone in self.calc_zones.items():
-            if zone.enabled and len(valid_lamps)>1:
-                if RECALCULATE:
-                    zone.calculate_values(
-                        lamps=valid_lamps, ref_manager=self.ref_manager
-                    )
-                elif UPDATE:
-                    zone.update_values(lamps=valid_lamps, ref_manager=self.ref_manager)
+            if zone.enabled and len(valid_lamps) > 0:
+                zone.calculate_values(
+                    lamps=valid_lamps, ref_manager=self.ref_manager, hard=hard
+                )
+        # update calc states.
+        self.calc_state = new_calc_state
+        self.update_state = new_update_state
 
-        self.calc_state = self.get_calc_state()
-        self.update_state = self.get_update_state()
+        # possibly this should be per-calc zone? idk maybe it's fine
+        for lamp_id in valid_lamps.keys():
+            new_calc_state = self.lamps[lamp_id].get_calc_state()
+            self.lamps[lamp_id].calc_state = new_calc_state
+
         return self
 
     def calculate_by_id(self, zone_id, hard=False):

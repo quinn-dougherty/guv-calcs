@@ -6,95 +6,66 @@ from photompy import get_intensity
 
 class LightingCalculator:
     """
-    Performs all calculations for a calculation zone
+    Performs all computations for a calculation zone
     """
 
     def __init__(self, zone):
         self.zone = zone
 
-    def compute(self, lamps, ref_manager=None):
+    def compute(self, lamps, hard=False):
         """
         Calculate and return irradiance values at all coordinate points within the zone.
-        Expensive! only to be run if necessary
         """
 
+        # this will only recalculate if the lamp has changed--unless it is a 'hard' recalculation
         self.zone.lamp_values_base = {
-            lamp_id: self._calculate_lamp(lamp) for lamp_id, lamp in lamps.items()
+            lamp_id: self._calculate_lamp(lamp, hard) for lamp_id, lamp in lamps.items()
         }
 
-        if ref_manager is not None:
-            # calculate reflectance -- may be expensive!
-            ref_manager.calculate_reflectance(self.zone)
-
-        self.zone.values = self.update(lamps, ref_manager)
-
-        return self.zone.values
-
-    def update(self, lamps, ref_manager=None):
-        """
-        (Relatively) cheaply update the values property
-        Called from within the main compute function but may also be called externally
-
-        run this if a property has changed that does not require a full recalculation
-        includes: vert, horiz, fov_vert, reflectance, dose
-        """
-
+        # this step is always cheap
         self.zone.lamp_values = {
-            lamp_id: self._apply_filters(lamps[lamp_id], values)
+            lamp_id: self._apply_filters(lamps[lamp_id], values.copy())
             for lamp_id, values in self.zone.lamp_values_base.items()
         }
 
-        # this should be implemented inside the reflectance module separately
-        # or possibly entirely restructured since both lamps and reflective surfaces
-        # will contribute to the eye dose
-
-        values = np.array(list(self.zone.lamp_values.values()))
+        # sum the base lamp values
         if self.zone.fov_horiz < 360 and len(lamps) > 1:
-            self.zone.base_values = self._calculate_horizontal_fov(values.T, lamps)
+            values = self._calculate_horizontal_fov(lamps)
         else:
-            self.zone.base_values = values.sum(axis=0)
-
-        if ref_manager is not None:
-            self.zone.reflected_values = ref_manager.get_total_reflectance(self.zone)
+            values = sum(self.zone.lamp_values.values())
 
         # reshape
-        self.zone.lamp_values = {
-            k: v.reshape(*self.zone.num_points)
-            for k, v in self.zone.lamp_values.items()
-        }
-        self.zone.base_values = self.zone.base_values.reshape(*self.zone.num_points)
+        values = values.reshape(*self.zone.num_points)
 
-        # add in reflected values
-        self.zone.values = self.zone.base_values + self.zone.reflected_values
+        return values
 
-        # convert to dose
-        if self.zone.dose:
-            mult = 3.6 * self.zone.hours
-            self.zone.values = self.zone.values * mult
-            self.zone.lamp_values = {
-                k: v * mult for k, v in self.zone.lamp_values.items()
-            }
-
-        return self.zone.values
-
-    def _calculate_lamp(self, lamp):
+    def _calculate_lamp(self, lamp, hard=False):
         """
         Calculate the zone values for a single lamp
         """
-        # get coords
-        rel_coords = self.zone.coords - lamp.position
-        Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
 
-        # fetch intensity values from photometric data
-        interpdict = lamp.lampdict["interp_vals"]
-        values = get_intensity(Theta, Phi, interpdict) / R ** 2
+        NEW_LAMP = self.zone.lamp_values_base.get(lamp.lamp_id) is None
+        LAMP_UPDATE = lamp.calc_state != lamp.get_calc_state()
+        ZONE_UPDATE = self.zone.calc_state != self.zone.get_calc_state()
 
-        # near field only if necessary
-        if lamp.surface.source_density > 0 and lamp.surface.photometric_distance:
-            values = self._calculate_nearfield(lamp, R, values)
+        if hard or NEW_LAMP or LAMP_UPDATE or ZONE_UPDATE:
+            # get coords
+            rel_coords = self.zone.coords - lamp.position
+            Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
 
-        if np.isnan(values.any()):  # mask any nans near light source
-            values = np.ma.masked_invalid(values)
+            # fetch intensity values from photometric data
+            interpdict = lamp.lampdict["interp_vals"]
+            values = get_intensity(Theta, Phi, interpdict) / R ** 2
+
+            # near field only if necessary
+            if lamp.surface.source_density > 0 and lamp.surface.photometric_distance:
+                values = self._calculate_nearfield(lamp, R, values)
+
+            if np.isnan(values.any()):  # mask any nans near light source
+                values = np.ma.masked_invalid(values)
+
+        else:
+            values = self.zone.lamp_values_base[lamp.lamp_id]
 
         return values
 
@@ -103,6 +74,7 @@ class LightingCalculator:
         update the values of a single lamp based on the calc zone properties,
         but which don't require a full recalculation
         """
+
         rel_coords = self.zone.coords - lamp.position
         Theta0, Phi0, R0 = to_polar(*rel_coords.T)
         # apply vertical field of view
@@ -115,6 +87,9 @@ class LightingCalculator:
 
         if lamp.intensity_units.lower() == "mw/sr":
             values = values / 10  # convert from mW/Sr to uW/cm2
+
+        # reshape
+        values = values.reshape(*self.zone.num_points)
 
         return values
 
@@ -140,7 +115,7 @@ class LightingCalculator:
             values[near_idx] += near_values
         return values
 
-    def _calculate_horizontal_fov(self, values, lamps):
+    def _calculate_horizontal_fov(self, lamps):
         """
         Vectorized function to compute the largest possible value for all lamps
         within a horizontal view field.
@@ -164,6 +139,9 @@ class LightingCalculator:
         # Create the adjacency mask for each pair within 180 degrees
         adjacency = diffs <= self.zone.fov_horiz / 2  # Shape (N, M, M)
 
+        # current values to be transformed
+        vals = self.zone.lamp_values.values()
+        values = np.array([val.reshape(-1) for val in vals]).T
         # Sum the values for all connected components (using the adjacency mask)
         value_sums = adjacency @ values[:, :, None]  # Shape (N, M, 1)
         # Remove the last singleton dimension,

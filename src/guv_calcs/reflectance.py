@@ -31,7 +31,7 @@ class ReflectanceManager:
     ):
 
         self.room = room
-        self.calc_zone_values = {}
+        self.zone_dict = {}
 
         keys = ["floor", "ceiling", "south", "north", "east", "west"]
         default_reflectances = {surface: 0.0 for surface in keys}
@@ -134,46 +134,47 @@ class ReflectanceManager:
             surface.plane.height = height
             surface.plane.set_dimensions(x1, x2, y1, y2)
 
-    def calculate_incidence(self):
+    def calculate_incidence(self, hard=False):
         """calculate the incident irradiances on all reflective walls"""
         for wall, R in self.reflectances.items():
-            if R > 0:
-                self.surfaces[wall].calculate_incidence(self.room.lamps)
+            valid_lamps = self.room._get_valid_lamps()
+            self.surfaces[wall].calculate_incidence(valid_lamps, hard=hard)
 
-    def calculate_reflectance_old(self, calc_zone):
-        """calculate the reflectance contribution to a calc zone from each surface"""
-        total_values = np.zeros(calc_zone.coords.shape[0])
-        for key, surface in self.surfaces.items():
-            if surface.R > 0:
-                surface.calculate_reflectance(calc_zone)
-                values = surface.zone_values[calc_zone.zone_id]
-                values = values.reshape(total_values.shape)
-                total_values += values * surface.R
-        return total_values
+    def calculate_reflectance(self, zone, hard=False):
+        """
+        calculate the reflectance contribution to a calc zone from each surface
+        """
 
-    def calculate_reflectance(self, calc_zone):
-        """calculate the reflectance contribution to a calc zone from each surface"""
-
-        threshold = calc_zone.values.mean() * 0.01  # 1% of total value
+        threshold = zone.base_values.mean() * 0.01  # 1% of total value
 
         total_values = {}
         for wall, surface in self.surfaces.items():
-            if surface.plane.values is not None:
-                if surface.R * surface.plane.values.mean() > threshold:
-                    surface.calculate_reflectance(calc_zone)
-                    values = surface.zone_values[calc_zone.zone_id]
-                    total_values[wall] = values
-        self.calc_zone_values[calc_zone.zone_id] = total_values
+            if surface.R * surface.plane.values.mean() > threshold:
+
+                surface.calculate_reflectance(zone, hard=hard)
+                values = surface.zone_dict[zone.zone_id]["values"]
+                total_values[wall] = values
+            else:
+                total_values[wall] = np.zeros(zone.num_points)
+
+        self.zone_dict[zone.zone_id] = total_values
 
         return total_values
 
-    def get_total_reflectance(self, calc_zone):
+    def get_total_reflectance(self, zone):
         """sum over all surfaces to get the total reflected values for that calc zone"""
-        dct = self.calc_zone_values[calc_zone.zone_id]
-        values = np.zeros(calc_zone.num_points)
-        for key, val in dct.items():
-            values += val * self.reflectances[key]
+        dct = self.zone_dict[zone.zone_id]
+        values = np.zeros(zone.num_points)
+        for wall, surface_vals in dct.items():
+            if surface_vals is not None:
+                values += surface_vals * self.reflectances[wall]
         return values
+
+    # def calculate_interreflectance(self):
+    # """
+    # calculate the contribution of each reflective surface to each
+    # other reflective surface
+    # """
 
 
 class ReflectiveSurface:
@@ -194,28 +195,111 @@ class ReflectiveSurface:
 
         self.R = R
         self.plane = plane
-        self.zone_values = {}
+        self.zone_dict = {}
 
-    def calculate_incidence(self, lamps):
+    def calculate_incidence(self, lamps, hard=False):
         """calculate incoming radiation"""
-        self.plane.calculate_values(lamps=lamps)
+        self.plane.calculate_values(lamps=lamps, hard=hard)
 
-    def calculate_reflectance(self, calc_zone, lamp=None):
+    def calculate_reflectance(self, zone, hard=False):
         """
+        TODO: this can be sped up by storing each calculation for each lamp,
+        and only recalculating the contribution from each lamp...maybe? idk
+        maybe that doesn't work after all.
+
+        Actually since calculating the incidence is fast
+
         calculate the reflective contribution of this reflective surface
         to a provided calculation zone
+
+        Arguments:
+            zone: a calculation zone onto which reflectance is calculated
+            lamp: optional. if provided, and incidence not yet calculated, uses this
+            lamp to calculate incidence. mostly this is just for
         """
 
         # first make sure incident irradiance is calculated
         if self.plane.values is None:
-            if lamp is not None:
-                self.calculate_incidence({lamp.lamp_id: lamp})
-            else:
-                raise ValueError("Incidence must be calculated before reflectance")
+            raise ValueError("Incidence must be calculated before reflectance")
 
-        I_r = self.plane.values[:, :, np.newaxis, np.newaxis, np.newaxis]
+        if self.zone_dict.get(zone.zone_id) is None:
+            self.zone_dict[zone.zone_id] = {}
+
+        calc_state = zone.get_calc_state()
+        update_state = zone.get_update_state()
+        surface_state = self.plane.get_calc_state()
+        NEW_ZONE = self.zone_dict[zone.zone_id].get("values") is None
+        ZONE_RECALC = calc_state != self.zone_dict[zone.zone_id].get("calc_state")
+        ZONE_UPDATE = update_state != self.zone_dict[zone.zone_id].get("update_state")
+        SURFACE_UPDATE = surface_state != self.zone_dict[zone.zone_id].get(
+            "surface_state"
+        )
+
+        CALCULATE = NEW_ZONE or SURFACE_UPDATE or hard
+
+        if CALCULATE or ZONE_RECALC:
+            distances, angles, theta = self._calculate_coordinates(zone)
+        else:
+            distances = self.zone_dict[zone.zone_id]["distances"]
+            angles = self.zone_dict[zone.zone_id]["angles"]
+            theta = self.zone_dict[zone.zone_id]["theta"]
+
+        if CALCULATE or ZONE_UPDATE:
+            I_r = self.plane.values[:, :, np.newaxis, np.newaxis, np.newaxis]
+            element_size = self.plane.x_spacing * self.plane.y_spacing
+
+            values = (I_r * abs(np.cos(angles)) * element_size) / (
+                np.pi * distances ** 2
+            )
+
+            values = self._apply_filters(values, theta, zone)
+
+            # Sum over all self.plane points to get total values at each volume point
+            values = np.sum(values, axis=(0, 1))  # Collapse the dimensions
+            values = values.reshape(*zone.num_points)
+        else:
+            values = self.zone_dict[zone.zone_id]["values"]
+
+        # update the state
+        self.zone_dict[zone.zone_id] = {
+            "distances": distances,
+            "angles": angles,
+            "theta": theta,
+            "values": values,
+            "calc_state": calc_state,
+            "update_state": update_state,
+            "surface_state": surface_state,
+        }
+
+        # Ensure the final array has the correct shape and return multiplied by R
+        return values * self.R
+
+    def _apply_filters(self, values, theta, zone):
+
+        theta = theta.reshape(values.shape)
+
+        # clean nans
+        if np.isnan(values).any():
+            values = np.ma.masked_invalid(values)
+
+        # apply vertical field of view
+        values[theta < 90 - zone.fov_vert / 2] = 0
+        if zone.vert:
+            values *= np.sin(np.radians(theta))
+        if zone.horiz:
+            values *= abs(np.cos(np.radians(theta)))
+
+        return values
+
+    def _calculate_coordinates(self, zone):
+        """
+        return the angles and distances between the points of the reflective
+        surface and the calculation zone
+
+        this is the expensive step!
+        """
         surface_points = self.plane.coords.reshape(*self.plane.num_points, 3)
-        volume_points = calc_zone.coords.reshape(*calc_zone.num_points, 3)
+        volume_points = zone.coords.reshape(*zone.num_points, 3)
 
         differences = (
             volume_points - surface_points[:, :, np.newaxis, np.newaxis, np.newaxis, :]
@@ -225,31 +309,7 @@ class ReflectiveSurface:
         cos_theta = differences[..., 2] / distances
         angles = np.arccos(cos_theta)
 
-        grid_element_size = self.plane.x_spacing * self.plane.y_spacing
-
-        nom = I_r * abs(np.cos(angles)) * grid_element_size
-        denom = np.pi * distances ** 2
-        values = nom / denom
-
-        # clean nans
-        if np.isnan(values).any():
-            values = np.ma.masked_invalid(values)
-
-        # apply angle-based differences
+        # for angle-based differences
         Theta0, Phi0, R0 = to_polar(*differences.reshape(-1, 3).T)
-        Theta0 = Theta0.reshape(values.shape)
 
-        # apply vertical field of view
-        values[Theta0 < 90 - calc_zone.fov_vert / 2] = 0
-        if calc_zone.vert:
-            values *= np.sin(np.radians(Theta0))
-        if calc_zone.horiz:
-            values *= abs(np.cos(np.radians(Theta0)))
-
-        # Sum over all self.plane points to get total values at each volume point
-        values = np.sum(values, axis=(0, 1))  # Collapse the self.surface dimensions
-        values = values.reshape(*calc_zone.num_points)
-
-        self.zone_values[calc_zone.zone_id] = values
-        # Ensure the final array has the correct shape and return multiplied by R
-        return values * self.R
+        return distances, angles, Theta0

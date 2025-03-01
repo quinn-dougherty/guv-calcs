@@ -108,6 +108,7 @@ class CalcZone(object):
         self.reflected_values = None
         self.lamp_values = {}
         self.lamp_values_base = {}
+        self.calc_state = None
 
     def save_zone(self, filename=None):
 
@@ -189,17 +190,45 @@ class CalcZone(object):
             self.units = "uW/cm2"
 
     def set_dose_time(self, hours):
+        """
+        Set the time over which the dose will be calculate in hours
+        """
         if type(hours) not in [float, int]:
             raise TypeError("Hours must be numeric")
         self.hours = hours
 
-    def calculate_values(self, lamps, ref_manager=None):
-        """ """
-        return self.calculator.compute(lamps, ref_manager)
+    def get_update_state(self):
+        return [self.fov_vert, self.fov_horiz, self.vert, self.horiz]
 
-    def update_values(self, lamps, ref_manager=None):
-        """ """
-        return self.calculator.update(lamps, ref_manager)
+    def calculate_values(self, lamps, ref_manager=None, hard=False):
+        """
+        Calculate all the values for all the lamps
+        """
+
+        new_calc_state = self.get_calc_state()
+
+        # updates self.lamp_values_base and self.lamp_values
+        self.base_values = self.calculator.compute(lamps=lamps, hard=hard)
+
+        if ref_manager is not None:
+            # calculate reflectance -- warning, may be expensive!
+            ref_manager.calculate_reflectance(self, hard=hard)
+            # add in reflected values, if applicable
+            self.reflected_values = ref_manager.get_total_reflectance(self)
+        else:
+            self.reflected_values = np.zeros(self.num_points)
+
+        # sum
+        values = self.base_values + self.reflected_values
+
+        # convert to dose
+        if self.dose:
+            values *= 3.6 * self.hours
+
+        self.values = values
+        self.calc_state = new_calc_state
+
+        return self.values
 
     def export(self, fname=None):
         """
@@ -330,6 +359,27 @@ class CalcVol(CalcZone):
         self._update()
         self.values = np.zeros(self.num_points)
         self.reflected_values = np.zeros(self.num_points)
+
+    def get_calc_state(self):
+        """
+        return a set of paramters that, if changed, indicate that
+        this calc zone must be recalculated
+        """
+        return [
+            self.offset,
+            self.x1,
+            self.x2,
+            self.x_spacing,
+            self.num_x,
+            self.y1,
+            self.y2,
+            self.y_spacing,
+            self.num_y,
+            self.z1,
+            self.z2,
+            self.z_spacing,
+            self.num_z,
+        ]
 
     def set_dimensions(self, x1=None, x2=None, y1=None, y2=None, z1=None, z2=None):
         self.x1 = self.x1 if x1 is None else x1
@@ -613,6 +663,24 @@ class CalcPlane(CalcZone):
 
         self._update()
         return self
+
+    def get_calc_state(self):
+        """
+        return a set of paramters that, if changed, indicate that
+        this calc zone must be recalculated
+        """
+        return [
+            self.offset,
+            self.x1,
+            self.x2,
+            self.x_spacing,
+            self.num_x,
+            self.y1,
+            self.y2,
+            self.y_spacing,
+            self.num_y,
+            self.height,
+        ]
 
     def _update(self):
         """
