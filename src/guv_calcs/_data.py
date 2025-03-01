@@ -47,7 +47,6 @@ def get_disinfection_table(fluence=None, wavelength=None, room=None):
     df = df[df["Medium"] == "Aerosol"]
 
     newkeys = []
-    
 
     if wavelength is not None:
         valid_wavelengths = df["wavelength [nm]"].unique()

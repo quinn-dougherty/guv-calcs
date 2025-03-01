@@ -1,6 +1,10 @@
 import warnings
 import numpy as np
-from ._data import get_disinfection_table, plot_disinfection_data, get_full_disinfection_table
+from ._data import (
+    get_disinfection_table,
+    plot_disinfection_data,
+    get_full_disinfection_table,
+)
 
 
 class DisinfectionCalculator:
@@ -14,11 +18,11 @@ class DisinfectionCalculator:
     def get_disinfection_plot(self, zone_id):
         """
         Return a violin plot of expected disinfection rates
-        """        
+        """
         df, fluence_dict = self.get_disinfection_table(zone_id)
         fig = plot_disinfection_data(df, fluence_dict, self.room)
         return fig
-        
+
     def get_disinfection_table(self, zone_id):
         """
         Return a table of expected disinfection rates
@@ -39,7 +43,7 @@ class DisinfectionCalculator:
             df = df[new_keys]
         else:
             msg = "Fluence value not available; returning full disinfection data table."
-            warnings.warn(msg,stacklevel=3)
+            warnings.warn(msg, stacklevel=3)
             df = get_full_disinfection_table()
 
         return df, fluence_dict
@@ -62,12 +66,12 @@ class DisinfectionCalculator:
     def _get_lamp_wavelength_dict(self, zone):
         """assign lamps to each unique wavelength contributing to the zone"""
         lamp_types = self._get_lamp_types(zone)
-        if len(zone.lamp_values)==0:
+        if len(zone.lamp_values) == 0:
             msg = f"Calc zone {zone.zone_id} has no associated lamps."
             warnings.warn(msg)
-        elif len(lamp_types)==0:
+        elif len(lamp_types) == 0:
             msg = f"Calc zone {zone.zone_id} has no associated lamps with an associated wavelength."
-        
+
         lamp_wavelengths = {}
         for wavelength in lamp_types:
             val = [
@@ -77,7 +81,7 @@ class DisinfectionCalculator:
             ]
             lamp_wavelengths[wavelength] = val
         return lamp_wavelengths
-               
+
     def _get_lamp_types(self, zone):
         """fetch a list of unique wavelengths contributing to the zone"""
         wavelengths = []
