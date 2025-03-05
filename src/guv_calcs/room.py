@@ -35,6 +35,7 @@ class Room:
         reflectances=None,
         reflectance_x_spacings=None,
         reflectance_y_spacings=None,
+        num_passes=None,
         air_changes=None,
         ozone_decay_constant=None,
     ):
@@ -56,10 +57,11 @@ class Room:
         self.air_changes = 1.0 if air_changes is None else air_changes
 
         self.ref_manager = ReflectanceManager(
-            self,
+            self.x, self.y, self.z,
             reflectances,
             reflectance_x_spacings,
             reflectance_y_spacings,
+            num_passes,
         )
         self.plotter = RoomPlotter(self)
         self.disinfection = DisinfectionCalculator(self)
@@ -70,6 +72,10 @@ class Room:
         self.calc_zones = {}
         self.calc_state = {}
         self.update_state = {}
+        
+    def set_num_passes(self, num_passes):
+        self.ref_manager.num_passes = num_passes
+        return self
 
     def set_reflectance(self, R, wall_id=None):
         self.ref_manager.set_reflectance(R=R, wall_id=wall_id)
@@ -492,30 +498,39 @@ class Room:
         recalculation will be performed
         """
 
-        new_calc_state = self.get_calc_state()
-        new_update_state = self.get_update_state()
-
-        LAMP_RECALC = self.calc_state.get("lamps") != new_calc_state.get("lamps")
-        REF_RECALC = self.calc_state.get("room") != new_calc_state.get("room")
-
-        # calculate incidence on the surfaces if the reflectances or lamps have changed
-        if LAMP_RECALC or REF_RECALC or hard:
-            self.ref_manager.calculate_incidence(hard=hard)
-
         valid_lamps = self._get_valid_lamps()
-        for name, zone in self.calc_zones.items():
-            if zone.enabled and len(valid_lamps) > 0:
-                zone.calculate_values(
-                    lamps=valid_lamps, ref_manager=self.ref_manager, hard=hard
-                )
-        # update calc states.
-        self.calc_state = new_calc_state
-        self.update_state = new_update_state
+        
+        if len(valid_lamps)>0:
+            new_calc_state = self.get_calc_state()
+            new_update_state = self.get_update_state()
 
-        # possibly this should be per-calc zone? idk maybe it's fine
-        for lamp_id in valid_lamps.keys():
-            new_calc_state = self.lamps[lamp_id].get_calc_state()
-            self.lamps[lamp_id].calc_state = new_calc_state
+            LAMP_RECALC = self.calc_state.get("lamps") != new_calc_state.get("lamps")
+            REF_RECALC = self.calc_state.get("room") != new_calc_state.get("room")
+            REF_UPDATE = self.update_state.get("room") != new_update_state.get("room")
+                    
+            # calculate incidence on the surfaces if the reflectances or lamps have changed
+            if LAMP_RECALC or REF_RECALC or REF_UPDATE or hard:
+                self.ref_manager.calculate_incidence(valid_lamps, hard=hard)
+
+            for name, zone in self.calc_zones.items():
+                if zone.enabled and len(valid_lamps) > 0:
+                    zone.calculate_values(
+                        lamps=valid_lamps, ref_manager=self.ref_manager, hard=hard
+                    )
+            # update calc states.
+            self.calc_state = new_calc_state
+            self.update_state = new_update_state
+
+            # possibly this should be per-calc zone? idk maybe it's fine
+            for lamp_id in valid_lamps.keys():
+                new_calc_state = self.lamps[lamp_id].get_calc_state()
+                self.lamps[lamp_id].calc_state = new_calc_state
+        else:
+            if len(self.lamps)==0:
+                msg = "No lamps are present in the room."
+            else:
+                msg = "No valid lamps are present in the room--either lamps have been disabled, or filedata has not been provided."
+            warnings.warn(msg, stacklevel=3)
 
         return self
 

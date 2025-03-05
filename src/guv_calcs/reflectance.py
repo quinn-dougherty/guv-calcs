@@ -1,7 +1,8 @@
 import numpy as np
+import copy
 from .calc_zone import CalcPlane
 from .trigonometry import to_polar
-
+import tracemalloc
 
 class ReflectanceManager:
     """
@@ -24,24 +25,29 @@ class ReflectanceManager:
 
     def __init__(
         self,
-        room,
+        x,y,z,
         reflectances=None,
         x_spacings=None,
         y_spacings=None,
+        num_passes=None,
     ):
 
-        self.room = room
-        self.zone_dict = {}
+        self.x = x
+        self.y = y
+        self.z = z
 
         keys = ["floor", "ceiling", "south", "north", "east", "west"]
         default_reflectances = {surface: 0.0 for surface in keys}
-        default_spacings = {surface: 0.5 for surface in keys}
+        default_spacings = {surface: 0.25 for surface in keys}
 
         self.reflectances = {**default_reflectances, **(reflectances or {})}
         self.x_spacings = {**default_spacings, **(x_spacings or {})}
         self.y_spacings = {**default_spacings, **(y_spacings or {})}
-
+        self.num_passes = 1 if num_passes is None else num_passes
+        
+        self.zone_dict = {} # will contain all values from all contributions
         self.surfaces = {}
+        self.managers = {}
         self._initialize_surfaces()
 
     def set_reflectance(self, R, wall_id=None):
@@ -98,32 +104,39 @@ class ReflectanceManager:
                 y_spacing=self.y_spacings[wall],
             )
             self.surfaces[wall] = ReflectiveSurface(R=reflectance, plane=plane)
+            
+        # possibly this should go here? idk
+        self.managers = {}
+        for wall, surface in self.surfaces.items():
+            ref_manager = copy.deepcopy(self)
+            del ref_manager.surfaces[wall]
+            self.managers[wall] = ref_manager
 
     def _get_surface_dimensions(self, wall):
         """retrieve the dimensions of a particular wall based on its id"""
         if wall == "floor":
-            x1, x2, y1, y2 = 0, self.room.x, 0, self.room.y
+            x1, x2, y1, y2 = 0, self.x, 0, self.y
             height = 0
             ref_surface = "xy"
         elif wall == "ceiling":
-            x1, x2, y1, y2 = 0, self.room.x, 0, self.room.y
-            height = self.room.z
+            x1, x2, y1, y2 = 0, self.x, 0, self.y
+            height = self.z
             ref_surface = "xy"
         elif wall == "south":
-            x1, x2, y1, y2 = 0, self.room.x, 0, self.room.z
+            x1, x2, y1, y2 = 0, self.x, 0, self.z
             height = 0
             ref_surface = "xz"
         elif wall == "north":
-            x1, x2, y1, y2 = 0, self.room.x, 0, self.room.z
-            height = self.room.y
+            x1, x2, y1, y2 = 0, self.x, 0, self.z
+            height = self.y
             ref_surface = "xz"
         elif wall == "west":
-            x1, x2, y1, y2 = 0, self.room.y, 0, self.room.z
+            x1, x2, y1, y2 = 0, self.y, 0, self.z
             height = 0
             ref_surface = "yz"
         elif wall == "east":
-            x1, x2, y1, y2 = 0, self.room.y, 0, self.room.z
-            height = self.room.x
+            x1, x2, y1, y2 = 0, self.y, 0, self.z
+            height = self.x
             ref_surface = "yz"
         return x1, x2, y1, y2, height, ref_surface
 
@@ -134,12 +147,81 @@ class ReflectanceManager:
             surface.plane.height = height
             surface.plane.set_dimensions(x1, x2, y1, y2)
 
-    def calculate_incidence(self, hard=False):
-        """calculate the incident irradiances on all reflective walls"""
-        for wall, R in self.reflectances.items():
-            valid_lamps = self.room._get_valid_lamps()
-            self.surfaces[wall].calculate_incidence(valid_lamps, hard=hard)
+    def calculate_incidence(self, lamps, hard=False):
+        """
+        calculate the incident irradiances on all reflective walls
+        """
+        
+        # first pass
+        for wall, surface in self.surfaces.items():
+            surface.calculate_incidence(lamps, hard=hard)
+            
+        # subsequent passes        
+        self._interreflectance(lamps, hard=hard)       
+            
+    def _interreflectance(self, lamps, hard=False):
+        """
+        calculate additional interreflectance
+        """
+        # create dict of ref managers for each wall
+        managers = self._create_managers1()
+        i=0
+        while i<self.num_passes:
+            # refs=[]
+            # vals=[]
+            for wall, surface in self.surfaces.items():
+                surface.calculate_incidence(lamps, ref_manager=managers[wall], hard=hard)
+                # surface.num_passes = i
+                # refs.append(surface.plane.reflected_values.mean())
+                # vals.append(surface.plane.values.mean())
+            managers = self._update_managers(managers)        
+            i = i + 1     
+            
+    def _create_managers1(self):
+        """
+        v1
+        create a dict of reflection managers for each wall
+        """
+        managers = {}
+        for wall, surface in self.surfaces.items():
+            ref_manager = copy.deepcopy(self)
+            del ref_manager.surfaces[wall]
+            managers[wall] = ref_manager
+        return managers
+        
+    def _create_managers2(self):
+        """
+        V2
+        create a dict of reflection managers for each wall
+        """
+        managers = {}
+        for wall, surface in self.surfaces.items():
+            ref_manager = ReflectanceManager(x=self.x, y=self.y, z=self.z,reflectances=self.reflectances, x_spacings=self.x_spacings,y_spacings=self.y_spacings)
+            # assign planes
+            for subwall, surface in ref_manager.surfaces.items():
+                ref_manager.surfaces[subwall].plane = copy.deepcopy(self.surfaces[subwall].plane)
+            # remove the surface being reflected upon
+            del ref_manager.surfaces[wall]
+            managers[wall] = ref_manager
+        return managers
+            
+    def _update_managers(self, managers: dict) -> dict:
+        """Update all interreflection managers with newly calculated surface incidences"""
+        for wall, manager in managers.items():
+            subwalls = list(manager.surfaces.keys())  # Create a static copy of keys
+            for subwall in subwalls:
+                # Update the values without modifying the dictionary structure
+                np.copyto(manager.surfaces[subwall].plane.values, self.surfaces[subwall].plane.values)
 
+                # Replace the object instead of deleting in-place
+                manager.surfaces[subwall] = ReflectiveSurface(
+                    R=self.surfaces[subwall].R,
+                    plane=copy.deepcopy(self.surfaces[subwall].plane)  # Deep copy only necessary data
+                )
+                # manager.surfaces[subwall].num_passes = i
+
+        return managers  # Updated in place
+        
     def calculate_reflectance(self, zone, hard=False):
         """
         calculate the reflectance contribution to a calc zone from each surface
@@ -156,7 +238,6 @@ class ReflectanceManager:
                 total_values[wall] = values
             else:
                 total_values[wall] = np.zeros(zone.num_points)
-
         self.zone_dict[zone.zone_id] = total_values
 
         return total_values
@@ -168,13 +249,7 @@ class ReflectanceManager:
         for wall, surface_vals in dct.items():
             if surface_vals is not None:
                 values += surface_vals * self.reflectances[wall]
-        return values
-
-    # def calculate_interreflectance(self):
-    # """
-    # calculate the contribution of each reflective surface to each
-    # other reflective surface
-    # """
+        return values    
 
 
 class ReflectiveSurface:
@@ -185,7 +260,7 @@ class ReflectiveSurface:
 
     def __init__(self, R, plane):
 
-        if not isinstance(R, float):
+        if not isinstance(R, (float,int)):
             raise TypeError("R must be a float in range [0, 1]")
         if R > 1 or R < 0:
             raise ValueError("R must be a float in range [0, 1]")
@@ -195,20 +270,23 @@ class ReflectiveSurface:
 
         self.R = R
         self.plane = plane
+        self.num_passes = 0 # init
         self.zone_dict = {}
 
-    def calculate_incidence(self, lamps, hard=False):
-        """calculate incoming radiation"""
-        self.plane.calculate_values(lamps=lamps, hard=hard)
+    def calculate_incidence(self, lamps, ref_manager=None, hard=False):
+        """calculate incoming radiation"""        
+        self.plane.calculate_values(lamps=lamps, ref_manager=ref_manager, hard=hard)
+        
+    def get_calc_state(self):
+        """"""
+        return self.plane.get_calc_state()
+        
+    def get_update_state(self):
+        """"""
+        return self.plane.get_update_state()+[self.plane.values.sum()]
 
     def calculate_reflectance(self, zone, hard=False):
         """
-        TODO: this can be sped up by storing each calculation for each lamp,
-        and only recalculating the contribution from each lamp...maybe? idk
-        maybe that doesn't work after all.
-
-        Actually since calculating the incidence is fast
-
         calculate the reflective contribution of this reflective surface
         to a provided calculation zone
 
@@ -217,7 +295,7 @@ class ReflectiveSurface:
             lamp: optional. if provided, and incidence not yet calculated, uses this
             lamp to calculate incidence. mostly this is just for
         """
-
+        # print(zone.zone_id, self.plane.zone_id, self.num_passes)
         # first make sure incident irradiance is calculated
         if self.plane.values is None:
             raise ValueError("Incidence must be calculated before reflectance")
@@ -227,24 +305,25 @@ class ReflectiveSurface:
 
         calc_state = zone.get_calc_state()
         update_state = zone.get_update_state()
-        surface_state = self.plane.get_calc_state()
+        surface_calc_state = self.get_calc_state()
+        surface_update_state = self.get_update_state()
         NEW_ZONE = self.zone_dict[zone.zone_id].get("values") is None
         ZONE_RECALC = calc_state != self.zone_dict[zone.zone_id].get("calc_state")
         ZONE_UPDATE = update_state != self.zone_dict[zone.zone_id].get("update_state")
-        SURFACE_UPDATE = surface_state != self.zone_dict[zone.zone_id].get(
-            "surface_state"
-        )
+        SURF_RECALC = surface_calc_state != self.zone_dict[zone.zone_id].get("surface_calc_state")
+        SURF_UPDATE = surface_update_state != self.zone_dict[zone.zone_id].get("surface_update_state")
 
-        CALCULATE = NEW_ZONE or SURFACE_UPDATE or hard
+        RECALCULATE = NEW_ZONE or ZONE_RECALC or SURF_RECALC or hard
+        UPDATE = NEW_ZONE or ZONE_UPDATE or SURF_UPDATE or hard
 
-        if CALCULATE or ZONE_RECALC:
+        if RECALCULATE:
             distances, angles, theta = self._calculate_coordinates(zone)
         else:
             distances = self.zone_dict[zone.zone_id]["distances"]
             angles = self.zone_dict[zone.zone_id]["angles"]
             theta = self.zone_dict[zone.zone_id]["theta"]
 
-        if CALCULATE or ZONE_UPDATE:
+        if UPDATE:
             I_r = self.plane.values[:, :, np.newaxis, np.newaxis, np.newaxis]
             element_size = self.plane.x_spacing * self.plane.y_spacing
 
@@ -268,9 +347,12 @@ class ReflectiveSurface:
             "values": values,
             "calc_state": calc_state,
             "update_state": update_state,
-            "surface_state": surface_state,
+            "surface_calc_state": surface_calc_state,
+            "surface_update_state": surface_update_state            
         }
-
+        
+        # if zone.zone_id not in ["floor", "ceiling", "south", "north", "east", "west"]:
+            # print(self.plane.zone_id, values.mean().round(3))
         # Ensure the final array has the correct shape and return multiplied by R
         return values * self.R
 
