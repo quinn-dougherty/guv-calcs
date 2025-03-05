@@ -35,7 +35,7 @@ class Room:
         reflectances=None,
         reflectance_x_spacings=None,
         reflectance_y_spacings=None,
-        num_passes=None,
+        max_num_passes=None,
         air_changes=None,
         ozone_decay_constant=None,
     ):
@@ -61,7 +61,7 @@ class Room:
             reflectances,
             reflectance_x_spacings,
             reflectance_y_spacings,
-            num_passes,
+            max_num_passes,
         )
         self.plotter = RoomPlotter(self)
         self.disinfection = DisinfectionCalculator(self)
@@ -73,8 +73,8 @@ class Room:
         self.calc_state = {}
         self.update_state = {}
         
-    def set_num_passes(self, num_passes):
-        self.ref_manager.num_passes = num_passes
+    def set_max_num_passes(self, max_num_passes):
+        self.ref_manager.max_num_passes = max_num_passes
         return self
 
     def set_reflectance(self, R, wall_id=None):

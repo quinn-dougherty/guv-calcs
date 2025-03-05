@@ -29,7 +29,7 @@ class ReflectanceManager:
         reflectances=None,
         x_spacings=None,
         y_spacings=None,
-        num_passes=None,
+        max_num_passes=None,
     ):
 
         self.x = x
@@ -38,12 +38,12 @@ class ReflectanceManager:
 
         keys = ["floor", "ceiling", "south", "north", "east", "west"]
         default_reflectances = {surface: 0.0 for surface in keys}
-        default_spacings = {surface: 0.5 for surface in keys}
+        default_spacings = {surface: 0.25 for surface in keys}
 
         self.reflectances = {**default_reflectances, **(reflectances or {})}
         self.x_spacings = {**default_spacings, **(x_spacings or {})}
         self.y_spacings = {**default_spacings, **(y_spacings or {})}
-        self.num_passes = 1 if num_passes is None else num_passes
+        self.max_num_passes = 6 if max_num_passes is None else max_num_passes
         
         self.zone_dict = {} # will contain all values from all contributions
         self.surfaces = {}
@@ -154,8 +154,7 @@ class ReflectanceManager:
         
         # first pass
         for wall, surface in self.surfaces.items():
-            surface.calculate_incidence(lamps, hard=hard)
-            
+            surface.calculate_incidence(lamps, hard=hard)            
         # subsequent passes        
         self._interreflectance(lamps, hard=hard)       
             
@@ -164,34 +163,29 @@ class ReflectanceManager:
         calculate additional interreflectance
         """
         # create dict of ref managers for each wall
-        managers = self._create_managers1()
-        i=0
-        while i<self.num_passes:
-            # refs=[]
-            # vals=[]
+        managers = self._create_managers()
+        i = 0
+        percent = 1 # initial
+        # while i<self.max_num_passes:
+        while percent>0.05 and i<self.max_num_passes:
+            pc = [] 
             for wall, surface in self.surfaces.items():
+                init = surface.plane.values.mean()
                 surface.calculate_incidence(lamps, ref_manager=managers[wall], hard=hard)
-                # surface.num_passes = i
-                # refs.append(surface.plane.reflected_values.mean())
-                # vals.append(surface.plane.values.mean())
+                
+                final = surface.plane.reflected_values.mean()
+                if final != 0:
+                    pc.append((abs(final-init)/final))
+            if len(pc)>0:
+                percent = np.mean(pc)
+            else:
+                percent = 0
             managers = self._update_managers(managers)        
             i = i + 1     
-            
-    def _create_managers1(self):
-        """
-        v1
-        create a dict of reflection managers for each wall
-        """
-        managers = {}
-        for wall, surface in self.surfaces.items():
-            ref_manager = copy.deepcopy(self)
-            del ref_manager.surfaces[wall]
-            managers[wall] = ref_manager
-        return managers
+        # print(i)
         
-    def _create_managers2(self):
+    def _create_managers(self):
         """
-        V2
         create a dict of reflection managers for each wall
         """
         managers = {}
@@ -199,7 +193,8 @@ class ReflectanceManager:
             ref_manager = ReflectanceManager(x=self.x, y=self.y, z=self.z,reflectances=self.reflectances, x_spacings=self.x_spacings,y_spacings=self.y_spacings)
             # assign planes
             for subwall, surface in ref_manager.surfaces.items():
-                ref_manager.surfaces[subwall].plane = copy.deepcopy(self.surfaces[subwall].plane)
+                new_plane = copy.deepcopy(self.surfaces[subwall].plane)
+                ref_manager.surfaces[subwall].plane = new_plane
             # remove the surface being reflected upon
             del ref_manager.surfaces[wall]
             managers[wall] = ref_manager
@@ -212,13 +207,12 @@ class ReflectanceManager:
             for subwall in subwalls:
                 # Update the values without modifying the dictionary structure
                 np.copyto(manager.surfaces[subwall].plane.values, self.surfaces[subwall].plane.values)
-
+                new_plane = copy.deepcopy(self.surfaces[subwall].plane) # create new plane
+                new_plane.values = new_plane.reflected_values # replace the total values with only the reflected values
                 # Replace the object instead of deleting in-place
                 manager.surfaces[subwall] = ReflectiveSurface(
-                    R=self.surfaces[subwall].R,
-                    plane=copy.deepcopy(self.surfaces[subwall].plane)  # Deep copy only necessary data
+                    R=self.surfaces[subwall].R, plane=new_plane  
                 )
-                # manager.surfaces[subwall].num_passes = i
 
         return managers  # Updated in place
         
@@ -270,7 +264,7 @@ class ReflectiveSurface:
 
         self.R = R
         self.plane = plane
-        self.num_passes = 0 # init
+        self.max_num_passes = 0 # init
         self.zone_dict = {}
 
     def calculate_incidence(self, lamps, ref_manager=None, hard=False):
@@ -295,7 +289,7 @@ class ReflectiveSurface:
             lamp: optional. if provided, and incidence not yet calculated, uses this
             lamp to calculate incidence. mostly this is just for
         """
-        # print(zone.zone_id, self.plane.zone_id, self.num_passes)
+        # print(zone.zone_id, self.plane.zone_id, self.max_num_passes)
         # first make sure incident irradiance is calculated
         if self.plane.values is None:
             raise ValueError("Incidence must be calculated before reflectance")

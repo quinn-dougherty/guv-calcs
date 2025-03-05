@@ -1,6 +1,6 @@
 from guv_calcs import *
 import numpy as np
-room = Room(x=4,y=6,z=2.7,num_passes=10)
+room = Room(x=4,y=6,z=2.7,max_num_passes=6)
 fname = "src/guv_calcs/data/lamp_data/B1 module.ies"
 # lamp1 =  Lamp("Lamp1", filename=fname).move(room.x/3,room.y/2,2.5).aim(room.x/2,room.y/2,2)
 # lamp2 =  Lamp("Lamp2", filename=fname).move(room.x*2/3,room.y/2,2.5).aim(room.x/2,room.y/2,2)
