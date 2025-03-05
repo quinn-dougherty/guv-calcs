@@ -1,31 +1,27 @@
 from guv_calcs import *
 import numpy as np
-def make():
-    room = Room(x=4,y=6,z=2.7,num_passes=10)
-    fname = "src/guv_calcs/data/lamp_data/B1 module.ies"
-    # lamp1 =  Lamp("Lamp1", filename=fname).move(room.x/3,room.y/2,2.5).aim(room.x/2,room.y/2,2)
-    # lamp2 =  Lamp("Lamp2", filename=fname).move(room.x*2/3,room.y/2,2.5).aim(room.x/2,room.y/2,2)
-    lamp =  Lamp("Lamp", filename=fname).move(2, 0, 1.35).aim(2,6,1.35)
+room = Room(x=4,y=6,z=2.7,num_passes=10)
+fname = "src/guv_calcs/data/lamp_data/B1 module.ies"
+# lamp1 =  Lamp("Lamp1", filename=fname).move(room.x/3,room.y/2,2.5).aim(room.x/2,room.y/2,2)
+# lamp2 =  Lamp("Lamp2", filename=fname).move(room.x*2/3,room.y/2,2.5).aim(room.x/2,room.y/2,2)
+lamp =  Lamp("Lamp", filename=fname).move(2, 0, 1.35).aim(2,6,1.35)
 
-                # height=0.3)
-    volume_spacing = 0.15
-    vol = CalcVol("RefVol",
-                      x1=0, x2=room.x, y1=0, y2=room.y, z1=0, z2=room.z,
-                     x_spacing=volume_spacing,
-                     y_spacing=volume_spacing,
-                     z_spacing=volume_spacing,
-                     )
-    plane_spacing = 0.1
-    plane = CalcPlane(
-        "RefPlane",
-            x1=0, x2=room.x, y1=0, y2=room.y, height=1.25,
-            x_spacing=plane_spacing,y_spacing=plane_spacing,
-    )
-    room.add(lamp,plane,vol)#.calculate()
-    return room, vol, plane
-# print(plane.values.max())
+            # height=0.3)
+volume_spacing = 0.15
+vol = CalcVol("RefVol",
+                  x1=0, x2=room.x, y1=0, y2=room.y, z1=0, z2=room.z,
+                 x_spacing=volume_spacing,
+                 y_spacing=volume_spacing,
+                 z_spacing=volume_spacing,
+                 )
+plane_spacing = 0.1
+plane = CalcPlane(
+    "RefPlane",
+        x1=0, x2=room.x, y1=0, y2=room.y, height=1.25,
+        x_spacing=plane_spacing,y_spacing=plane_spacing,
+)
+room.add(lamp,plane,vol)
 
-room,vol,plane = make()
 for R in [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]:
     room.set_reflectance(R).calculate()
     print(round(vol.values.mean(),2),round(plane.values.mean(),2))
