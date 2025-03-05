@@ -38,7 +38,7 @@ class ReflectanceManager:
 
         keys = ["floor", "ceiling", "south", "north", "east", "west"]
         default_reflectances = {surface: 0.0 for surface in keys}
-        default_spacings = {surface: 0.25 for surface in keys}
+        default_spacings = {surface: 0.5 for surface in keys}
 
         self.reflectances = {**default_reflectances, **(reflectances or {})}
         self.x_spacings = {**default_spacings, **(x_spacings or {})}
