@@ -38,7 +38,7 @@ class ReflectanceManager:
 
         keys = ["floor", "ceiling", "south", "north", "east", "west"]
         default_reflectances = {surface: 0.0 for surface in keys}
-        default_spacings = {surface: 0.25 for surface in keys}
+        default_spacings = {surface: 0.1 for surface in keys}
 
         self.reflectances = {**default_reflectances, **(reflectances or {})}
         self.x_spacings = {**default_spacings, **(x_spacings or {})}
@@ -167,7 +167,7 @@ class ReflectanceManager:
         i = 0
         percent = 1 # initial
         # while i<self.max_num_passes:
-        while percent>0.05 and i<self.max_num_passes:
+        while percent>0.01 and i<self.max_num_passes:
             pc = [] 
             for wall, surface in self.surfaces.items():
                 init = surface.plane.values.mean()

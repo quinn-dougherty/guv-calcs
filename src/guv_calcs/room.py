@@ -96,6 +96,7 @@ class Room:
         data["reflectances"] = self.ref_manager.reflectances
         data["reflectance_x_spacing"] = self.ref_manager.x_spacings
         data["reflectance_y_spacing"] = self.ref_manager.y_spacings
+        data["max_num_passes"] = self.ref_manager.max_num_passes
         data["standard"] = self.standard
         data["air_changes"] = self.air_changes
         data["ozone_decay_constant"] = self.ozone_decay_constant
@@ -186,7 +187,7 @@ class Room:
                 if include_lamp_files:
                     data_dict[lamp.name + ".ies"] = lamp.save_ies()
                 if include_lamp_plots:
-                    ies_fig, ax = lamp.plot_ies(lamp.name)
+                    ies_fig, ax = lamp.plot_ies(title=lamp.name)
                     data_dict[lamp.name + "_ies.png"] = fig_to_bytes(ies_fig)
             if lamp.spectra is not None:
                 if include_lamp_plots:

@@ -516,6 +516,8 @@ class Lamp:
         else:
             data["intensity_map"] = self.surface.intensity_map_orig.tolist()
 
+        data["enabled"] = True
+
         data["filename"] = self.filename
         filedata = self.save_ies()
         data["filedata"] = filedata.decode() if filedata is not None else None
