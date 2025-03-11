@@ -290,7 +290,7 @@ class Room:
         self.dimensions = (self.x, self.y, self.z)
         self.volume = self.x * self.y * self.z
 
-        self.ref_manager.update_dimensions()
+        self.ref_manager.update_dimensions(self.x,self.y,self.z)
         return self
 
     def get_units(self):
@@ -336,6 +336,9 @@ class Room:
             eye_vert = True
             fov_vert = 80
 
+        max_vol_val = 20
+        max_plane_val = 50
+
         self.add_calc_zone(
             CalcVol(
                 zone_id="WholeRoomFluence",
@@ -346,9 +349,9 @@ class Room:
                 y2=self.y,
                 z1=0,
                 z2=self.z,
-                num_x=min(int(self.x * 20), 50),
-                num_y=min(int(self.y * 20), 50),
-                num_z=min(int(self.z * 20), 50),
+                num_x=min(int(self.x * 20), max_vol_val),
+                num_y=min(int(self.y * 20), max_vol_val),
+                num_z=min(int(self.z * 20), max_vol_val),
                 show_values=False,
             )
         )
@@ -362,8 +365,8 @@ class Room:
                 x2=self.x,
                 y1=0,
                 y2=self.y,
-                num_x=min(int(self.x * 20), 300),
-                num_y=min(int(self.y * 20), 300),
+                num_x=min(int(self.x * 20), max_plane_val),
+                num_y=min(int(self.y * 20), max_plane_val),
                 horiz=skin_horiz,
                 dose=True,
                 hours=8,
@@ -379,8 +382,8 @@ class Room:
                 x2=self.x,
                 y1=0,
                 y2=self.y,
-                num_x=min(int(self.x * 20), 300),
-                num_y=min(int(self.y * 20), 300),
+                num_x=min(int(self.x * 20), max_plane_val),
+                num_y=min(int(self.y * 20), max_plane_val),
                 vert=eye_vert,
                 horiz=False,
                 fov_vert=fov_vert,
@@ -502,6 +505,7 @@ class Room:
         valid_lamps = self._get_valid_lamps()
         
         if len(valid_lamps)>0:
+            
             new_calc_state = self.get_calc_state()
             new_update_state = self.get_update_state()
 

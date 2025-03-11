@@ -43,7 +43,7 @@ class ReflectanceManager:
         self.reflectances = {**default_reflectances, **(reflectances or {})}
         self.x_spacings = {**default_spacings, **(x_spacings or {})}
         self.y_spacings = {**default_spacings, **(y_spacings or {})}
-        self.max_num_passes = 6 if max_num_passes is None else max_num_passes
+        self.max_num_passes = 0 if max_num_passes is None else max_num_passes
         
         self.zone_dict = {} # will contain all values from all contributions
         self.surfaces = {}
@@ -140,8 +140,11 @@ class ReflectanceManager:
             ref_surface = "yz"
         return x1, x2, y1, y2, height, ref_surface
 
-    def update_dimensions(self):
+    def update_dimensions(self,x=None,y=None,z=None):
         """update the wall dimensions based on changes to the Room parent class"""
+        self.x = self.x if x is None else x
+        self.y = self.y if y is None else y
+        self.z = self.z if z is None else z
         for wall, surface in self.surfaces.items():
             x1, x2, y1, y2, height, _ = self._get_surface_dimensions(wall)
             surface.plane.height = height
