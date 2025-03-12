@@ -43,7 +43,7 @@ class ReflectanceManager:
         self.reflectances = {**default_reflectances, **(reflectances or {})}
         self.x_spacings = {**default_spacings, **(x_spacings or {})}
         self.y_spacings = {**default_spacings, **(y_spacings or {})}
-        self.max_num_passes = 0 if max_num_passes is None else max_num_passes
+        self.max_num_passes = 6 if max_num_passes is None else max_num_passes
         
         self.zone_dict = {} # will contain all values from all contributions
         self.surfaces = {}
