@@ -118,14 +118,6 @@ def fig_to_bytes(fig):
     return buf.getvalue()
 
 
-def feet_to_meters(val):
-    return val * 0.3048
-
-
-def meters_to_feet(val):
-    return val / 0.3048
-
-
 def get_lamp_positions(num_lamps, x, y, num_divisions=100):
     """
     generate a list of (x,y) positions for a lamp given room dimensions and
