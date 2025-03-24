@@ -28,6 +28,8 @@ def convert_units(src, dst, *args):
 
     if src == dst:
         result = args
+        if len(result)==1:
+            result = result[0]
     elif src == "meters":
         if dst == "feet":
             result = convert(meters_to_feet, *args)
