@@ -3,6 +3,7 @@ import numpy as np
 from scipy.spatial import Delaunay
 from .trigonometry import to_polar
 from .calc_zone import CalcPlane, CalcVol
+from ._units import convert_units
 
 
 class RoomPlotter:
@@ -35,17 +36,20 @@ class RoomPlotter:
                 fig = self._plot_plane(zone=zone, fig=fig, select_id=select_id)
             elif isinstance(zone, CalcVol):
                 fig = self._plot_vol(zone=zone, fig=fig, select_id=select_id)
+
+        x, y, z = self.room.x, self.room.y, self.room.z
+
         # set views
         fig.update_layout(
             title=title,
             scene=dict(
-                xaxis=dict(range=[0, self.room.x]),
-                yaxis=dict(range=[0, self.room.y]),
-                zaxis=dict(range=[0, self.room.z]),
+                xaxis=dict(range=[0, x]),
+                yaxis=dict(range=[0, y]),
+                zaxis=dict(range=[0, z]),
                 aspectratio=dict(
-                    x=self.room.x / self.room.z,
-                    y=self.room.y / self.room.z,
-                    z=self.room.z / self.room.z,
+                    x=x / z,
+                    y=y / z,
+                    z=1,
                 ),
             ),
             height=750,
@@ -93,8 +97,13 @@ class RoomPlotter:
 
     def _plot_lamp(self, lamp, fig, select_id=None, color="#cc61ff"):
         """plot lamp as a photometric web"""
-
-        x, y, z = lamp.transform(lamp.photometric_coords, scale=lamp.values.max()).T
+        
+        init_scale = convert_units(self.room.units, "meters", lamp.values.max())
+        coords = lamp.transform(lamp.photometric_coords, scale=init_scale).T
+        scale = lamp.get_total_power()/120
+        coords = (coords.T - lamp.position)*scale + lamp.position
+        x,y,z = coords.T
+        
         Theta, Phi, R = to_polar(*lamp.photometric_coords.T)
         tri = Delaunay(np.column_stack((Theta.flatten(), Phi.flatten())))
         lampcolor = self._set_color(select_id, label=lamp.lamp_id, enabled=lamp.enabled)
@@ -114,10 +123,12 @@ class RoomPlotter:
             legendgrouptitle_text="Lamps",
             showlegend=True,
         )
+        xi, yi, zi = lamp.surface.position
+        xia, yia, zia = lamp.aim_point
         aimtrace = go.Scatter3d(
-            x=[lamp.x, lamp.aimx],
-            y=[lamp.y, lamp.aimy],
-            z=[lamp.z, lamp.aimz],
+            x=[xi, xia],
+            y=[yi, yia],
+            z=[zi, zia],
             mode="lines",
             line=dict(color="black", width=2, dash="dash"),
             name=lamp.name,
@@ -155,10 +166,11 @@ class RoomPlotter:
     def _plot_plane(self, zone, fig, select_id=None):
         """plot a calculation plane"""
         zonecolor = self._set_color(select_id, zone.zone_id, zone.enabled)
+        x,y,z = zone.coords.T
         zonetrace = go.Scatter3d(
-            x=zone.coords.T[0],
-            y=zone.coords.T[1],
-            z=zone.coords.T[2],
+            x=x,
+            y=y,
+            z=z,
             mode="markers",
             marker=dict(size=2, color=zonecolor),
             opacity=0.5,
@@ -175,9 +187,9 @@ class RoomPlotter:
             self._update_trace_by_id(
                 fig,
                 zone.zone_id,
-                x=zone.coords.T[0],
-                y=zone.coords.T[1],
-                z=zone.coords.T[2],
+                x=x,
+                y=y,
+                z=z,
                 marker=dict(size=2, color=zonecolor),
             )
 
@@ -185,15 +197,16 @@ class RoomPlotter:
 
     def _plot_vol(self, zone, fig, select_id=None):
         # Define the vertices of the rectangular prism
+        (x1, y1, z1), (x2, y2, z2) = zone.dimensions
         vertices = [
-            (zone.x1, zone.y1, zone.z1),  # 0
-            (zone.x2, zone.y1, zone.z1),  # 1
-            (zone.x2, zone.y2, zone.z1),  # 2
-            (zone.x1, zone.y2, zone.z1),  # 3
-            (zone.x1, zone.y1, zone.z2),  # 4
-            (zone.x2, zone.y1, zone.z2),  # 5
-            (zone.x2, zone.y2, zone.z2),  # 6
-            (zone.x1, zone.y2, zone.z2),  # 7
+            (x1, y1, z1),  # 0
+            (x2, y1, z1),  # 1
+            (x2, y2, z1),  # 2
+            (x1, y2, z1),  # 3
+            (x1, y1, z2),  # 4
+            (x2, y1, z2),  # 5
+            (x2, y2, z2),  # 6
+            (x1, y2, z2),  # 7
         ]
 
         # Define edges by vertex indices

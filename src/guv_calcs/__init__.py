@@ -14,6 +14,7 @@ from ._data import (
     sum_multiwavelength_data,
     plot_disinfection_data,
 )
+from ._units import convert_units
 from ._helpers import new_lamp_position, get_lamp_positions
 from ._version import __version__
 
@@ -36,6 +37,7 @@ __all__ = [
     "get_standards",
     "sum_multiwavelength_data",
     "plot_disinfection_data",
+    "convert_units",
     "new_lamp_position",
     "get_lamp_positions",
 ]

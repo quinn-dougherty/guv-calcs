@@ -40,7 +40,8 @@ class Room:
         ozone_decay_constant=None,
     ):
         self.units = "meters" if units is None else units.lower()
-        self.set_units(self.units)  # just checks that unit entry is valid
+        if self.units not in ["meters", "feet"]:
+            raise KeyError("Valid units are `meters` or `feet`")
         default_dimensions = (
             [6.0, 4.0, 2.7] if self.units == "meters" else [20.0, 13.0, 9.0]
         )
@@ -280,6 +281,12 @@ class Room:
         if units not in ["meters", "feet"]:
             raise KeyError("Valid units are `meters` or `feet`")
         self.units = units
+        
+        standard_zone_height = self._get_height()
+        if 'SkinLimits' in self.calc_zones.keys():
+            self.calc_zones['SkinLimits'].set_height(standard_zone_height)
+        if 'EyeLimits' in self.calc_zones.keys():
+            self.calc_zones['EyeLimits'].set_height(standard_zone_height)
         return self
 
     def set_dimensions(self, x=None, y=None, z=None):
@@ -320,18 +327,25 @@ class Room:
         """
         return self.disinfection.get_disinfection_plot(zone_id)
 
+    def _get_height(self):
+        if "UL8802" in self.standard:
+            height = 1.9 if self.units=='meters' else 6.25
+        else:
+            height = 1.8 if self.units=='meters' else 5.9
+        return height 
+        
     def add_standard_zones(self):
         """
         convenience function. Add skin and eye limit calculation planes,
         plus whole room fluence.
         """
         if "UL8802" in self.standard:
-            height = 1.9
+            height = self._get_height()
             skin_horiz = False
             eye_vert = False
             fov_vert = 180
         else:
-            height = 1.8
+            height = self._get_height()
             skin_horiz = True
             eye_vert = True
             fov_vert = 80
