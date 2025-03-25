@@ -258,7 +258,7 @@ class Lamp:
             spectra_source = None
 
         return cls(
-            lamp_id=lamp_id,
+            lamp_id=key if lamp_id is None else lamp_id,
             name=name,
             filename=filename,
             x=x,
