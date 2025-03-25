@@ -1,8 +1,7 @@
 import numpy as np
-
-from .trigonometry import attitude, to_polar
 from photompy import get_intensity
-
+from .trigonometry import attitude, to_polar
+from ._units import convert_units
 
 class LightingCalculator:
     """
@@ -52,7 +51,8 @@ class LightingCalculator:
             # get coords
             rel_coords = self.zone.coords - lamp.position
             Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
-
+            if lamp.surface.units.lower() != "meters":
+                R = np.array(convert_units(lamp.surface.units, "meters", *R))
             # fetch intensity values from photometric data
             interpdict = lamp.lampdict["interp_vals"]
             values = get_intensity(Theta, Phi, interpdict) / R ** 2

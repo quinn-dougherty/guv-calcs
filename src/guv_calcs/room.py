@@ -15,6 +15,7 @@ from .room_plotter import RoomPlotter
 from .disinfection_calculator import DisinfectionCalculator
 from .reflectance import ReflectanceManager
 
+VALID_UNITS = ["meters", "feet"]
 
 class Room:
     """
@@ -40,8 +41,8 @@ class Room:
         ozone_decay_constant=None,
     ):
         self.units = "meters" if units is None else units.lower()
-        if self.units not in ["meters", "feet"]:
-            raise KeyError("Valid units are `meters` or `feet`")
+        if self.units not in VALID_UNITS:
+            raise KeyError(f"Invalid unit {units}")
         default_dimensions = (
             [6.0, 4.0, 2.7] if self.units == "meters" else [20.0, 13.0, 9.0]
         )
@@ -288,7 +289,13 @@ class Room:
         if 'EyeLimits' in self.calc_zones.keys():
             self.calc_zones['EyeLimits'].set_height(standard_zone_height)
         return self
-
+        
+    def harmonize_units(self):
+        """ensure that all lamps in the state have the correct units"""
+        for lamp in self.lamps.values():
+            if lamp.surface.units != self.units:
+                lamp.set_units(self.units)
+            
     def set_dimensions(self, x=None, y=None, z=None):
         """set room dimensions"""
         self.x = self.x if x is None else x
@@ -516,6 +523,8 @@ class Room:
         recalculation will be performed
         """
 
+        self.harmonize_units()
+
         valid_lamps = self._get_valid_lamps()
         
         if len(valid_lamps)>0:
@@ -565,4 +574,5 @@ class Room:
 
     def plotly(self, fig=None, select_id=None, title=""):
         """return a plotly figure of all the room's components"""
+        self.harmonize_units()
         return self.plotter.plotly(fig=fig, select_id=select_id, title=title)

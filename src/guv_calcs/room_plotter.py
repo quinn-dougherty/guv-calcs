@@ -62,6 +62,16 @@ class RoomPlotter:
                 xanchor="left",
             ),
         )
+        fig.add_annotation(
+            text=f"Units: {self.room.units}",
+            xref="paper", yref="paper",
+            x=0, y=0,
+            xanchor="left", yanchor="bottom",
+            showarrow=False,
+            font=dict(size=12, color="gray"),
+            bgcolor="rgba(255,255,255,0.5)",
+            borderpad=4,
+        )
         fig.update_scenes(camera_projection_type="orthographic")
         return fig
 

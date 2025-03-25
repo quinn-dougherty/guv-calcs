@@ -295,7 +295,8 @@ class Lamp:
         # update position
         self.position = position
         self.x, self.y, self.z = self.position
-        self.surface.set_position(self.position)
+        
+        self.surface.set_orientation(mounting_position=self.position, aim_point=self.aim_point)
         return self
 
     def rotate(self, angle):
@@ -314,7 +315,7 @@ class Lamp:
         self.heading = np.degrees(np.arctan2(yr, xr))
         self.bank = np.degrees(np.arctan2(np.sqrt(xr ** 2 + yr ** 2), zr) - np.pi)
         # update grid points
-        self.surface.update()
+        self.surface.set_orientation(mounting_position=self.position, aim_point=self.aim_point)
         return self
 
     def transform(self, coords, scale=1):
@@ -355,14 +356,21 @@ class Lamp:
     def set_source_density(self, source_density):
         """change source discretization"""
         self.surface.set_source_density(source_density)
+        
+    def set_units(self,units):
+        """set """
+        self.surface.set_units(units)
+        return self
 
     def set_width(self, width):
         """change x-axis extent of lamp emissive surface"""
         self.surface.set_length(width)
+        return self
 
     def set_length(self, length):
         """change y-axis extent of lamp emissive surface"""
         self.surface.set_length(length)
+        return self
 
     def get_calc_state(self):
         """
