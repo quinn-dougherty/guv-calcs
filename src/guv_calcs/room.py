@@ -288,6 +288,8 @@ class Room:
             self.calc_zones['SkinLimits'].set_height(standard_zone_height)
         if 'EyeLimits' in self.calc_zones.keys():
             self.calc_zones['EyeLimits'].set_height(standard_zone_height)
+            
+        self.harmonize_units()
         return self
         
     def harmonize_units(self):
@@ -325,37 +327,49 @@ class Room:
         """
         Return a dataframe of the expected disinfection rates, based on the room state
         """
-        df, _ = self.disinfection.get_disinfection_table(zone_id)
+        df, _ = self.disinfection.get_disinfection_table(zone_id=zone_id)
         return df
 
     def get_disinfection_plot(self, zone_id="WholeRoomFluence"):
         """
         Return a violin plot of the expected disinfection rates, based on the room state
         """
-        return self.disinfection.get_disinfection_plot(zone_id)
+        return self.disinfection.get_disinfection_plot(zone_id=zone_id)
 
-    def _get_height(self):
+
+    def _get_standard_zone_params(self):
         if "UL8802" in self.standard:
             height = 1.9 if self.units=='meters' else 6.25
+            skin_horiz = False
+            eye_vert = False
+            fov_vert = 180
         else:
             height = 1.8 if self.units=='meters' else 5.9
-        return height 
+            skin_horiz = True
+            eye_vert = True
+            fov_vert = 80
+        return height, skin_horiz, eye_vert, fov_vert
+        
+    def set_standard(self, standard):
+
+        self.standard = standard        
+        height, skin_horiz, eye_vert, fov_vert = self._get_standard_zone_params()
+        
+        if "SkinLimits" in self.calc_zones.keys():
+            self.calc_zones["SkinLimits"].set_height(height)
+            self.calc_zones["SkinLimits"].horiz = skin_horiz
+        if "EyeLimits" in self.calc_zones.keys():
+            self.calc_zones["EyeLimits"].set_height(height)
+            self.calc_zones["EyeLimits"].fov_vert = fov_vert
+            self.calc_zones["EyeLimits"].vert = eye_vert
+        return self
         
     def add_standard_zones(self):
         """
         convenience function. Add skin and eye limit calculation planes,
         plus whole room fluence.
         """
-        if "UL8802" in self.standard:
-            height = self._get_height()
-            skin_horiz = False
-            eye_vert = False
-            fov_vert = 180
-        else:
-            height = self._get_height()
-            skin_horiz = True
-            eye_vert = True
-            fov_vert = 80
+        height, skin_horiz, eye_vert, fov_vert =self._get_standard_zone_params()
 
         max_vol_val = 20
         max_plane_val = 50
