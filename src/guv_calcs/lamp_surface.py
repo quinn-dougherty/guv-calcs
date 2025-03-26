@@ -19,6 +19,7 @@ class LampSurface:
         intensity_map,
         position,
         aim_point,
+        angle,
     ):
         """
         Represents the emissive surface of a lamp; manages functions
@@ -36,6 +37,7 @@ class LampSurface:
         )
         self.mounting_position = position
         self.aim_point = aim_point
+        self.angle = angle
         self.position = self._calculate_surface_position()
 
         self.source_density = 1 if source_density is None else source_density
@@ -97,6 +99,11 @@ class LampSurface:
         self.mounting_position = mounting_position
         self.aim_point = aim_point
         self.update()
+        
+    def set_angle(self, angle):
+        self.angle=angle
+        if len(self.surface_points)>1:
+            self.update()
 
     def load_intensity_map(self, intensity_map):
         """external method for loading relative intensity map after lamp object has been instantiated"""
@@ -218,6 +225,14 @@ class LampSurface:
         else:
             u_points = np.array([0])
         return u_points, v_points
+        
+    def _rotate(self, vec, normal):
+        angle_rad = np.radians(self.angle)
+        cos_a = np.cos(angle_rad)
+        sin_a = np.sin(angle_rad)
+        return (vec * cos_a +
+                np.cross(normal, vec) * sin_a +
+                normal * np.dot(normal, vec) * (1 - cos_a))
 
     def _generate_surface_points(self):
         """
@@ -254,6 +269,10 @@ class LampSurface:
             # Second vector orthogonal to both the normal and u
             v = np.cross(normal, u)
             v = v / np.linalg.norm(v)  # ensure it's unit length
+            
+            # rotate
+            u = self._rotate(u, normal)
+            v = self._rotate(v, normal)
             # Calculate the 3D coordinates of the points, with an overall shift by the original point
             surface_points = (
                 self.position + np.outer(uu.flatten(), u) + np.outer(vv.flatten(), v)
