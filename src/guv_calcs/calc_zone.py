@@ -126,11 +126,11 @@ class CalcZone(object):
         data["show_values"] = self.show_values
         data["x1"] = self.x1
         data["x2"] = self.x2
-        data["x_spacing"] = self.x_spacing
+        # data["x_spacing"] = self.x_spacing
         data["num_x"] = self.num_x
         data["y1"] = self.y1
         data["y2"] = self.y2
-        data["y_spacing"] = self.y_spacing
+        # data["y_spacing"] = self.y_spacing
         data["num_y"] = self.num_y
         if isinstance(self, CalcPlane):
             data["height"] = self.height
@@ -138,7 +138,7 @@ class CalcZone(object):
         elif isinstance(self, CalcVol):
             data["z1"] = self.z1
             data["z2"] = self.z2
-            data["z_spacing"] = self.z_spacing
+            # data["z_spacing"] = self.z_spacing
             data["num_z"] = self.num_z
             data["calctype"] = "Volume"
 
