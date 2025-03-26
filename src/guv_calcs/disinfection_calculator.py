@@ -14,7 +14,13 @@ class DisinfectionCalculator:
 
     def __init__(self, room):
         self.room = room
-
+        
+    def get_disinfection_data(self, zone_id):
+        """return the dataframe and violin plot"""
+        df, fluence_dict = self.get_disinfection_table(zone_id)
+        fig = plot_disinfection_data(df, fluence_dict, self.room)
+        return df, fig        
+        
     def get_disinfection_plot(self, zone_id):
         """
         Return a violin plot of expected disinfection rates

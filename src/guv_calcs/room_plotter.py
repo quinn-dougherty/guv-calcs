@@ -111,7 +111,7 @@ class RoomPlotter:
         init_scale = convert_units(self.room.units, "meters", lamp.values.max())
         coords = lamp.transform(lamp.photometric_coords, scale=init_scale).T
         scale = lamp.get_total_power()/120
-        coords = (coords.T - lamp.position)*scale + lamp.position
+        coords = (coords.T - lamp.position)*scale + lamp.surface.position
         x,y,z = coords.T
         
         Theta, Phi, R = to_polar(*lamp.photometric_coords.T)

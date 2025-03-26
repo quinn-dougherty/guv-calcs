@@ -49,7 +49,7 @@ class LightingCalculator:
 
         if hard or NEW_LAMP or LAMP_UPDATE or ZONE_UPDATE:
             # get coords
-            rel_coords = self.zone.coords - lamp.position
+            rel_coords = self.zone.coords - lamp.surface.position
             Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
             if lamp.surface.units.lower() != "meters":
                 R = np.array(convert_units(lamp.surface.units, "meters", *R))
@@ -75,7 +75,7 @@ class LightingCalculator:
         but which don't require a full recalculation
         """
 
-        rel_coords = self.zone.coords - lamp.position
+        rel_coords = self.zone.coords - lamp.surface.position
         Theta0, Phi0, R0 = to_polar(*rel_coords.T)
         # apply vertical field of view
         values[Theta0 < 90 - self.zone.fov_vert / 2] = 0
@@ -123,7 +123,7 @@ class LightingCalculator:
 
         # Compute relative coordinates: Shape (num_points, num_lamps, 3)
         lamp_positions = np.array(
-            [lamp.position for lamp in lamps.values() if lamp.enabled]
+            [lamp.surface.position for lamp in lamps.values() if lamp.enabled]
         )
         rel_coords = self.zone.coords[:, None, :] - lamp_positions[None, :, :]
 

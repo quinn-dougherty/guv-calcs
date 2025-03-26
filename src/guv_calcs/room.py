@@ -322,20 +322,10 @@ class Room:
         """return room volume"""
         self.volume = self.x * self.y * self.z
         return self.volume
-
-    def get_disinfection_table(self, zone_id="WholeRoomFluence"):
-        """
-        Return a dataframe of the expected disinfection rates, based on the room state
-        """
-        df, _ = self.disinfection.get_disinfection_table(zone_id=zone_id)
-        return df
-
-    def get_disinfection_plot(self, zone_id="WholeRoomFluence"):
-        """
-        Return a violin plot of the expected disinfection rates, based on the room state
-        """
-        return self.disinfection.get_disinfection_plot(zone_id=zone_id)
-
+        
+    def get_disinfection_data(self, zone_id="WholeRoomFluence"):
+        """return the fluence_dict, dataframe, and violin plot"""
+        return self.disinfection.get_disinfection_data(zone_id=zone_id)
 
     def _get_standard_zone_params(self):
         if "UL8802" in self.standard:
