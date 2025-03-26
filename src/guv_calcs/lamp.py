@@ -175,6 +175,7 @@ class Lamp:
             intensity_map=intensity_map,
             position=self.position,
             aim_point=self.aim_point,
+            angle=self.angle
         )
 
         # update heading and bank
@@ -302,6 +303,7 @@ class Lamp:
     def rotate(self, angle):
         """designate lamp orientation with respect to its z axis"""
         self.angle = angle
+        self.surface.set_angle(angle)
         return self
 
     def aim(self, x=None, y=None, z=None):
@@ -364,13 +366,17 @@ class Lamp:
 
     def set_width(self, width):
         """change x-axis extent of lamp emissive surface"""
-        self.surface.set_length(width)
+        self.surface.set_width(width)
         return self
 
     def set_length(self, length):
         """change y-axis extent of lamp emissive surface"""
         self.surface.set_length(length)
         return self
+        
+    def set_depth(self, depth):
+        """change the z-axis offset of where the lamp's emissive surface is"""
+        self.surface.set_depth(depth)
 
     def get_calc_state(self):
         """
@@ -653,7 +659,7 @@ class Lamp:
             distance = min([d for d in distances])
         self.aim_point = self.position + np.array([dx, dy, dz]) * distance
         self.aimx, self.aimy, self.aimz = self.aim_point
-        self.surface.set_aim_point(self.aim_point)
+        self.surface.set_orientation(mounting_position=self.position, aim_point=self.aim_point)
 
     def _set_intensity_units(self, arg):
         """determine the units of the radiant intensity"""
