@@ -145,11 +145,25 @@ class RoomPlotter:
             customdata=[lamp.lamp_id + "_aim"],
             showlegend=False,
         )
+        xs,ys,zs = lamp.surface.surface_points.T
+        surfacetrace = go.Scatter3d(
+            x=xs,
+            y=ys,
+            z=zs,
+            mode="markers",
+            marker=dict(size=2, color=lampcolor),
+            opacity=0.5,
+            legendgroup="surfaces",
+            showlegend=False,
+            name=lamp.name,
+            customdata=[lamp.lamp_id + "_surface"],
+        )
 
         traces = [trace.customdata[0] for trace in fig.data]
         if lamptrace.customdata[0] not in traces:
             fig.add_trace(lamptrace)
             fig.add_trace(aimtrace)
+            fig.add_trace(surfacetrace)
         else:
             self._update_trace_by_id(
                 fig,
@@ -167,10 +181,15 @@ class RoomPlotter:
             self._update_trace_by_id(
                 fig,
                 lamp.lamp_id + "_aim",
-                x=[lamp.x, lamp.aimx],
-                y=[lamp.y, lamp.aimy],
-                z=[lamp.z, lamp.aimz],
+                x=[xi, xia],
+                y=[yi, yia],
+                z=[zi, zia],
             )
+            
+            self._update_trace_by_id(
+                fig,
+                lamp.lamp_id+"_surface",
+                x=xs,y=yw,z=zs)
         return fig
 
     def _plot_plane(self, zone, fig, select_id=None):
