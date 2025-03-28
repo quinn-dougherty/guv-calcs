@@ -3,6 +3,7 @@ from photompy import get_intensity
 from .trigonometry import attitude, to_polar
 from ._units import convert_units
 
+
 class LightingCalculator:
     """
     Performs all computations for a calculation zone
@@ -110,6 +111,8 @@ class LightingCalculator:
             Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
             Theta_n, Phi_n, R_n = Theta[near_idx], Phi[near_idx], R[near_idx]
             interpdict = lamp.lampdict["interp_vals"]
+            if lamp.surface.units.lower() != "meters":
+                R_n = np.array(convert_units(lamp.surface.units, "meters", *R_n))
             near_values = get_intensity(Theta_n, Phi_n, interpdict) / R_n ** 2
             near_values = near_values * val / num_points
             values[near_idx] += near_values
