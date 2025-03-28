@@ -285,13 +285,7 @@ class Room:
         if units not in ["meters", "feet"]:
             raise KeyError("Valid units are `meters` or `feet`")
         self.units = units
-
-        standard_zone_height = self._get_height()
-        if "SkinLimits" in self.calc_zones.keys():
-            self.calc_zones["SkinLimits"].set_height(standard_zone_height)
-        if "EyeLimits" in self.calc_zones.keys():
-            self.calc_zones["EyeLimits"].set_height(standard_zone_height)
-
+        self._update_standard_zones() 
         self.harmonize_units()
         return self
 
@@ -329,8 +323,9 @@ class Room:
     def get_disinfection_data(self, zone_id="WholeRoomFluence"):
         """return the fluence_dict, dataframe, and violin plot"""
         return self.disinfection.get_disinfection_data(zone_id=zone_id)
-
-    def _get_standard_zone_params(self):
+        
+    def _update_standard_zones(self):
+        """update the standard safety calculation zones based on the current standard and units"""
         if "UL8802" in self.standard:
             height = 1.9 if self.units == "meters" else 6.25
             skin_horiz = False
@@ -341,13 +336,7 @@ class Room:
             skin_horiz = True
             eye_vert = True
             fov_vert = 80
-        return height, skin_horiz, eye_vert, fov_vert
-
-    def set_standard(self, standard):
-
-        self.standard = standard
-        height, skin_horiz, eye_vert, fov_vert = self._get_standard_zone_params()
-
+            
         if "SkinLimits" in self.calc_zones.keys():
             self.calc_zones["SkinLimits"].set_height(height)
             self.calc_zones["SkinLimits"].horiz = skin_horiz
@@ -355,6 +344,11 @@ class Room:
             self.calc_zones["EyeLimits"].set_height(height)
             self.calc_zones["EyeLimits"].fov_vert = fov_vert
             self.calc_zones["EyeLimits"].vert = eye_vert
+
+    def set_standard(self, standard):
+        """update the photobiological safety standard the Room is subject to"""
+        self.standard = standard
+        self._update_standard_zones()        
         return self
 
     def add_standard_zones(self):
@@ -362,7 +356,6 @@ class Room:
         convenience function. Add skin and eye limit calculation planes,
         plus whole room fluence.
         """
-        height, skin_horiz, eye_vert, fov_vert = self._get_standard_zone_params()
 
         max_vol_val = 20
         max_plane_val = 50
@@ -388,14 +381,12 @@ class Room:
             CalcPlane(
                 zone_id="SkinLimits",
                 name="Skin Dose (8 Hours)",
-                height=height,
                 x1=0,
                 x2=self.x,
                 y1=0,
                 y2=self.y,
                 num_x=min(int(self.x * 20), max_plane_val),
                 num_y=min(int(self.y * 20), max_plane_val),
-                horiz=skin_horiz,
                 dose=True,
                 hours=8,
             )
@@ -405,21 +396,22 @@ class Room:
             CalcPlane(
                 zone_id="EyeLimits",
                 name="Eye Dose (8 Hours)",
-                height=height,
                 x1=0,
                 x2=self.x,
                 y1=0,
                 y2=self.y,
                 num_x=min(int(self.x * 20), max_plane_val),
                 num_y=min(int(self.y * 20), max_plane_val),
-                vert=eye_vert,
                 horiz=False,
-                fov_vert=fov_vert,
                 fov_horiz=180,
                 dose=True,
                 hours=8,
             )
         )
+        
+        # sets the height and field of view parameters
+        self._update_standard_zones()
+        
         return self
 
     def _check_position(self, dimensions, obj_name):
@@ -460,6 +452,10 @@ class Room:
         """
         if not isinstance(lamp, Lamp):
             raise TypeError(f"Must be type Lamp, not {type(lamp)}")
+        # check units
+        if lamp.surface.units != self.units:
+            lamp.set_units(self.units)
+        # check position
         self.check_lamp_position(lamp)
         self.lamps[lamp.lamp_id] = lamp
         return self
