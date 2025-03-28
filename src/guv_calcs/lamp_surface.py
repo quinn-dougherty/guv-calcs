@@ -1,5 +1,6 @@
 from pathlib import Path
 import pathlib
+import io
 import warnings
 import numpy as np
 import matplotlib.pyplot as plt
@@ -26,15 +27,9 @@ class LampSurface:
         related to source discretization.
         """
         self.units = units if units is not None else "meters"
-        self.width = (
-            convert_units(self.units, "meters", width) if width is not None else 0
-        )
-        self.length = (
-            convert_units(self.units, "meters", length) if length is not None else 0
-        )
-        self.depth = (
-            convert_units(self.units, "meters", depth) if depth is not None else 0
-        )
+        self.width = width if width is not None else 0
+        self.length = length if length is not None else 0
+        self.depth =  depth if depth is not None else 0
         self.mounting_position = position
         self.aim_point = aim_point
         self.angle = angle
@@ -96,6 +91,7 @@ class LampSurface:
             self.update()
 
     def set_orientation(self, mounting_position, aim_point):
+        """set the position/aim point of the surface points based on the fixture position/aim point"""
         self.mounting_position = mounting_position
         self.aim_point = aim_point
         self.update()
@@ -113,25 +109,29 @@ class LampSurface:
 
     def update_from_lampdict(self, lampdict):
         """
+        populate length/width/depth/units values from a lampdict object
         if current length, width and units values aren't present,
         up, populate them all from the ies data instead
+        
+        if override is true, 
+        
         """
-        if not all([self.width, self.length, self.units]):
-            if any([self.width, self.length, self.units]):
-                msg = "Width, length, and units arguments will be ignored and set from the .ies file instead."
+        # if not all([self.width, self.length, self.units]):
+            # if any([self.width, self.length, self.units]):
+                # msg = "Width, length, and units arguments will be ignored and set from the .ies file instead."
                 # warnings.warn(msg, stacklevel=2)
-            units_type = lampdict["units_type"]
-            if units_type == 1:
-                self.units = "feet"
-            elif units_type == 2:
-                self.units = "meters"
-            else:
-                msg = "Lamp dimension units could not be determined. Your ies file may be malformed. Units of meters are being assumed."
-                warnings.warn(msg, stacklevel=2)
-                self.units = "meters"
-            self.width = lampdict["width"]
-            self.length = lampdict["length"]
-            self.depth = lampdict["height"]
+        units_type = lampdict["units_type"]
+        if units_type == 1:
+            self.units = "feet"
+        elif units_type == 2:
+            self.units = "meters"
+        else:
+            msg = "Lamp dimension units could not be determined. Your ies file may be malformed. Units of meters are being assumed."
+            warnings.warn(msg, stacklevel=2)
+            self.units = "meters"
+        self.width = lampdict["width"]
+        self.length = lampdict["length"]
+        self.depth = lampdict["height"]
         self.update()
 
     def _calculate_surface_position(self):
@@ -155,9 +155,8 @@ class LampSurface:
                 intensity_map = None
         elif isinstance(arg, bytes):
             try:
-                intensity_map = np.genfromtxt(
-                    arg.decode("utf-8").splitlines(), delimiter=","
-                )
+                data = arg.decode("utf-8-sig")
+                intensity_map = np.genfromtxt(io.StringIO(data), delimiter=",")
             except UnicodeDecodeError:
                 msg = (
                     "Could not read intensity map file. Intensity map will not be used."
@@ -170,6 +169,7 @@ class LampSurface:
             msg = f"Argument type {type(arg)} for argument intensity_map is invalid. intensity_map will not be used."
             warnings.warn(msg, stacklevel=3)
             intensity_map = None
+            
         # clean nans
         if intensity_map is not None:
             if np.isnan(intensity_map).any():
