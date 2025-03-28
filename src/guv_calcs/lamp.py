@@ -462,10 +462,6 @@ class Lamp:
             self.thetas = None
             self.phis = None
             self.values = None
-            self.units = None
-            self.dimensions = None
-            self.input_watts = None
-            self.keywords = None
             self.coords = None
             self.photometric_coords = None
             self.spectra = None
