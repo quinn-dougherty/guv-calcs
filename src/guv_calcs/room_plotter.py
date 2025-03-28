@@ -64,9 +64,12 @@ class RoomPlotter:
         )
         fig.add_annotation(
             text=f"Units: {self.room.units}",
-            xref="paper", yref="paper",
-            x=0, y=0,
-            xanchor="left", yanchor="bottom",
+            xref="paper",
+            yref="paper",
+            x=0,
+            y=0,
+            xanchor="left",
+            yanchor="bottom",
             showarrow=False,
             font=dict(size=12, color="gray"),
             bgcolor="rgba(255,255,255,0.5)",
@@ -107,13 +110,13 @@ class RoomPlotter:
 
     def _plot_lamp(self, lamp, fig, select_id=None, color="#cc61ff"):
         """plot lamp as a photometric web"""
-        
+
         init_scale = convert_units(self.room.units, "meters", lamp.values.max())
         coords = lamp.transform(lamp.photometric_coords, scale=init_scale).T
-        scale = lamp.get_total_power()/120
-        coords = (coords.T - lamp.position)*scale + lamp.surface.position
-        x,y,z = coords.T
-        
+        scale = lamp.get_total_power() / 120
+        coords = (coords.T - lamp.position) * scale + lamp.surface.position
+        x, y, z = coords.T
+
         Theta, Phi, R = to_polar(*lamp.photometric_coords.T)
         tri = Delaunay(np.column_stack((Theta.flatten(), Phi.flatten())))
         lampcolor = self._set_color(select_id, label=lamp.lamp_id, enabled=lamp.enabled)
@@ -145,14 +148,14 @@ class RoomPlotter:
             customdata=[lamp.lamp_id + "_aim"],
             showlegend=False,
         )
-        xs,ys,zs = lamp.surface.surface_points.T
+        xs, ys, zs = lamp.surface.surface_points.T
         surfacetrace = go.Scatter3d(
             x=xs,
             y=ys,
             z=zs,
             mode="markers",
             marker=dict(size=2, color=lampcolor),
-            opacity=0.5,
+            opacity=0.9,
             legendgroup="surfaces",
             showlegend=False,
             name=lamp.name,
@@ -185,17 +188,14 @@ class RoomPlotter:
                 y=[yi, yia],
                 z=[zi, zia],
             )
-            
-            self._update_trace_by_id(
-                fig,
-                lamp.lamp_id+"_surface",
-                x=xs,y=yw,z=zs)
+
+            self._update_trace_by_id(fig, lamp.lamp_id + "_surface", x=xs, y=ys, z=zs)
         return fig
 
     def _plot_plane(self, zone, fig, select_id=None):
         """plot a calculation plane"""
         zonecolor = self._set_color(select_id, zone.zone_id, zone.enabled)
-        x,y,z = zone.coords.T
+        x, y, z = zone.coords.T
         zonetrace = go.Scatter3d(
             x=x,
             y=y,
