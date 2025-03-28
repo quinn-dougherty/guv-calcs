@@ -17,6 +17,7 @@ from .reflectance import ReflectanceManager
 
 VALID_UNITS = ["meters", "feet"]
 
+
 class Room:
     """
     Represents a room containing lamps and calculation zones.
@@ -59,7 +60,9 @@ class Room:
         self.air_changes = 1.0 if air_changes is None else air_changes
 
         self.ref_manager = ReflectanceManager(
-            self.x, self.y, self.z,
+            self.x,
+            self.y,
+            self.z,
             reflectances,
             reflectance_x_spacings,
             reflectance_y_spacings,
@@ -74,7 +77,7 @@ class Room:
         self.calc_zones = {}
         self.calc_state = {}
         self.update_state = {}
-        
+
     def set_max_num_passes(self, max_num_passes):
         self.ref_manager.max_num_passes = max_num_passes
         return self
@@ -282,22 +285,22 @@ class Room:
         if units not in ["meters", "feet"]:
             raise KeyError("Valid units are `meters` or `feet`")
         self.units = units
-        
+
         standard_zone_height = self._get_height()
-        if 'SkinLimits' in self.calc_zones.keys():
-            self.calc_zones['SkinLimits'].set_height(standard_zone_height)
-        if 'EyeLimits' in self.calc_zones.keys():
-            self.calc_zones['EyeLimits'].set_height(standard_zone_height)
-            
+        if "SkinLimits" in self.calc_zones.keys():
+            self.calc_zones["SkinLimits"].set_height(standard_zone_height)
+        if "EyeLimits" in self.calc_zones.keys():
+            self.calc_zones["EyeLimits"].set_height(standard_zone_height)
+
         self.harmonize_units()
         return self
-        
+
     def harmonize_units(self):
         """ensure that all lamps in the state have the correct units"""
         for lamp in self.lamps.values():
             if lamp.surface.units != self.units:
                 lamp.set_units(self.units)
-            
+
     def set_dimensions(self, x=None, y=None, z=None):
         """set room dimensions"""
         self.x = self.x if x is None else x
@@ -306,7 +309,7 @@ class Room:
         self.dimensions = (self.x, self.y, self.z)
         self.volume = self.x * self.y * self.z
 
-        self.ref_manager.update_dimensions(self.x,self.y,self.z)
+        self.ref_manager.update_dimensions(self.x, self.y, self.z)
         return self
 
     def get_units(self):
@@ -322,29 +325,29 @@ class Room:
         """return room volume"""
         self.volume = self.x * self.y * self.z
         return self.volume
-        
+
     def get_disinfection_data(self, zone_id="WholeRoomFluence"):
         """return the fluence_dict, dataframe, and violin plot"""
         return self.disinfection.get_disinfection_data(zone_id=zone_id)
 
     def _get_standard_zone_params(self):
         if "UL8802" in self.standard:
-            height = 1.9 if self.units=='meters' else 6.25
+            height = 1.9 if self.units == "meters" else 6.25
             skin_horiz = False
             eye_vert = False
             fov_vert = 180
         else:
-            height = 1.8 if self.units=='meters' else 5.9
+            height = 1.8 if self.units == "meters" else 5.9
             skin_horiz = True
             eye_vert = True
             fov_vert = 80
         return height, skin_horiz, eye_vert, fov_vert
-        
+
     def set_standard(self, standard):
 
-        self.standard = standard        
+        self.standard = standard
         height, skin_horiz, eye_vert, fov_vert = self._get_standard_zone_params()
-        
+
         if "SkinLimits" in self.calc_zones.keys():
             self.calc_zones["SkinLimits"].set_height(height)
             self.calc_zones["SkinLimits"].horiz = skin_horiz
@@ -353,13 +356,13 @@ class Room:
             self.calc_zones["EyeLimits"].fov_vert = fov_vert
             self.calc_zones["EyeLimits"].vert = eye_vert
         return self
-        
+
     def add_standard_zones(self):
         """
         convenience function. Add skin and eye limit calculation planes,
         plus whole room fluence.
         """
-        height, skin_horiz, eye_vert, fov_vert =self._get_standard_zone_params()
+        height, skin_horiz, eye_vert, fov_vert = self._get_standard_zone_params()
 
         max_vol_val = 20
         max_plane_val = 50
@@ -530,16 +533,16 @@ class Room:
         self.harmonize_units()
 
         valid_lamps = self._get_valid_lamps()
-        
-        if len(valid_lamps)>0:
-            
+
+        if len(valid_lamps) > 0:
+
             new_calc_state = self.get_calc_state()
             new_update_state = self.get_update_state()
 
             LAMP_RECALC = self.calc_state.get("lamps") != new_calc_state.get("lamps")
             REF_RECALC = self.calc_state.get("room") != new_calc_state.get("room")
             REF_UPDATE = self.update_state.get("room") != new_update_state.get("room")
-                    
+
             # calculate incidence on the surfaces if the reflectances or lamps have changed
             if LAMP_RECALC or REF_RECALC or REF_UPDATE or hard:
                 self.ref_manager.calculate_incidence(valid_lamps, hard=hard)
@@ -558,7 +561,7 @@ class Room:
                 new_calc_state = self.lamps[lamp_id].get_calc_state()
                 self.lamps[lamp_id].calc_state = new_calc_state
         else:
-            if len(self.lamps)==0:
+            if len(self.lamps) == 0:
                 msg = "No lamps are present in the room."
             else:
                 msg = "No valid lamps are present in the room--either lamps have been disabled, or filedata has not been provided."

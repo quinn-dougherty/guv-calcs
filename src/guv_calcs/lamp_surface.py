@@ -75,7 +75,7 @@ class LampSurface:
         """change x-axis extent of lamp emissive surface"""
         self.width = width
         self.update()
-        
+
     def set_length(self, length):
         """change y-axis extent of lamp emissive surface"""
         self.length = length
@@ -99,10 +99,10 @@ class LampSurface:
         self.mounting_position = mounting_position
         self.aim_point = aim_point
         self.update()
-        
+
     def set_angle(self, angle):
-        self.angle=angle
-        if len(self.surface_points)>1:
+        self.angle = angle
+        if len(self.surface_points) > 1:
             self.update()
 
     def load_intensity_map(self, intensity_map):
@@ -129,9 +129,9 @@ class LampSurface:
                 msg = "Lamp dimension units could not be determined. Your ies file may be malformed. Units of meters are being assumed."
                 warnings.warn(msg, stacklevel=2)
                 self.units = "meters"
-            self.width = lampdict["width"]#convert_units(self.units, "meters", lampdict["width"])
-            self.length = lampdict["length"]#convert_units(self.units, "meters", lampdict["length"])
-            self.depth = lampdict["height"]#convert_units(self.units, "meters", lampdict["height"])
+            self.width = lampdict["width"]
+            self.length = lampdict["length"]
+            self.depth = lampdict["height"]
         self.update()
 
     def _calculate_surface_position(self):
@@ -225,14 +225,16 @@ class LampSurface:
         else:
             u_points = np.array([0])
         return u_points, v_points
-        
+
     def _rotate(self, vec, normal):
         angle_rad = np.radians(self.angle)
         cos_a = np.cos(angle_rad)
         sin_a = np.sin(angle_rad)
-        return (vec * cos_a +
-                np.cross(normal, vec) * sin_a +
-                normal * np.dot(normal, vec) * (1 - cos_a))
+        return (
+            vec * cos_a
+            + np.cross(normal, vec) * sin_a
+            + normal * np.dot(normal, vec) * (1 - cos_a)
+        )
 
     def _generate_surface_points(self):
         """
@@ -269,7 +271,7 @@ class LampSurface:
             # Second vector orthogonal to both the normal and u
             v = np.cross(normal, u)
             v = v / np.linalg.norm(v)  # ensure it's unit length
-            
+
             # rotate
             u = self._rotate(u, normal)
             v = self._rotate(v, normal)
