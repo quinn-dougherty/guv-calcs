@@ -216,7 +216,7 @@ class CalcZone(object):
             # add in reflected values, if applicable
             self.reflected_values = ref_manager.get_total_reflectance(self)
         else:
-            self.reflected_values = np.zeros(self.num_points)
+            self.reflected_values = np.zeros(self.num_points).astype('float32')
 
         # sum
         values = self.base_values + self.reflected_values

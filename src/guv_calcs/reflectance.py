@@ -259,7 +259,7 @@ class ReflectanceManager:
     def get_total_reflectance(self, zone):
         """sum over all surfaces to get the total reflected values for that calc zone"""
         dct = self.zone_dict[zone.zone_id]
-        values = np.zeros(zone.num_points)
+        values = np.zeros(zone.num_points).astype('float32')
         for wall, surface_vals in dct.items():
             if surface_vals is not None:
                 values += surface_vals * self.reflectances[wall]
@@ -288,11 +288,11 @@ class ReflectiveSurface:
         self.zone_dict = {}
 
     def calculate_incidence(self, lamps, ref_manager=None, hard=False):
-        """calculate incoming radiation"""
+        """calculate incoming radiation onto all surfaces"""
         self.plane.calculate_values(lamps=lamps, ref_manager=ref_manager, hard=hard)
 
     def get_calc_state(self):
-        """"""
+        """check if the surface needs to be recalculated"""
         return self.plane.get_calc_state()
 
     def get_update_state(self):
@@ -335,19 +335,16 @@ class ReflectiveSurface:
         UPDATE = NEW_ZONE or ZONE_UPDATE or SURF_UPDATE or hard
 
         if RECALCULATE:
-            distances, angles, theta = self._calculate_coordinates(zone)
+            form_factors, theta = self._calculate_coordinates(zone)
         else:
-            distances = self.zone_dict[zone.zone_id]["distances"]
-            angles = self.zone_dict[zone.zone_id]["angles"]
+            form_factors = self.zone_dict[zone.zone_id]["form_factors"]
             theta = self.zone_dict[zone.zone_id]["theta"]
 
         if UPDATE:
-            I_r = self.plane.values[:, :, np.newaxis, np.newaxis, np.newaxis]
+            I_r = self.plane.values[:, :, np.newaxis, np.newaxis, np.newaxis].astype('float32')
             element_size = self.plane.x_spacing * self.plane.y_spacing
 
-            values = (I_r * abs(np.cos(angles)) * element_size) / (
-                np.pi * distances ** 2
-            )
+            values = (I_r *  element_size * form_factors).astype('float32')
 
             values = self._apply_filters(values, theta, zone)
 
@@ -359,8 +356,7 @@ class ReflectiveSurface:
 
         # update the state
         self.zone_dict[zone.zone_id] = {
-            "distances": distances,
-            "angles": angles,
+            "form_factors": form_factors,
             "theta": theta,
             "values": values,
             "calc_state": calc_state,
@@ -372,9 +368,10 @@ class ReflectiveSurface:
         # if zone.zone_id not in ["floor", "ceiling", "south", "north", "east", "west"]:
         # print(self.plane.zone_id, values.mean().round(3))
         # Ensure the final array has the correct shape and return multiplied by R
-        return values * self.R
+        return (values * self.R).astype('float32')
 
     def _apply_filters(self, values, theta, zone):
+        """apply field-of-view based calculations"""
 
         theta = theta.reshape(values.shape)
 
@@ -408,8 +405,10 @@ class ReflectiveSurface:
 
         cos_theta = differences[..., 2] / distances
         angles = np.arccos(cos_theta)
+        
+        form_factors = abs(np.cos(angles))/ (np.pi * distances**2)
 
         # for angle-based differences
         Theta0, Phi0, R0 = to_polar(*differences.reshape(-1, 3).T)
 
-        return distances, angles, Theta0
+        return form_factors.astype('float32'), Theta0.astype('float32')
