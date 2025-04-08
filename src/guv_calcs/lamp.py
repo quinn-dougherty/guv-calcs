@@ -509,13 +509,13 @@ class Lamp:
         data = {}
         data["lamp_id"] = self.lamp_id
         data["name"] = self.name
-        data["x"] = self.x
-        data["y"] = self.y
-        data["z"] = self.z
-        data["angle"] = self.angle
-        data["aimx"] = self.aimx
-        data["aimy"] = self.aimy
-        data["aimz"] = self.aimz
+        data["x"] = float(self.x)
+        data["y"] = float(self.y)
+        data["z"] = float(self.z)
+        data["angle"] = float(self.angle)
+        data["aimx"] = float(self.aimx)
+        data["aimy"] = float(self.aimy)
+        data["aimz"] = float(self.aimz)
         data["intensity_units"] = self.intensity_units
         data["guv_type"] = self.guv_type
         data["wavelength"] = self.wavelength
@@ -532,7 +532,7 @@ class Lamp:
 
         data["enabled"] = True
 
-        data["filename"] = self.filename
+        data["filename"] = str(self.filename)
         filedata = self.save_ies()
         data["filedata"] = filedata.decode() if filedata is not None else None
 
