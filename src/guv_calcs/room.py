@@ -123,7 +123,6 @@ class Room:
         savedata["timestamp"] = timestamp
 
         savedata["data"] = self.to_dict()
-
         if fname is not None:
             filename = check_savefile(fname, ".guv")
             with open(filename, "w") as json_file:
@@ -285,7 +284,7 @@ class Room:
         if units not in ["meters", "feet"]:
             raise KeyError("Valid units are `meters` or `feet`")
         self.units = units
-        self._update_standard_zones() 
+        self._update_standard_zones()
         self.harmonize_units()
         return self
 
@@ -323,7 +322,7 @@ class Room:
     def get_disinfection_data(self, zone_id="WholeRoomFluence"):
         """return the fluence_dict, dataframe, and violin plot"""
         return self.disinfection.get_disinfection_data(zone_id=zone_id)
-        
+
     def _update_standard_zones(self):
         """update the standard safety calculation zones based on the current standard and units"""
         if "UL8802" in self.standard:
@@ -336,7 +335,7 @@ class Room:
             skin_horiz = True
             eye_vert = True
             fov_vert = 80
-            
+
         if "SkinLimits" in self.calc_zones.keys():
             self.calc_zones["SkinLimits"].set_height(height)
             self.calc_zones["SkinLimits"].horiz = skin_horiz
@@ -348,7 +347,7 @@ class Room:
     def set_standard(self, standard):
         """update the photobiological safety standard the Room is subject to"""
         self.standard = standard
-        self._update_standard_zones()        
+        self._update_standard_zones()
         return self
 
     def add_standard_zones(self):
@@ -357,8 +356,8 @@ class Room:
         plus whole room fluence.
         """
 
-        max_vol_val = 20
-        max_plane_val = 50
+        # max_vol_val = 20
+        # max_plane_val = 50
 
         self.add_calc_zone(
             CalcVol(
@@ -370,9 +369,9 @@ class Room:
                 y2=self.y,
                 z1=0,
                 z2=self.z,
-                num_x=min(int(self.x * 20), max_vol_val),
-                num_y=min(int(self.y * 20), max_vol_val),
-                num_z=min(int(self.z * 20), max_vol_val),
+                # num_x=min(int(self.x * 20), max_vol_val),
+                # num_y=min(int(self.y * 20), max_vol_val),
+                # num_z=min(int(self.z * 20), max_vol_val),
                 show_values=False,
             )
         )
@@ -385,8 +384,8 @@ class Room:
                 x2=self.x,
                 y1=0,
                 y2=self.y,
-                num_x=min(int(self.x * 20), max_plane_val),
-                num_y=min(int(self.y * 20), max_plane_val),
+                # num_x=min(int(self.x * 20), max_plane_val),
+                # num_y=min(int(self.y * 20), max_plane_val),
                 dose=True,
                 hours=8,
             )
@@ -400,18 +399,18 @@ class Room:
                 x2=self.x,
                 y1=0,
                 y2=self.y,
-                num_x=min(int(self.x * 20), max_plane_val),
-                num_y=min(int(self.y * 20), max_plane_val),
+                # num_x=min(int(self.x * 20), max_plane_val),
+                # num_y=min(int(self.y * 20), max_plane_val),
                 horiz=False,
                 fov_horiz=180,
                 dose=True,
                 hours=8,
             )
         )
-        
+
         # sets the height and field of view parameters
         self._update_standard_zones()
-        
+
         return self
 
     def _check_position(self, dimensions, obj_name):

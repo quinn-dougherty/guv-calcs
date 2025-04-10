@@ -126,11 +126,11 @@ class CalcZone(object):
         data["show_values"] = self.show_values
         data["x1"] = self.x1
         data["x2"] = self.x2
-        # data["x_spacing"] = self.x_spacing
+        data["x_spacing"] = self.x_spacing
         data["num_x"] = self.num_x
         data["y1"] = self.y1
         data["y2"] = self.y2
-        # data["y_spacing"] = self.y_spacing
+        data["y_spacing"] = self.y_spacing
         data["num_y"] = self.num_y
         if isinstance(self, CalcPlane):
             data["height"] = self.height
@@ -138,7 +138,7 @@ class CalcZone(object):
         elif isinstance(self, CalcVol):
             data["z1"] = self.z1
             data["z2"] = self.z2
-            # data["z_spacing"] = self.z_spacing
+            data["z_spacing"] = self.z_spacing
             data["num_z"] = self.num_z
             data["calctype"] = "Volume"
 
@@ -166,7 +166,7 @@ class CalcZone(object):
         if type(offset) is not bool:
             raise TypeError("Offset must be either True or False")
         self.offset = offset
-        self._update
+        self._update()
 
     def set_value_type(self, dose):
         """
@@ -200,6 +200,23 @@ class CalcZone(object):
     def get_update_state(self):
         return [self.fov_vert, self.fov_horiz, self.vert, self.horiz]
 
+    def _set_spacing(self, pt1, pt2, num, spacing):
+        """set the spacing value conservatively from a num_points value"""
+        rnge = abs(pt2 - pt1)
+        if int(rnge / spacing) == int(num):
+            val = spacing  # no changes needed
+        else:
+            testval = rnge / round(num)
+            i = 1
+            while i < 6:
+
+                val = round(testval, i)
+                if val != 0 and int(rnge / round(testval, i) + 1) == num:
+                    break
+                i += 1
+                val = testval  # if no rounded value works use the original value
+        return val
+
     def calculate_values(self, lamps, ref_manager=None, hard=False):
         """
         Calculate all the values for all the lamps
@@ -216,7 +233,7 @@ class CalcZone(object):
             # add in reflected values, if applicable
             self.reflected_values = ref_manager.get_total_reflectance(self)
         else:
-            self.reflected_values = np.zeros(self.num_points).astype('float32')
+            self.reflected_values = np.zeros(self.num_points).astype("float32")
 
         # sum
         values = self.base_values + self.reflected_values
@@ -320,45 +337,42 @@ class CalcVol(CalcZone):
         self.z2 = 2.7 if z2 is None else z2
         self.dimensions = ((self.x1, self.y1, self.z1), (self.x2, self.y2, self.z2))
 
-        self.num_x = 30 if num_x is None else abs(num_x)
-        self.num_y = 30 if num_y is None else abs(num_y)
-        self.num_z = 10 if num_z is None else abs(num_z)
+        # spacing and num points
+        xr = abs(self.x2 - self.x1)
+        yr = abs(self.y2 - self.y1)
+        zr = abs(self.z2 - self.z1)
+        nx = min(int(xr * 10), 20)
+        ny = min(int(yr * 10), 20)
+        nz = min(int(zr * 10), 20)
+        default_xs = round(xr / nx, -int(np.floor(np.log10(xr / nx))))
+        default_ys = round(yr / ny, -int(np.floor(np.log10(yr / ny))))
+        default_zs = round(zr / nz, -int(np.floor(np.log10(zr / nz))))
+        default_num_x = int(xr / default_xs + 1)
+        default_num_y = int(yr / default_ys + 1)
+        default_num_z = int(zr / default_zs + 1)
 
-        default_x = abs(self.x2 - self.x1) / self.num_x
-        default_y = abs(self.y2 - self.y1) / self.num_y
-        default_z = abs(self.z2 - self.z1) / self.num_z
-
-        # only allow setting by spacing if num_x / num_y / num_z are None
-        if num_x is None:
-            self.x_spacing = default_x if x_spacing is None else abs(x_spacing)
-            self.num_x = int(abs((self.x2 - self.x1) / self.x_spacing))
+        if x_spacing is None:  # set from num_points if spacing is not provided
+            self.num_x = default_num_x if num_x is None else int(num_x)
+            self.x_spacing = self._set_spacing(self.x1, self.x2, self.num_x, default_xs)
         else:
-            self.x_spacing = default_x
-            if x_spacing is not None:
-                msg = f"Passed x_spacing value will be ignored for calc zone {self.zone_id}, num_x used instead"
-                warnings.warn(msg, stacklevel=3)
-
-        if num_y is None:
-            self.y_spacing = default_y if y_spacing is None else abs(y_spacing)
-            self.num_y = int(abs((self.y2 - self.y1) / self.y_spacing))
+            self.x_spacing = x_spacing
+            self.num_x = int(xr / self.x_spacing + 1)
+        if y_spacing is None:
+            self.num_y = default_num_y if num_y is None else int(num_y)
+            self.y_spacing = self._set_spacing(self.y1, self.y2, self.num_y, default_ys)
         else:
-            self.y_spacing = default_y
-            if y_spacing is not None:
-                msg = f"Passed y_spacing value will be ignored for calc zone {self.zone_id}, num_y used instead"
-                warnings.warn(msg, stacklevel=3)
-
-        if num_z is None:
-            self.z_spacing = default_z if z_spacing is None else abs(z_spacing)
-            self.num_z = int(abs((self.z2 - self.z1) / self.z_spacing))
+            self.y_spacing = y_spacing
+            self.num_y = int(yr / self.y_spacing + 1)
+        if z_spacing is None:
+            self.num_z = default_num_z if num_z is None else int(num_z)
+            self.z_spacing = self._set_spacing(self.z1, self.z2, self.num_z, default_zs)
         else:
-            self.z_spacing = default_z
-            if z_spacing is not None:
-                msg = f"Passed z_spacing value will be ignored for calc zone {self.zone_id}, num_z used instead"
-                warnings.warn(msg, stacklevel=3)
+            self.z_spacing = z_spacing
+            self.num_z = int(zr / self.z_spacing + 1)
 
         self._update()
-        self.values = np.zeros(self.num_points)
-        self.reflected_values = np.zeros(self.num_points)
+        self.values = np.zeros(self.num_points).astype("float32")
+        self.reflected_values = np.zeros(self.num_points).astype("float32")
 
     def get_calc_state(self):
         """
@@ -398,22 +412,22 @@ class CalcVol(CalcZone):
         self.x_spacing = self.x_spacing if x_spacing is None else abs(x_spacing)
         self.y_spacing = self.y_spacing if y_spacing is None else abs(y_spacing)
         self.z_spacing = self.z_spacing if z_spacing is None else abs(z_spacing)
-        numx = int(abs(self.x2 - self.x1) / self.x_spacing)
-        numy = int(abs(self.y2 - self.y1) / self.y_spacing)
-        numz = int(abs(self.z2 - self.z1) / self.z_spacing)
+        numx = int(abs(self.x2 - self.x1) / self.x_spacing) + 1
+        numy = int(abs(self.y2 - self.y1) / self.y_spacing) + 1
+        numz = int(abs(self.z2 - self.z1) / self.z_spacing) + 1
 
-        if numx == 0:
-            msg = f"x_spacing too large. Minimum spacing:{self.x2-self.x1}"
-            warnings.warn(msg, stacklevel=3)
-            numx += 1
-        if numy == 0:
-            msg = f"y_spacing too large. Minimum spacing:{self.y2-self.y1}"
-            warnings.warn(msg, stacklevel=3)
-            numy += 1
-        if numz == 0:
-            msg = f"z_spacing too large. Minimum spacing:{self.z2-self.z1}"
-            warnings.warn(msg, stacklevel=3)
-            numz += 1
+        # if numx == 0:
+        # msg = f"x_spacing too large. Minimum spacing:{self.x2-self.x1}"
+        # warnings.warn(msg, stacklevel=3)
+        # numx += 1
+        # if numy == 0:
+        # msg = f"y_spacing too large. Minimum spacing:{self.y2-self.y1}"
+        # warnings.warn(msg, stacklevel=3)
+        # numy += 1
+        # if numz == 0:
+        # msg = f"z_spacing too large. Minimum spacing:{self.z2-self.z1}"
+        # warnings.warn(msg, stacklevel=3)
+        # numz += 1
         self.num_x = numx
         self.num_y = numy
         self.num_z = numz
@@ -436,9 +450,10 @@ class CalcVol(CalcZone):
             warnings.warn("Number of z points must be at least 1")
             self.num_z += 1
 
-        self.x_spacing = abs((self.x2 - self.x1) / round(self.num_x))
-        self.y_spacing = abs((self.y2 - self.y1) / round(self.num_y))
-        self.z_spacing = abs((self.z2 - self.z1) / round(self.num_z))
+        # update spacing if required
+        self.x_spacing = self._set_spacing(self.x1, self.x2, self.num_x, self.x_spacing)
+        self.y_spacing = self._set_spacing(self.y1, self.y2, self.num_y, self.y_spacing)
+        self.z_spacing = self._set_spacing(self.z1, self.z2, self.num_z, self.z_spacing)
 
         self._update()
         return self
@@ -447,12 +462,6 @@ class CalcVol(CalcZone):
         """
         Update the number of points based on the spacing, and then the points
         """
-        if self.offset:
-            xmult = -1 if self.x1 > self.x2 else 1
-            ymult = -1 if self.y1 > self.y2 else 1
-            zmult = -1 if self.z1 > self.z2 else 1
-        else:
-            xmult, ymult, zmult = 0, 0, 0
 
         if self.x1 == self.x2:
             self.num_x = 1
@@ -461,13 +470,17 @@ class CalcVol(CalcZone):
         if self.z1 == self.z2:
             self.num_z = 1
 
-        x_offset = xmult * (self.x_spacing / 2)
-        y_offset = ymult * (self.y_spacing / 2)
-        z_offset = zmult * (self.z_spacing / 2)
+        xpoints = np.array([i * self.x_spacing for i in range(self.num_x)])
+        ypoints = np.array([i * self.y_spacing for i in range(self.num_y)])
+        zpoints = np.array([i * self.z_spacing for i in range(self.num_z)])
 
-        xpoints = np.linspace(self.x1 + x_offset, self.x2 - x_offset, self.num_x)
-        ypoints = np.linspace(self.y1 + y_offset, self.y2 - y_offset, self.num_y)
-        zpoints = np.linspace(self.z1 + z_offset, self.z2 - z_offset, self.num_z)
+        if self.offset:
+            x_offset = (abs(self.x2 - self.x1) - xpoints[-1]) / 2
+            y_offset = (abs(self.y2 - self.y1) - ypoints[-1]) / 2
+            z_offset = (abs(self.z2 - self.z1) - zpoints[-1]) / 2
+            xpoints += x_offset
+            ypoints += y_offset
+            zpoints += z_offset
 
         self.points = [xpoints, ypoints, zpoints]
         self.xp, self.yp, self.zp = self.points
@@ -580,29 +593,30 @@ class CalcPlane(CalcZone):
 
         self.ref_surface = "xy" if ref_surface is None else ref_surface.lower()
 
-        self.num_x = 30 if num_x is None else abs(num_x)
-        self.num_y = 30 if num_y is None else abs(num_y)
+        # spacing and num points
+        xr = abs(self.x2 - self.x1)
+        yr = abs(self.y2 - self.y1)
+        nx = min(int(xr * 10), 50)
+        ny = min(int(yr * 10), 50)
+        # default spacing
+        default_xs = round(xr / nx, -int(np.floor(np.log10(xr / nx))))
+        default_ys = round(yr / ny, -int(np.floor(np.log10(yr / ny))))
+        # default number of points derived from default spacing
+        default_num_x = int(xr / default_xs + 1)
+        default_num_y = int(yr / default_ys + 1)
 
-        default_x = abs(self.x2 - self.x1) / self.num_x
-        default_y = abs(self.y2 - self.y1) / self.num_y
-
-        # only allow setting by spacing if num_x / num_y are None
-        if num_x is None:
-            self.x_spacing = default_x if x_spacing is None else abs(x_spacing)
-            self.num_x = int(abs((self.x2 - self.x1) / self.x_spacing))
+        if x_spacing is None:  # set from num_points if spacing is not provided
+            self.num_x = default_num_x if num_x is None else int(num_x)
+            self.x_spacing = self._set_spacing(self.x1, self.x2, self.num_x, default_xs)
         else:
-            self.x_spacing = default_x
-            if x_spacing is not None:
-                msg = f"Passed x_spacing value will be ignored for calc zone {self.zone_id}, num_x used instead"
-                warnings.warn(msg, stacklevel=3)
-        if num_y is None:
-            self.y_spacing = default_y if y_spacing is None else abs(y_spacing)
-            self.num_y = int(abs((self.y2 - self.y1) / self.y_spacing))
+            self.x_spacing = x_spacing
+            self.num_x = int(xr / self.x_spacing + 1)
+        if y_spacing is None:
+            self.num_y = default_num_y if num_y is None else int(num_y)
+            self.y_spacing = self._set_spacing(self.y1, self.y2, self.num_y, default_ys)
         else:
-            self.y_spacing = default_y
-            if y_spacing is not None:
-                msg = f"Passed y_spacing value will be ignored for calc zone {self.zone_id}, num_y used instead"
-                warnings.warn(msg, stacklevel=3)
+            self.y_spacing = y_spacing
+            self.num_y = int(yr / self.y_spacing + 1)
 
         self._update()
         self.values = np.zeros(self.num_points)
@@ -630,16 +644,16 @@ class CalcPlane(CalcZone):
         """set the fineness of the grid spacing and update the coordinate points"""
         self.x_spacing = self.x_spacing if x_spacing is None else abs(x_spacing)
         self.y_spacing = self.y_spacing if y_spacing is None else abs(y_spacing)
-        numx = int(abs(self.x2 - self.x1) / self.x_spacing)
-        numy = int(abs(self.y2 - self.y1) / self.y_spacing)
-        if numx == 0:
-            msg = f"x_spacing too large. Minimum spacing:{self.x2-self.x1}"
-            warnings.warn(msg, stacklevel=3)
-            numx += 1
-        if numy == 0:
-            msg = f"y_spacing too large. Minimum spacing:{self.y2-self.y1}"
-            warnings.warn(msg, stacklevel=3)
-            numy += 1
+        numx = int(abs(self.x2 - self.x1) / self.x_spacing) + 1
+        numy = int(abs(self.y2 - self.y1) / self.y_spacing) + 1
+        # if numx == 0:
+        # msg = f"x_spacing too large. Minimum spacing:{self.x2-self.x1}"
+        # warnings.warn(msg, stacklevel=3)
+        # numx += 1
+        # if numy == 0:
+        # msg = f"y_spacing too large. Minimum spacing:{self.y2-self.y1}"
+        # warnings.warn(msg, stacklevel=3)
+        # numy += 1
         self.num_x = numx
         self.num_y = numy
         self._update()
@@ -658,8 +672,9 @@ class CalcPlane(CalcZone):
             warnings.warn("Number of y points must be at least 1")
             self.num_y += 1
 
-        self.x_spacing = abs((self.x2 - self.x1) / round(self.num_x))
-        self.y_spacing = abs((self.y2 - self.y1) / round(self.num_y))
+        # update spacing if required
+        self.x_spacing = self._set_spacing(self.x1, self.x2, self.num_x, self.x_spacing)
+        self.y_spacing = self._set_spacing(self.y1, self.y2, self.num_y, self.y_spacing)
 
         self._update()
         return self
@@ -686,22 +701,19 @@ class CalcPlane(CalcZone):
         """
         Update the number of points based on the spacing, and then the points
         """
-        if self.offset:
-            xmult = -1 if self.x1 > self.x2 else 1
-            ymult = -1 if self.y1 > self.y2 else 1
-        else:
-            xmult, ymult = 0, 0
 
         if self.x1 == self.x2:
             self.num_x = 1
         if self.y1 == self.y2:
             self.num_y = 1
 
-        x_offset = xmult * (self.x_spacing / 2)
-        y_offset = ymult * (self.y_spacing / 2)
-
-        xpoints = np.linspace(self.x1 + x_offset, self.x2 - x_offset, self.num_x)
-        ypoints = np.linspace(self.y1 + y_offset, self.y2 - y_offset, self.num_y)
+        xpoints = np.array([i * self.x_spacing for i in range(self.num_x)])
+        ypoints = np.array([i * self.y_spacing for i in range(self.num_y)])
+        if self.offset:
+            x_offset = (abs(self.x2 - self.x1) - xpoints[-1]) / 2
+            y_offset = (abs(self.y2 - self.y1) - ypoints[-1]) / 2
+            xpoints += x_offset
+            ypoints += y_offset
 
         self.points = [xpoints, ypoints]
         self.xp, self.yp = self.points
