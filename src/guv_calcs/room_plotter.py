@@ -131,7 +131,7 @@ class RoomPlotter:
             color=lampcolor,
             opacity=0.4,
             name=lamp.name,
-            customdata=[lamp.lamp_id],
+            customdata=["lamp_" + lamp.lamp_id],
             legendgroup="lamps",
             legendgrouptitle_text="Lamps",
             showlegend=True,
@@ -145,7 +145,7 @@ class RoomPlotter:
             mode="lines",
             line=dict(color="black", width=2, dash="dash"),
             name=lamp.name,
-            customdata=[lamp.lamp_id + "_aim"],
+            customdata=["lamp_" + lamp.lamp_id + "_aim"],
             showlegend=False,
         )
         xs, ys, zs = lamp.surface.surface_points.T
@@ -159,7 +159,7 @@ class RoomPlotter:
             legendgroup="surfaces",
             showlegend=False,
             name=lamp.name,
-            customdata=[lamp.lamp_id + "_surface"],
+            customdata=["lamp_" + lamp.lamp_id + "_surface"],
         )
 
         traces = [trace.customdata[0] for trace in fig.data]
@@ -207,7 +207,7 @@ class RoomPlotter:
             legendgrouptitle_text="Calculation Zones",
             showlegend=True,
             name=zone.name,
-            customdata=[zone.zone_id],
+            customdata=["zone_" + zone.zone_id],
         )
         traces = [trace.name for trace in fig.data]
         if zonetrace.name not in traces:
@@ -276,7 +276,7 @@ class RoomPlotter:
             legendgroup="zones",
             legendgrouptitle_text="Calculation Zones",
             name=zone.name,
-            customdata=[zone.zone_id],
+            customdata=["zone_" + zone.zone_id],
         )
         traces = [trace.name for trace in fig.data]
         if zonetrace.name not in traces:
@@ -308,7 +308,7 @@ class RoomPlotter:
                     showscale=False,
                     colorbar=None,
                     name=zone.name + " Values",
-                    customdata=[zone.zone_id + "_values"],
+                    customdata=["zone_" + zone.zone_id + "_values"],
                     legendgroup="zones",
                     legendgrouptitle_text="Calculation Zones",
                     showlegend=True,

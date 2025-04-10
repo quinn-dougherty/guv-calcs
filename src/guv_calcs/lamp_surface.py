@@ -29,7 +29,7 @@ class LampSurface:
         self.units = units if units is not None else "meters"
         self.width = width if width is not None else 0
         self.length = length if length is not None else 0
-        self.depth =  depth if depth is not None else 0
+        self.depth = depth if depth is not None else 0
         self.mounting_position = position
         self.aim_point = aim_point
         self.angle = angle
@@ -112,14 +112,14 @@ class LampSurface:
         populate length/width/depth/units values from a lampdict object
         if current length, width and units values aren't present,
         up, populate them all from the ies data instead
-        
-        if override is true, 
-        
+
+        if override is true,
+
         """
         # if not all([self.width, self.length, self.units]):
-            # if any([self.width, self.length, self.units]):
-                # msg = "Width, length, and units arguments will be ignored and set from the .ies file instead."
-                # warnings.warn(msg, stacklevel=2)
+        # if any([self.width, self.length, self.units]):
+        # msg = "Width, length, and units arguments will be ignored and set from the .ies file instead."
+        # warnings.warn(msg, stacklevel=2)
         units_type = lampdict["units_type"]
         if units_type == 1:
             self.units = "feet"
@@ -169,7 +169,7 @@ class LampSurface:
             msg = f"Argument type {type(arg)} for argument intensity_map is invalid. intensity_map will not be used."
             warnings.warn(msg, stacklevel=3)
             intensity_map = None
-            
+
         # clean nans
         if intensity_map is not None:
             if np.isnan(intensity_map).any():

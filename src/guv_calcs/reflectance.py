@@ -3,6 +3,7 @@ import copy
 from .calc_zone import CalcPlane
 from .trigonometry import to_polar
 
+
 class ReflectanceManager:
     """
     Class for managing reflective surfaces and their interactions
@@ -259,7 +260,7 @@ class ReflectanceManager:
     def get_total_reflectance(self, zone):
         """sum over all surfaces to get the total reflected values for that calc zone"""
         dct = self.zone_dict[zone.zone_id]
-        values = np.zeros(zone.num_points).astype('float32')
+        values = np.zeros(zone.num_points).astype("float32")
         for wall, surface_vals in dct.items():
             if surface_vals is not None:
                 values += surface_vals * self.reflectances[wall]
@@ -341,10 +342,12 @@ class ReflectiveSurface:
             theta = self.zone_dict[zone.zone_id]["theta"]
 
         if UPDATE:
-            I_r = self.plane.values[:, :, np.newaxis, np.newaxis, np.newaxis].astype('float32')
+            I_r = self.plane.values[:, :, np.newaxis, np.newaxis, np.newaxis].astype(
+                "float32"
+            )
             element_size = self.plane.x_spacing * self.plane.y_spacing
 
-            values = (I_r *  element_size * form_factors).astype('float32')
+            values = (I_r * element_size * form_factors / 10).astype("float32")
 
             values = self._apply_filters(values, theta, zone)
 
@@ -368,7 +371,7 @@ class ReflectiveSurface:
         # if zone.zone_id not in ["floor", "ceiling", "south", "north", "east", "west"]:
         # print(self.plane.zone_id, values.mean().round(3))
         # Ensure the final array has the correct shape and return multiplied by R
-        return (values * self.R).astype('float32')
+        return (values * self.R).astype("float32")
 
     def _apply_filters(self, values, theta, zone):
         """apply field-of-view based calculations"""
@@ -405,10 +408,10 @@ class ReflectiveSurface:
 
         cos_theta = differences[..., 2] / distances
         angles = np.arccos(cos_theta)
-        
-        form_factors = abs(np.cos(angles))/ (np.pi * distances**2)
+
+        form_factors = abs(np.cos(angles)) / (np.pi * distances ** 2)
 
         # for angle-based differences
         Theta0, Phi0, R0 = to_polar(*differences.reshape(-1, 3).T)
 
-        return form_factors.astype('float32'), Theta0.astype('float32')
+        return form_factors.astype("float32"), Theta0.astype("float32")

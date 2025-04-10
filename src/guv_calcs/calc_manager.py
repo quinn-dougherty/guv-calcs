@@ -64,8 +64,8 @@ class LightingCalculator:
 
             if np.isnan(values.any()):  # mask any nans near light source
                 values = np.ma.masked_invalid(values)
-                
-            values = values.astype('float32')
+
+            values = values.astype("float32")
 
         else:
             values = self.zone.lamp_values_base[lamp.lamp_id]
