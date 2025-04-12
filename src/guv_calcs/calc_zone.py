@@ -760,24 +760,34 @@ class CalcPlane(CalcZone):
             cbar.set_label(self.units, loc="center")
         return fig, ax
 
-    def _write_rows(self, fname=None):
+    def _write_rows(self):
         """
         export solution to csv
         """
-        # if fname is None:
-        # fname = self.name+".csv"
-        num_x = self.num_points[0]
-        num_y = self.num_points[1]
+        
+        num_x = self.num_x
+        num_y = self.num_y
 
-        rows = [[""] + self.points[0].tolist()]
+        if self.ref_surface == "xy":
+            xpoints = self.points[0].tolist()
+            ypoints = self.points[1].tolist()
+        elif self.ref_surface == "xz":
+            xpoints = self.points[0]
+            ypoints = [self.height] * num_y            
+        elif self.ref_surface == "yz":
+            xpoints = [self.height] * num_x
+            ypoints = self.points[1]            
+
+        rows = [[""] + xpoints]
         if self.values is None:
-            vals = [[""] * num_y] * num_x
+            vals = [[-1] * num_y] * num_x
         elif self.values.shape != (num_x, num_y):
-            vals = [[""] * num_y] * num_x
+            vals = [[-1] * num_y] * num_x
         else:
             vals = self.values
-        rows += np.concatenate(([np.flip(self.points[1])], vals)).T.tolist()
+        rows += np.concatenate(([np.flip(ypoints)], vals)).T.tolist()
         rows += [""]
         # zvals
-        rows += [[""] + [self.height] * num_x] * num_y
+        zvals = self.coords.T[2].reshape(num_x, num_y).T
+        rows += [[""]+list(line) for line in zvals]
         return rows
