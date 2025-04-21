@@ -74,19 +74,34 @@ class LightingCalculator:
 
     def _apply_filters(self, lamp, values):
         """
+        TODO:
+        possibly I should really be saving on calculation time
+        by not calculating unnecessary angles to begin with 
+        
         update the values of a single lamp based on the calc zone properties,
         but which don't require a full recalculation
         """
 
-        rel_coords = self.zone.coords - lamp.surface.position
-        Theta0, Phi0, R0 = to_polar(*rel_coords.T)
-        # apply vertical field of view
-        values[Theta0 < 90 - self.zone.fov_vert / 2] = 0
+        if self.zone.calctype=="Plane":
+            rel_coords = self.zone.coords - lamp.surface.position
+            rel = rel_coords @ self.zone.basis
+            theta_rel, phi_rel, _ = to_polar(*rel.T) # relative coordinates
+            
+            # apply normals/directions
+            if self.zone.direction != 0:
+                values[theta_rel > 90] = 0      
 
-        if self.zone.vert:
-            values *= np.sin(np.radians(Theta0))
-        if self.zone.horiz:
-            values *= abs(np.cos(np.radians(Theta0)))
+            # apply vertical/horizontal irradiances
+            if self.zone.vert:
+                values *= np.sin(np.radians(theta_rel))
+            if self.zone.horiz:
+                values *= abs(np.cos(np.radians(theta_rel)))
+                
+            theta, phi, _  = to_polar(*rel_coords.T) # absolute coordinates
+            # apply vertical field of view - I THINK this should stay in absolute coordinates
+            if self.zone.fov_vert<180:
+                values[theta < (90 - self.zone.fov_vert / 2)] = 0
+                values[theta > (90 + self.zone.fov_vert / 2)] = 0     
 
         if lamp.intensity_units.lower() == "mw/sr":
             values = values / 10  # convert from mW/Sr to uW/cm2
@@ -160,7 +175,6 @@ class LightingCalculator:
         transformations applied, and convert to polar coords for further
         operations
         """
-        Theta0, Phi0, R0 = to_polar(*rel_coords.T)
         # apply all transformations that have been applied to this lamp, but in reverse
         rel_coords = np.array(
             attitude(rel_coords.T, roll=0, pitch=0, yaw=-lamp.heading)

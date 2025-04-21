@@ -59,6 +59,7 @@ class CalcZone(object):
         fov_horiz=None,
         vert=None,
         horiz=None,
+        all_angles=None,
         dose=None,
         hours=None,
         enabled=None,
@@ -196,6 +197,9 @@ class CalcZone(object):
         if type(hours) not in [float, int]:
             raise TypeError("Hours must be numeric")
         self.hours = hours
+        
+        if self.values is not None and self.dose:
+            self.values = (self.values * hours) / self.hours    
 
     def get_update_state(self):
         return [self.fov_vert, self.fov_horiz, self.vert, self.horiz]
@@ -246,6 +250,7 @@ class CalcZone(object):
         self.calc_state = new_calc_state
 
         return self.values
+               
 
     def export(self, fname=None):
         """
@@ -347,28 +352,27 @@ class CalcVol(CalcZone):
         default_xs = round(xr / nx, -int(np.floor(np.log10(xr / nx))))
         default_ys = round(yr / ny, -int(np.floor(np.log10(yr / ny))))
         default_zs = round(zr / nz, -int(np.floor(np.log10(zr / nz))))
-        default_num_x = int(xr / default_xs + 1)
-        default_num_y = int(yr / default_ys + 1)
-        default_num_z = int(zr / default_zs + 1)
-
+        default_num_x = int(round(xr / default_xs))
+        default_num_y = int(round(yr / default_ys))
+        default_num_z = int(round(zr / default_zs))
         if x_spacing is None:  # set from num_points if spacing is not provided
             self.num_x = default_num_x if num_x is None else int(num_x)
             self.x_spacing = self._set_spacing(self.x1, self.x2, self.num_x, default_xs)
         else:
             self.x_spacing = x_spacing
-            self.num_x = int(xr / self.x_spacing + 1)
+            self.num_x = int(round(xr / self.x_spacing))
         if y_spacing is None:
             self.num_y = default_num_y if num_y is None else int(num_y)
             self.y_spacing = self._set_spacing(self.y1, self.y2, self.num_y, default_ys)
         else:
             self.y_spacing = y_spacing
-            self.num_y = int(yr / self.y_spacing + 1)
+            self.num_y = int(round(yr / self.y_spacing))
         if z_spacing is None:
             self.num_z = default_num_z if num_z is None else int(num_z)
             self.z_spacing = self._set_spacing(self.z1, self.z2, self.num_z, default_zs)
         else:
             self.z_spacing = z_spacing
-            self.num_z = int(zr / self.z_spacing + 1)
+            self.num_z = int(round(zr / self.z_spacing))
 
         self._update()
         self.values = np.zeros(self.num_points).astype("float32")
@@ -412,22 +416,9 @@ class CalcVol(CalcZone):
         self.x_spacing = self.x_spacing if x_spacing is None else abs(x_spacing)
         self.y_spacing = self.y_spacing if y_spacing is None else abs(y_spacing)
         self.z_spacing = self.z_spacing if z_spacing is None else abs(z_spacing)
-        numx = int(abs(self.x2 - self.x1) / self.x_spacing) + 1
-        numy = int(abs(self.y2 - self.y1) / self.y_spacing) + 1
-        numz = int(abs(self.z2 - self.z1) / self.z_spacing) + 1
-
-        # if numx == 0:
-        # msg = f"x_spacing too large. Minimum spacing:{self.x2-self.x1}"
-        # warnings.warn(msg, stacklevel=3)
-        # numx += 1
-        # if numy == 0:
-        # msg = f"y_spacing too large. Minimum spacing:{self.y2-self.y1}"
-        # warnings.warn(msg, stacklevel=3)
-        # numy += 1
-        # if numz == 0:
-        # msg = f"z_spacing too large. Minimum spacing:{self.z2-self.z1}"
-        # warnings.warn(msg, stacklevel=3)
-        # numz += 1
+        numx = int(round(abs(self.x2 - self.x1) / self.x_spacing))
+        numy = int(round(abs(self.y2 - self.y1) / self.y_spacing))
+        numz = int(round(abs(self.z2 - self.z1) / self.z_spacing))
         self.num_x = numx
         self.num_y = numy
         self.num_z = numz
@@ -437,9 +428,9 @@ class CalcVol(CalcZone):
         """
         set the number of points desired in a dimension, instead of setting the spacing
         """
-        self.num_x = self.num_x if num_x is None else num_x
-        self.num_y = self.num_y if num_y is None else num_y
-        self.num_z = self.num_z if num_z is None else num_z
+        self.num_x = self.num_x if num_x is None else abs(int(num_x))
+        self.num_y = self.num_y if num_y is None else abs(int(num_y))
+        self.num_z = self.num_z if num_z is None else abs(int(num_z))
         if self.num_x == 0:
             warnings.warn("Number of x points must be at least 1")
             self.num_x += 1
@@ -547,10 +538,12 @@ class CalcPlane(CalcZone):
         y2=None,
         height=None,
         ref_surface="xy",
+        direction=None,
         num_x=None,
         num_y=None,
         x_spacing=None,
         y_spacing=None,
+        all_angles=None,
         offset=None,
         fov80=None,
         fov_vert=None,
@@ -591,7 +584,12 @@ class CalcPlane(CalcZone):
         if ref_surface.lower() not in ["xy", "xz", "yz"]:
             raise ValueError("ref_surface must be a string in [`xy`,`xz`,`yz`]")
 
+        # TODO: this should really be much cleaner, perhaps just have users define a normal?
         self.ref_surface = "xy" if ref_surface is None else ref_surface.lower()
+        if direction is not None and not direction in [1,0,-1]:
+            raise ValueError("Direction must be in [1, 0, -1]")
+        self.direction = 0 if direction is None else int(direction)
+        self.basis = self._get_basis()
 
         # spacing and num points
         xr = abs(self.x2 - self.x1)
@@ -602,26 +600,54 @@ class CalcPlane(CalcZone):
         default_xs = round(xr / nx, -int(np.floor(np.log10(xr / nx))))
         default_ys = round(yr / ny, -int(np.floor(np.log10(yr / ny))))
         # default number of points derived from default spacing
-        default_num_x = int(xr / default_xs + 1)
-        default_num_y = int(yr / default_ys + 1)
+        default_num_x = int(round(xr / default_xs))# + 1)
+        default_num_y = int(round(yr / default_ys))# + 1)
 
         if x_spacing is None:  # set from num_points if spacing is not provided
             self.num_x = default_num_x if num_x is None else int(num_x)
             self.x_spacing = self._set_spacing(self.x1, self.x2, self.num_x, default_xs)
         else:
             self.x_spacing = x_spacing
-            self.num_x = int(xr / self.x_spacing + 1)
+            self.num_x = int(round(xr / self.x_spacing))# + 1)
         if y_spacing is None:
             self.num_y = default_num_y if num_y is None else int(num_y)
             self.y_spacing = self._set_spacing(self.y1, self.y2, self.num_y, default_ys)
         else:
             self.y_spacing = y_spacing
-            self.num_y = int(yr / self.y_spacing + 1)
+            self.num_y = int(round(yr / self.y_spacing))#+ 1)
 
         self._update()
         self.values = np.zeros(self.num_points)
         self.reflected_values = np.zeros(self.num_points)
+        
+    def _get_basis(self):
+        """
+        Return an orthonormal basis (u, v, n) for the surface:
+        - n is the normal vector (points outward from surface)
+        - u, v span the surface plane
+        """
+        
+        if self.ref_surface == "xy":
+            n = np.array([0, 0, 1])
+        elif self.ref_surface == "xz":
+            n = np.array([0, 1, 0])
+        elif self.ref_surface == "yz":
+            n = np.array([1, 0, 0])
+        if self.direction!=0:
+            n *= self.direction
+            
+        # Generate arbitrary vector not parallel to n
+        tmp = np.array([1, 0, 0]) if abs(n[0]) < 0.9 else np.array([0, 1, 0])
 
+        u = np.cross(n, tmp)
+        u = u / np.linalg.norm(u)
+
+        v = np.cross(n, u)
+        basis = np.stack([u, v, n], axis=1)
+
+        return basis
+                
+                
     def set_height(self, height):
         """set height of calculation plane. currently we only support vertical planes"""
         if type(height) not in [float, int]:
@@ -629,6 +655,17 @@ class CalcPlane(CalcZone):
         self.height = height
         self._update()
         return self
+        
+    def set_ref_surface(self, ref_surface):
+        """
+        set the reference surface of the calc plane--must be a string in [`xy`,`xz`,`yz`]
+        """
+        if not isinstance(ref_surface, str):
+            raise TypeError("ref_surface must be a string in [`xy`,`xz`,`yz`]")
+        if ref_surface.lower() not in ["xy", "xz", "yz"]:
+            raise ValueError("ref_surface must be a string in [`xy`,`xz`,`yz`]")
+        self.ref_surface = ref_surface
+        self._update()
 
     def set_dimensions(self, x1=None, x2=None, y1=None, y2=None):
         """set the dimensions and update the coordinate points"""
@@ -644,16 +681,8 @@ class CalcPlane(CalcZone):
         """set the fineness of the grid spacing and update the coordinate points"""
         self.x_spacing = self.x_spacing if x_spacing is None else abs(x_spacing)
         self.y_spacing = self.y_spacing if y_spacing is None else abs(y_spacing)
-        numx = int(abs(self.x2 - self.x1) / self.x_spacing) + 1
-        numy = int(abs(self.y2 - self.y1) / self.y_spacing) + 1
-        # if numx == 0:
-        # msg = f"x_spacing too large. Minimum spacing:{self.x2-self.x1}"
-        # warnings.warn(msg, stacklevel=3)
-        # numx += 1
-        # if numy == 0:
-        # msg = f"y_spacing too large. Minimum spacing:{self.y2-self.y1}"
-        # warnings.warn(msg, stacklevel=3)
-        # numy += 1
+        numx = int(round(abs(self.x2 - self.x1) / self.x_spacing) )#+ 1
+        numy = int(round(abs(self.y2 - self.y1) / self.y_spacing) )#+ 1
         self.num_x = numx
         self.num_y = numy
         self._update()
@@ -663,8 +692,8 @@ class CalcPlane(CalcZone):
         """
         set the number of points desired in a dimension, instead of setting the spacing
         """
-        self.num_x = self.num_x if num_x is None else abs(num_x)
-        self.num_y = self.num_y if num_y is None else abs(num_y)
+        self.num_x = self.num_x if num_x is None else abs(int(num_x))
+        self.num_y = self.num_y if num_y is None else abs(int(num_y))
         if self.num_x == 0:
             warnings.warn("Number of x points must be at least 1")
             self.num_x += 1
@@ -728,13 +757,7 @@ class CalcPlane(CalcZone):
             Z = X
             X = np.full(X.shape, self.height)
 
-        self.coords = np.stack([X.flatten(), Y.flatten(), Z.flatten()], axis=-1)
-
-        # xy_coords = np.array([np.array((x0, y0)) for x0, y0 in zip(X, Y)])
-        # zs = np.ones(xy_coords.shape[0]) * self.height
-
-        # self.coords = np.stack([xy_coords.T[0], xy_coords.T[1], zs]).T
-        # self.coords = np.unique(self.coords, axis=0)
+        self.coords = np.stack([X,Y,Z], axis=-1)
 
         self.num_points = np.array([len(self.xp), len(self.yp)])
 
@@ -753,8 +776,13 @@ class CalcPlane(CalcZone):
         if self.values is not None:
             vmin = self.values.min() if vmin is None else vmin
             vmax = self.values.max() if vmax is None else vmax
-            extent = [self.x1, self.x2, self.y1, self.y2]
-            img = ax.imshow(self.values.T[::-1], extent=extent, vmin=vmin, vmax=vmax)
+            if self.ref_surface == "yz":
+                extent = [self.y1, self.y2, self.x1, self.x2]
+                values = self.values[::-1]
+            else:
+                extent = [self.x1, self.x2, self.y1, self.y2]
+                values = self.values.T[::-1]
+            img = ax.imshow(values, extent=extent, vmin=vmin, vmax=vmax)
             cbar = fig.colorbar(img, pad=0.03)
             ax.set_title(title)
             cbar.set_label(self.units, loc="center")

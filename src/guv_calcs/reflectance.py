@@ -40,7 +40,7 @@ class ReflectanceManager:
 
         keys = ["floor", "ceiling", "south", "north", "east", "west"]
         default_reflectances = {surface: 0.0 for surface in keys}
-        default_spacings = {surface: 0.1 for surface in keys}
+        default_spacings = {surface: 0.5 for surface in keys}
 
         self.reflectances = {**default_reflectances, **(reflectances or {})}
         self.x_spacings = {**default_spacings, **(x_spacings or {})}
@@ -93,7 +93,7 @@ class ReflectanceManager:
     def _initialize_surfaces(self):
 
         for wall, reflectance in self.reflectances.items():
-            x1, x2, y1, y2, height, ref_surface = self._get_surface_dimensions(wall)
+            x1, x2, y1, y2, height, ref_surface, direction = self._get_surface_dimensions(wall)
             plane = CalcPlane(
                 zone_id=wall,
                 x1=x1,
@@ -102,6 +102,8 @@ class ReflectanceManager:
                 y2=y2,
                 height=height,
                 ref_surface=ref_surface,
+                direction=direction,
+                horiz=True,
                 x_spacing=self.x_spacings[wall],
                 y_spacing=self.y_spacings[wall],
             )
@@ -120,27 +122,33 @@ class ReflectanceManager:
             x1, x2, y1, y2 = 0, self.x, 0, self.y
             height = 0
             ref_surface = "xy"
+            direction = 1
         elif wall == "ceiling":
             x1, x2, y1, y2 = 0, self.x, 0, self.y
             height = self.z
             ref_surface = "xy"
+            direction = -1
         elif wall == "south":
             x1, x2, y1, y2 = 0, self.x, 0, self.z
             height = 0
             ref_surface = "xz"
+            direction = 1
         elif wall == "north":
             x1, x2, y1, y2 = 0, self.x, 0, self.z
             height = self.y
             ref_surface = "xz"
+            direction = -1
         elif wall == "west":
-            x1, x2, y1, y2 = 0, self.y, 0, self.z
+            x1, x2, y1, y2 = 0, self.z, 0, self.y
             height = 0
             ref_surface = "yz"
+            direction = 1
         elif wall == "east":
-            x1, x2, y1, y2 = 0, self.y, 0, self.z
+            x1, x2, y1, y2 = 0, self.z, 0, self.y
             height = self.x
             ref_surface = "yz"
-        return x1, x2, y1, y2, height, ref_surface
+            direction = -1
+        return x1, x2, y1, y2, height, ref_surface, direction
 
     def update_dimensions(self, x=None, y=None, z=None):
         """update the wall dimensions based on changes to the Room parent class"""
@@ -148,7 +156,7 @@ class ReflectanceManager:
         self.y = self.y if y is None else y
         self.z = self.z if z is None else z
         for wall, surface in self.surfaces.items():
-            x1, x2, y1, y2, height, _ = self._get_surface_dimensions(wall)
+            x1, x2, y1, y2, height, _, _ = self._get_surface_dimensions(wall)
             surface.plane.height = height
             surface.plane.set_dimensions(x1, x2, y1, y2)
 
@@ -162,6 +170,8 @@ class ReflectanceManager:
             surface.calculate_incidence(lamps, hard=hard)
         # subsequent passes
         self._interreflectance(lamps, hard=hard)
+        # for wall, surface in self.surfaces.items():
+            # print(wall,surface.plane.values.mean())
 
     def _interreflectance(self, lamps, hard=False):
         """
@@ -171,18 +181,29 @@ class ReflectanceManager:
         managers = self._create_managers()
         i = 0
         percent = 1  # initial
-        # while i<self.max_num_passes:
+
+        dct = {}
+        for wall, surface in self.surfaces.items():
+            dct[wall] = surface.plane.values
+
         while percent > 0.01 and i < self.max_num_passes:
+            # print(i,'---')
             pc = []
             for wall, surface in self.surfaces.items():
+                
                 init = surface.plane.values.mean()
+                
                 surface.calculate_incidence(
                     lamps, ref_manager=managers[wall], hard=hard
                 )
 
-                final = surface.plane.reflected_values.mean()
-                if final != 0:
-                    pc.append((abs(final - init) / final))
+                ref = surface.plane.reflected_values.mean()
+                dct[wall] += surface.plane.reflected_values
+                if ref != 0:
+                    pc.append((abs(ref - init) / ref))
+
+                final = surface.plane.values.mean()
+                # print(wall,init,ref,final, dct[wall].mean())
             if len(pc) > 0:
                 percent = np.mean(pc)
             else:
@@ -190,6 +211,31 @@ class ReflectanceManager:
             managers = self._update_managers(managers)
             i = i + 1
         # print(i)
+        for wall, surface in self.surfaces.items():
+            surface.plane.values = dct[wall]
+
+    def _update_managers(self, managers: dict) -> dict:
+        """Update all interreflection managers with newly calculated surface incidences"""
+        for wall, manager in managers.items():
+            subwalls = list(manager.surfaces.keys())  # Create a static copy of keys
+            for subwall in subwalls:
+                # Update the values without modifying the dictionary structure
+                np.copyto(
+                    manager.surfaces[subwall].plane.values,
+                    self.surfaces[subwall].plane.values,
+                )
+                # create new plane
+                new_plane = copy.deepcopy(
+                    self.surfaces[subwall].plane
+                ) 
+                # replace the total values with only the reflected values
+                new_plane.values = new_plane.reflected_values
+                # Replace the object instead of deleting in-place
+                manager.surfaces[subwall] = ReflectiveSurface(
+                    R=self.surfaces[subwall].R, plane=new_plane
+                )
+
+        return managers  # Updated in place
 
     def _create_managers(self):
         """
@@ -213,29 +259,6 @@ class ReflectanceManager:
             del ref_manager.surfaces[wall]
             managers[wall] = ref_manager
         return managers
-
-    def _update_managers(self, managers: dict) -> dict:
-        """Update all interreflection managers with newly calculated surface incidences"""
-        for wall, manager in managers.items():
-            subwalls = list(manager.surfaces.keys())  # Create a static copy of keys
-            for subwall in subwalls:
-                # Update the values without modifying the dictionary structure
-                np.copyto(
-                    manager.surfaces[subwall].plane.values,
-                    self.surfaces[subwall].plane.values,
-                )
-                new_plane = copy.deepcopy(
-                    self.surfaces[subwall].plane
-                )  # create new plane
-                new_plane.values = (
-                    new_plane.reflected_values
-                )  # replace the total values with only the reflected values
-                # Replace the object instead of deleting in-place
-                manager.surfaces[subwall] = ReflectiveSurface(
-                    R=self.surfaces[subwall].R, plane=new_plane
-                )
-
-        return managers  # Updated in place
 
     def calculate_reflectance(self, zone, hard=False):
         """
@@ -285,7 +308,7 @@ class ReflectiveSurface:
 
         self.R = R
         self.plane = plane
-        self.max_num_passes = 0  # init
+        self.num_passes = 0  # init
         self.zone_dict = {}
 
     def calculate_incidence(self, lamps, ref_manager=None, hard=False):
@@ -336,10 +359,10 @@ class ReflectiveSurface:
         UPDATE = NEW_ZONE or ZONE_UPDATE or SURF_UPDATE or hard
 
         if RECALCULATE:
-            form_factors, theta = self._calculate_coordinates(zone)
+            form_factors, theta_zone = self._calculate_coordinates(zone)
         else:
             form_factors = self.zone_dict[zone.zone_id]["form_factors"]
-            theta = self.zone_dict[zone.zone_id]["theta"]
+            theta_zone = self.zone_dict[zone.zone_id]["theta_zone"]
 
         if UPDATE:
             I_r = self.plane.values[:, :, np.newaxis, np.newaxis, np.newaxis].astype(
@@ -347,9 +370,9 @@ class ReflectiveSurface:
             )
             element_size = self.plane.x_spacing * self.plane.y_spacing
 
-            values = (I_r * element_size * form_factors / 10).astype("float32")
+            values = (I_r * element_size * form_factors)#.astype("float32")
 
-            values = self._apply_filters(values, theta, zone)
+            values = self._apply_filters(values, theta_zone, zone)
 
             # Sum over all self.plane points to get total values at each volume point
             values = np.sum(values, axis=(0, 1))  # Collapse the dimensions
@@ -360,7 +383,7 @@ class ReflectiveSurface:
         # update the state
         self.zone_dict[zone.zone_id] = {
             "form_factors": form_factors,
-            "theta": theta,
+            "theta_zone":theta_zone,
             "values": values,
             "calc_state": calc_state,
             "update_state": update_state,
@@ -373,21 +396,28 @@ class ReflectiveSurface:
         # Ensure the final array has the correct shape and return multiplied by R
         return (values * self.R).astype("float32")
 
-    def _apply_filters(self, values, theta, zone):
+    def _apply_filters(self, values, theta_zone,zone):
         """apply field-of-view based calculations"""
-
-        theta = theta.reshape(values.shape)
 
         # clean nans
         if np.isnan(values).any():
             values = np.ma.masked_invalid(values)
-
-        # apply vertical field of view
-        values[theta < 90 - zone.fov_vert / 2] = 0
-        if zone.vert:
-            values *= np.sin(np.radians(theta))
-        if zone.horiz:
-            values *= abs(np.cos(np.radians(theta)))
+    
+        if zone.calctype=="Plane":  
+            
+            # apply normals
+            if zone.direction != 0:
+                values[theta_zone >= np.pi/2] = 0 
+            
+            # apply vertical field of view
+            values[theta_zone < (np.pi/2 - np.radians(zone.fov_vert / 2))] = 0
+            values[theta_zone > (np.pi/2 + np.radians(zone.fov_vert / 2))] = 0
+ 
+            if zone.vert:
+                values *= np.sin(theta_zone)
+            if zone.horiz:
+                values *= abs(np.cos(theta_zone))
+            
 
         return values
 
@@ -399,19 +429,38 @@ class ReflectiveSurface:
         this is the expensive step!
         """
         surface_points = self.plane.coords.reshape(*self.plane.num_points, 3)
-        volume_points = zone.coords.reshape(*zone.num_points, 3)
+        zone_points = zone.coords.reshape(*zone.num_points, 3)
 
         differences = (
-            volume_points - surface_points[:, :, np.newaxis, np.newaxis, np.newaxis, :]
+            surface_points[:, :, np.newaxis, np.newaxis, np.newaxis, :] - zone_points
         )
-        distances = np.linalg.norm(differences, axis=-1)
+        x, y, z = differences.reshape(-1,3).T
+        distances = np.sqrt(x ** 2 + y ** 2 + z ** 2)
+        distances = distances.reshape(differences.shape[0:-1])
+        # distances = np.linalg.norm(differences, axis=-1) # notably slower!
+        
+        # angles relative to reflective surface -- always between 0 and 90 unless the calc zone has been misspecified
+        rel_surface = differences @ self.plane.basis
+        cos_theta_surface = -rel_surface[..., 2] / distances
+        cos_theta_surface[cos_theta_surface<0] = 0 
+        # theta_surface = np.arccos(cos_theta_surface)
+        form_factors = cos_theta_surface / (np.pi * distances ** 2)
+        form_factors = form_factors.astype('float32')
+        
+        #  angles relative to calculation zone. only relevant if zone calctype is a plane!
+        if zone.calctype == "Plane":
+            rel_zone = differences @ zone.basis
+            cos_theta_zone = rel_zone[..., 2] / distances
+            theta_zone = np.arccos(cos_theta_zone).astype("float32")
+            # theta_zone = np.degrees(theta_zone).astype("float32")
 
-        cos_theta = differences[..., 2] / distances
-        angles = np.arccos(cos_theta)
-
-        form_factors = abs(np.cos(angles)) / (np.pi * distances ** 2)
-
-        # for angle-based differences
-        Theta0, Phi0, R0 = to_polar(*differences.reshape(-1, 3).T)
-
-        return form_factors.astype("float32"), Theta0.astype("float32")
+            # if np.degrees(theta_zone).max()>90:
+                # print(self.plane.zone_id,zone.zone_id,np.degrees(theta_zone).max())
+        else:
+            theta_zone = None
+        
+        # # ? absolute? angles
+        # cos_theta = -differences[..., 2] / distances
+        # theta = np.arccos(cos_theta)#.astype("float32")
+        # print(np.degrees(theta_zone).min(),np.degrees(theta_zone).max())
+        return form_factors, theta_zone

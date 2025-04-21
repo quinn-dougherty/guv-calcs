@@ -16,6 +16,7 @@ from ._data import (
 )
 from ._units import convert_units
 from ._helpers import new_lamp_position, get_lamp_positions
+from ._read import read_export_file, file_to_zone
 from ._version import __version__
 
 __all__ = [
@@ -40,6 +41,8 @@ __all__ = [
     "convert_units",
     "new_lamp_position",
     "get_lamp_positions",
+    "read_export_file", 
+    "file_to_zone"
 ]
 
 __version__ = __version__

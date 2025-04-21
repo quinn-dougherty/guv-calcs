@@ -10,7 +10,7 @@ from collections.abc import Iterable
 from .lamp import Lamp
 from .calc_zone import CalcZone, CalcPlane, CalcVol
 from ._data import get_version
-from ._helpers import parse_loadfile, check_savefile, fig_to_bytes
+from ._helpers import parse_loadfile, check_savefile, fig_to_bytes, new_lamp_position
 from .room_plotter import RoomPlotter
 from .disinfection_calculator import DisinfectionCalculator
 from .reflectance import ReflectanceManager
@@ -99,8 +99,8 @@ class Room:
         data["z"] = self.z
         data["units"] = self.units
         data["reflectances"] = self.ref_manager.reflectances
-        data["reflectance_x_spacing"] = self.ref_manager.x_spacings
-        data["reflectance_y_spacing"] = self.ref_manager.y_spacings
+        data["reflectance_x_spacings"] = self.ref_manager.x_spacings
+        data["reflectance_y_spacings"] = self.ref_manager.y_spacings
         data["max_num_passes"] = self.ref_manager.max_num_passes
         data["standard"] = self.standard
         data["air_changes"] = self.air_changes
@@ -458,6 +458,26 @@ class Room:
         self.check_lamp_position(lamp)
         self.lamps[lamp.lamp_id] = lamp
         return self
+        
+    def place_lamp(self,lamp):
+        """
+        Position a lamp as far from other lamps and the walls as possible
+        """
+        idx = len(self.lamps)+1
+        x, y = new_lamp_position(idx, self.x, self.y)
+        lamp.move(x,y,self.z)
+        self.add_lamp(lamp)
+        return self
+        
+    def place_lamps(self,*args):
+        """place multiple lamps in the room, as far away from each other and the walls as possible"""
+        for obj in args:
+            if isinstance(obj, Lamp):
+                self.place_lamp(obj)
+            else:
+                msg = f"Cannot add object of type {type(obj).__name__} to Room."
+                warnings.warn(msg, stacklevel=3)
+        return self
 
     def remove_lamp(self, lamp_id):
         """remove a lamp from the room"""
@@ -569,9 +589,20 @@ class Room:
         valid_lamps = {
             k: v for k, v in self.lamps.items() if v.enabled and v.filedata is not None
         }
-        self.calc_zones[zone_id].calculate_values(lamps=valid_lamps)
-        self.calc_state = self.get_calc_state()
-        self.update_state = self.get_update_state()
+        if len(valid_lamps)>0:
+            new_calc_state = self.get_calc_state()
+            new_update_state = self.get_update_state()
+
+            LAMP_RECALC = self.calc_state.get("lamps") != new_calc_state.get("lamps")
+            REF_RECALC = self.calc_state.get("room") != new_calc_state.get("room")
+            REF_UPDATE = self.update_state.get("room") != new_update_state.get("room")
+
+            # calculate incidence on the surfaces if the reflectances or lamps have changed
+            if LAMP_RECALC or REF_RECALC or REF_UPDATE or hard:
+                self.ref_manager.calculate_incidence(valid_lamps, hard=hard)
+            self.calc_zones[zone_id].calculate_values(lamps=valid_lamps)
+            self.calc_state = self.get_calc_state()
+            self.update_state = self.get_update_state()
         return self
 
     def plotly(self, fig=None, select_id=None, title=""):
