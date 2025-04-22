@@ -29,7 +29,9 @@ class LightingCalculator:
         }
 
         # sum the base lamp values
-        if self.zone.fov_horiz < 360 and len(lamps) > 1:
+        if (self.zone.calctype == "Plane" 
+        and self.zone.fov_horiz < 360
+        and len(lamps) > 1):
             values = self._calculate_horizontal_fov(lamps)
         else:
             values = sum(self.zone.lamp_values.values())
@@ -84,24 +86,23 @@ class LightingCalculator:
 
         if self.zone.calctype=="Plane":
             rel_coords = self.zone.coords - lamp.surface.position
-            rel = rel_coords @ self.zone.basis
-            theta_rel, phi_rel, _ = to_polar(*rel.T) # relative coordinates
-            
+            x, y, z = (rel_coords @ self.zone.basis).T
+            r = np.sqrt(x ** 2 + y ** 2 + z ** 2)
+            theta = np.arccos(-z / r)
+
             # apply normals/directions
             if self.zone.direction != 0:
-                values[theta_rel > 90] = 0      
+                values[theta > np.pi/2] = 0      
 
             # apply vertical/horizontal irradiances
             if self.zone.vert:
-                values *= np.sin(np.radians(theta_rel))
+                values *= np.sin(theta)
             if self.zone.horiz:
-                values *= abs(np.cos(np.radians(theta_rel)))
+                values *= abs(np.cos(theta))
                 
-            theta, phi, _  = to_polar(*rel_coords.T) # absolute coordinates
-            # apply vertical field of view - I THINK this should stay in absolute coordinates
             if self.zone.fov_vert<180:
-                values[theta < (90 - self.zone.fov_vert / 2)] = 0
-                values[theta > (90 + self.zone.fov_vert / 2)] = 0     
+                values[theta < (np.pi/2 - np.radians(self.zone.fov_vert / 2))] = 0
+                values[theta > (np.pi/2 + np.radians(self.zone.fov_vert / 2))] = 0     
 
         if lamp.intensity_units.lower() == "mw/sr":
             values = values / 10  # convert from mW/Sr to uW/cm2
@@ -146,6 +147,7 @@ class LightingCalculator:
             [lamp.surface.position for lamp in lamps.values() if lamp.enabled]
         )
         rel_coords = self.zone.coords[:, None, :] - lamp_positions[None, :, :]
+        rel_coords = rel_coords @ self.zone.basis
 
         # Calculate horizontal angles (in degrees)
         angles = np.degrees(np.arctan2(rel_coords[..., 1], rel_coords[..., 0]))
