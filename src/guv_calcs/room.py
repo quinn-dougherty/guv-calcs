@@ -37,7 +37,8 @@ class Room:
         reflectances=None,
         reflectance_x_spacings=None,
         reflectance_y_spacings=None,
-        max_num_passes=None,
+        reflectance_max_num_passes=None,
+        reflectance_threshold=None,
         air_changes=None,
         ozone_decay_constant=None,
     ):
@@ -60,13 +61,14 @@ class Room:
         self.air_changes = 1.0 if air_changes is None else air_changes
 
         self.ref_manager = ReflectanceManager(
-            self.x,
-            self.y,
-            self.z,
-            reflectances,
-            reflectance_x_spacings,
-            reflectance_y_spacings,
-            max_num_passes,
+            x=self.x,
+            y=self.y,
+            z=self.z,
+            reflectances=reflectances,
+            x_spacings=reflectance_x_spacings,
+            y_spacings=reflectance_y_spacings,
+            max_num_passes=reflectance_max_num_passes,
+            threshold=reflectance_threshold,
         )
         self.plotter = RoomPlotter(self)
         self.disinfection = DisinfectionCalculator(self)
@@ -101,7 +103,8 @@ class Room:
         data["reflectances"] = self.ref_manager.reflectances
         data["reflectance_x_spacings"] = self.ref_manager.x_spacings
         data["reflectance_y_spacings"] = self.ref_manager.y_spacings
-        data["max_num_passes"] = self.ref_manager.max_num_passes
+        data["reflectance_max_num_passes"] = self.ref_manager.max_num_passes
+        data["reflectance_threshold"] = self.ref_manager.threshold
         data["standard"] = self.standard
         data["air_changes"] = self.air_changes
         data["ozone_decay_constant"] = self.ozone_decay_constant

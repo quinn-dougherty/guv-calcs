@@ -9,18 +9,26 @@ class ReflectanceManager:
     Class for managing reflective surfaces and their interactions
 
     Attributes:
-    room: guv_calcs.Room
-        instance of the parent class
+    x,y,z: floats
+        cartesian dimensions--should be the same as the Room object
     reflectances: dict { str: float}
         dict with keys [`floor`, `ceiling`, `south`, `north`, `east`, `west`]
         and float values between 0 and 1. All values default 0.0
     x_spacings: dict { str: float}
         dict with same keys as `reflectances` and float values greater than 0.
         All values default 0.5. Determines spacing in the relative x direction
-    u_spacings: dict { str: float}
+    y_spacings: dict { str: float}
         dict with same keys as `reflectances` and float values greater than 0.
         All values default 0.5. Determines spacing in the relative y direction
-
+    max_num_passes: int, default=100
+        When calculating interreflections, the maximum number of passes before
+        the calculation concludes.
+    threshold: float in [0,1], default=0.02
+        When calculating interreflections, the threshold below which additional
+        reflection contributions are no longer calculated. Interreflection
+        calculation will step when the number of loops reaches max_num_passes
+        or when the contributions fall below the threshold times the initial value,
+        whichever happens first.
     """
 
     def __init__(
@@ -32,6 +40,7 @@ class ReflectanceManager:
         x_spacings=None,
         y_spacings=None,
         max_num_passes=None,
+        threshold=None,
     ):
 
         self.x = x
@@ -45,7 +54,12 @@ class ReflectanceManager:
         self.reflectances = {**default_reflectances, **(reflectances or {})}
         self.x_spacings = {**default_spacings, **(x_spacings or {})}
         self.y_spacings = {**default_spacings, **(y_spacings or {})}
-        self.max_num_passes = 6 if max_num_passes is None else max_num_passes
+        self.max_num_passes = 100 if max_num_passes is None else int(max_num_passes)
+        self.threshold = 0.02 if threshold is None else threshold
+        if not isinstance(self.threshold, float):
+            raise TypeError("threshold must be a float between 0 and 1")
+        if self.threshold<0 or self.threshold>1:
+            raise ValueError("threshold must be a float between 0 and 1")
 
         self.zone_dict = {}  # will contain all values from all contributions
         self.surfaces = {}
@@ -170,8 +184,6 @@ class ReflectanceManager:
             surface.calculate_incidence(lamps, hard=hard)
         # subsequent passes
         self._interreflectance(lamps, hard=hard)
-        # for wall, surface in self.surfaces.items():
-            # print(wall,surface.plane.values.mean())
 
     def _interreflectance(self, lamps, hard=False):
         """
@@ -179,15 +191,15 @@ class ReflectanceManager:
         """
         # create dict of ref managers for each wall
         managers = self._create_managers()
-        i = 0
-        percent = 1  # initial
-
+        
+        # for storing the progressively increasing reflectance values
         dct = {}
         for wall, surface in self.surfaces.items():
             dct[wall] = surface.plane.values
 
-        while percent > 0.01 and i < self.max_num_passes:
-            # print(i,'---')
+        i = 0 # increases to self.max_num_passes
+        percent = 1  # falls to self.threshold
+        while percent > self.threshold and i < self.max_num_passes:
             pc = []
             for wall, surface in self.surfaces.items():
                 
@@ -197,20 +209,13 @@ class ReflectanceManager:
                     lamps, ref_manager=managers[wall], hard=hard
                 )
 
-                ref = surface.plane.reflected_values.mean()
                 dct[wall] += surface.plane.reflected_values
-                if ref != 0:
-                    pc.append((abs(ref - init) / ref))
 
                 final = surface.plane.values.mean()
-                # print(wall,init,ref,final, dct[wall].mean())
-            if len(pc) > 0:
-                percent = np.mean(pc)
-            else:
-                percent = 0
+                pc.append((abs(final - init) / final))
+            percent = np.mean(pc)
             managers = self._update_managers(managers)
             i = i + 1
-        # print(i)
         for wall, surface in self.surfaces.items():
             surface.plane.values = dct[wall]
 
@@ -333,7 +338,6 @@ class ReflectiveSurface:
             lamp: optional. if provided, and incidence not yet calculated, uses this
             lamp to calculate incidence. mostly this is just for
         """
-        # print(zone.zone_id, self.plane.zone_id, self.max_num_passes)
         # first make sure incident irradiance is calculated
         if self.plane.values is None:
             raise ValueError("Incidence must be calculated before reflectance")
@@ -365,12 +369,10 @@ class ReflectiveSurface:
             theta_zone = self.zone_dict[zone.zone_id]["theta_zone"]
 
         if UPDATE:
-            I_r = self.plane.values[:, :, np.newaxis, np.newaxis, np.newaxis].astype(
-                "float32"
-            )
+            I_r = self.plane.values[:, :, np.newaxis, np.newaxis, np.newaxis]
             element_size = self.plane.x_spacing * self.plane.y_spacing
 
-            values = (I_r * element_size * form_factors)#.astype("float32")
+            values = (I_r * element_size * form_factors).astype("float32")
 
             values = self._apply_filters(values, theta_zone, zone)
 
@@ -383,7 +385,7 @@ class ReflectiveSurface:
         # update the state
         self.zone_dict[zone.zone_id] = {
             "form_factors": form_factors,
-            "theta_zone":theta_zone,
+            "theta_zone": theta_zone,
             "values": values,
             "calc_state": calc_state,
             "update_state": update_state,
@@ -391,9 +393,6 @@ class ReflectiveSurface:
             "surface_update_state": surface_update_state,
         }
 
-        # if zone.zone_id not in ["floor", "ceiling", "south", "north", "east", "west"]:
-        # print(self.plane.zone_id, values.mean().round(3))
-        # Ensure the final array has the correct shape and return multiplied by R
         return (values * self.R).astype("float32")
 
     def _apply_filters(self, values, theta_zone,zone):
@@ -407,7 +406,7 @@ class ReflectiveSurface:
             
             # apply normals
             if zone.direction != 0:
-                values[theta_zone >= np.pi/2] = 0 
+                values[theta_zone > np.pi/2] = 0 
             
             # apply vertical field of view
             values[theta_zone < (np.pi/2 - np.radians(zone.fov_vert / 2))] = 0
@@ -447,20 +446,16 @@ class ReflectiveSurface:
         form_factors = cos_theta_surface / (np.pi * distances ** 2)
         form_factors = form_factors.astype('float32')
         
-        #  angles relative to calculation zone. only relevant if zone calctype is a plane!
+        #  angles relative to calculation zone. only relevant for planes
         if zone.calctype == "Plane":
             rel_zone = differences @ zone.basis
             cos_theta_zone = rel_zone[..., 2] / distances
             theta_zone = np.arccos(cos_theta_zone).astype("float32")
-            # theta_zone = np.degrees(theta_zone).astype("float32")
-
-            # if np.degrees(theta_zone).max()>90:
-                # print(self.plane.zone_id,zone.zone_id,np.degrees(theta_zone).max())
         else:
             theta_zone = None
         
         # # ? absolute? angles
         # cos_theta = -differences[..., 2] / distances
-        # theta = np.arccos(cos_theta)#.astype("float32")
-        # print(np.degrees(theta_zone).min(),np.degrees(theta_zone).max())
+        # theta = np.arccos(cos_theta)
+
         return form_factors, theta_zone
