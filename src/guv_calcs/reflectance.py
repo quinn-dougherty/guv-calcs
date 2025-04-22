@@ -153,12 +153,12 @@ class ReflectanceManager:
             ref_surface = "xz"
             direction = -1
         elif wall == "west":
-            x1, x2, y1, y2 = 0, self.z, 0, self.y
+            x1, x2, y1, y2 = 0, self.y, 0, self.z
             height = 0
             ref_surface = "yz"
             direction = 1
         elif wall == "east":
-            x1, x2, y1, y2 = 0, self.z, 0, self.y
+            x1, x2, y1, y2 = 0, self.y, 0, self.z
             height = self.x
             ref_surface = "yz"
             direction = -1

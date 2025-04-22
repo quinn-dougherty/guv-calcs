@@ -739,7 +739,8 @@ class CalcPlane(CalcZone):
             Z = Y
             Y = np.full(Y.shape, self.height)
         elif self.ref_surface in ["yz"]:
-            Z = X
+            Z = Y
+            Y = X
             X = np.full(X.shape, self.height)
 
         self.coords = np.stack([X,Y,Z], axis=-1)
