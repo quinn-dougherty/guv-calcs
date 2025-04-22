@@ -54,12 +54,6 @@ class CalcZone(object):
         zone_id=None,
         name=None,
         offset=None,
-        fov80=None,  # legacy!! just here for backwards compatibility
-        fov_vert=None,
-        fov_horiz=None,
-        vert=None,
-        horiz=None,
-        all_angles=None,
         dose=None,
         hours=None,
         enabled=None,
@@ -67,13 +61,7 @@ class CalcZone(object):
     ):
         self.zone_id = str(zone_id)
         self.name = zone_id if name is None else name
-        self.offset = True if offset is None else offset
-        if fov80 and fov_vert is None:
-            fov_vert = 80  # set if legacy value is present
-        self.fov_vert = 180 if fov_vert is None else fov_vert
-        self.fov_horiz = 360 if fov_horiz is None else abs(fov_horiz)
-        self.vert = False if vert is None else vert
-        self.horiz = False if horiz is None else horiz
+        self.offset = True if offset is None else offset        
         self.dose = False if dose is None else dose
         if self.dose:
             self.units = "mJ/cm²"
@@ -105,6 +93,13 @@ class CalcZone(object):
         self.yp = None
         self.zp = None
         self.coords = None
+        self.ref_surface = None
+        self.direction = None
+        self.horiz = None
+        self.vert = None
+        self.fov_vert = None
+        self.fov_horiz = None
+        self.basis = None
         self.values = None
         self.reflected_values = None
         self.lamp_values = {}
@@ -307,11 +302,6 @@ class CalcVol(CalcZone):
         y_spacing=None,
         z_spacing=None,
         offset=None,
-        fov80=None,
-        fov_vert=None,
-        fov_horiz=None,
-        vert=None,
-        horiz=None,
         dose=None,
         hours=None,
         enabled=None,
@@ -323,11 +313,6 @@ class CalcVol(CalcZone):
             zone_id=zone_id,
             name=name,
             offset=offset,
-            fov80=fov80,
-            fov_vert=fov_vert,
-            fov_horiz=fov_horiz,
-            vert=vert,
-            horiz=horiz,
             dose=dose,
             hours=hours,
             enabled=enabled,
@@ -543,9 +528,7 @@ class CalcPlane(CalcZone):
         num_y=None,
         x_spacing=None,
         y_spacing=None,
-        all_angles=None,
         offset=None,
-        fov80=None,
         fov_vert=None,
         fov_horiz=None,
         vert=None,
@@ -560,11 +543,6 @@ class CalcPlane(CalcZone):
             zone_id=zone_id,
             name=name,
             offset=offset,
-            fov80=fov80,
-            fov_vert=fov_vert,
-            fov_horiz=fov_horiz,
-            vert=vert,
-            horiz=horiz,
             dose=dose,
             hours=hours,
             enabled=enabled,
@@ -579,17 +557,24 @@ class CalcPlane(CalcZone):
         self.y2 = 4 if y2 is None else y2
         self.dimensions = ((self.x1, self.y1), (self.x2, self.y2))
 
+        # TODO: this should really be much cleaner
+        # perhaps just have users define cartesian points + a normal?
+        # that may just need to be a slightly different class
         if not isinstance(ref_surface, str):
             raise TypeError("ref_surface must be a string in [`xy`,`xz`,`yz`]")
         if ref_surface.lower() not in ["xy", "xz", "yz"]:
             raise ValueError("ref_surface must be a string in [`xy`,`xz`,`yz`]")
 
-        # TODO: this should really be much cleaner, perhaps just have users define a normal?
         self.ref_surface = "xy" if ref_surface is None else ref_surface.lower()
         if direction is not None and not direction in [1,0,-1]:
             raise ValueError("Direction must be in [1, 0, -1]")
-        self.direction = 0 if direction is None else int(direction)
+        self.direction = 1 if direction is None else int(direction) # eg planar norm
         self.basis = self._get_basis()
+
+        self.fov_vert = 180 if fov_vert is None else fov_vert
+        self.fov_horiz = 360 if fov_horiz is None else abs(fov_horiz)
+        self.vert = False if vert is None else vert
+        self.horiz = False if horiz is None else horiz
 
         # spacing and num points
         xr = abs(self.x2 - self.x1)
