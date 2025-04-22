@@ -123,11 +123,11 @@ class CalcZone(object):
         data["x1"] = self.x1
         data["x2"] = self.x2
         data["x_spacing"] = self.x_spacing
-        data["num_x"] = self.num_x
+        # data["num_x"] = self.num_x
         data["y1"] = self.y1
         data["y2"] = self.y2
         data["y_spacing"] = self.y_spacing
-        data["num_y"] = self.num_y
+        # data["num_y"] = self.num_y
         if isinstance(self, CalcPlane):
             data["height"] = self.height
             data["calctype"] = "Plane"
@@ -135,7 +135,7 @@ class CalcZone(object):
             data["z1"] = self.z1
             data["z2"] = self.z2
             data["z_spacing"] = self.z_spacing
-            data["num_z"] = self.num_z
+            # data["num_z"] = self.num_z
             data["calctype"] = "Volume"
 
         if filename is not None:
@@ -195,9 +195,6 @@ class CalcZone(object):
         
         if self.values is not None and self.dose:
             self.values = (self.values * hours) / self.hours    
-
-    def get_update_state(self):
-        return [self.fov_vert, self.fov_horiz, self.vert, self.horiz]
 
     def _set_spacing(self, pt1, pt2, num, spacing):
         """set the spacing value conservatively from a num_points value"""
@@ -373,16 +370,21 @@ class CalcVol(CalcZone):
             self.x1,
             self.x2,
             self.x_spacing,
-            self.num_x,
             self.y1,
             self.y2,
             self.y_spacing,
-            self.num_y,
             self.z1,
             self.z2,
             self.z_spacing,
-            self.num_z,
         ]
+    
+    def get_update_state(self):
+        """
+        return a set of parameters that, if changed, indicate that the
+        calc zone need not be be recalculated, but may need updating
+        Currently there are no relevant update parameters for a calc volume
+        """
+        return []
 
     def set_dimensions(self, x1=None, x2=None, y1=None, y2=None, z1=None, z2=None):
         self.x1 = self.x1 if x1 is None else x1
@@ -650,7 +652,20 @@ class CalcPlane(CalcZone):
         if ref_surface.lower() not in ["xy", "xz", "yz"]:
             raise ValueError("ref_surface must be a string in [`xy`,`xz`,`yz`]")
         self.ref_surface = ref_surface
+        self.basis = self._get_basis()
         self._update()
+        return self
+
+    def set_direction(self,direction):
+        """
+        set the direction of the plane normal
+        Valid values are currently 1, -1 and 0 
+        """
+        if not direction in [1,0,-1]:
+            raise ValueError("Direction must be in [1, 0, -1]")
+        self.direction = int(direction)
+        self.basis = self._get_basis()
+        return self
 
     def set_dimensions(self, x1=None, x2=None, y1=None, y2=None):
         """set the dimensions and update the coordinate points"""
@@ -703,19 +718,32 @@ class CalcPlane(CalcZone):
             self.x1,
             self.x2,
             self.x_spacing,
-            self.num_x,
             self.y1,
             self.y2,
             self.y_spacing,
-            self.num_y,
             self.height,
+            self.ref_surface,
+            self.direction # only for reflectance...possibly can be optimized
         ]
+
+    
+    def get_update_state(self):
+        """
+        return a set of parameters that, if changed, indicate that the
+        calc zone need not be be recalculated, but may need updating
+        """
+        return [
+            self.fov_vert, 
+            self.fov_horiz, 
+            self.vert,
+            self.horiz
+        ]
+
 
     def _update(self):
         """
-        Update the number of points based on the spacing, and then the points
+        Update the normal and number of points based on the spacing, and then the points
         """
-
         if self.x1 == self.x2:
             self.num_x = 1
         if self.y1 == self.y2:
@@ -762,12 +790,8 @@ class CalcPlane(CalcZone):
         if self.values is not None:
             vmin = self.values.min() if vmin is None else vmin
             vmax = self.values.max() if vmax is None else vmax
-            if self.ref_surface == "yz":
-                extent = [self.y1, self.y2, self.x1, self.x2]
-                values = self.values[::-1]
-            else:
-                extent = [self.x1, self.x2, self.y1, self.y2]
-                values = self.values.T[::-1]
+            extent = [self.x1, self.x2, self.y1, self.y2]
+            values = self.values.T[::-1]
             img = ax.imshow(values, extent=extent, vmin=vmin, vmax=vmax)
             cbar = fig.colorbar(img, pad=0.03)
             ax.set_title(title)
@@ -786,11 +810,11 @@ class CalcPlane(CalcZone):
             xpoints = self.points[0].tolist()
             ypoints = self.points[1].tolist()
         elif self.ref_surface == "xz":
-            xpoints = self.points[0]
+            xpoints = self.points[0].tolist()
             ypoints = [self.height] * num_y            
         elif self.ref_surface == "yz":
             xpoints = [self.height] * num_x
-            ypoints = self.points[1]            
+            ypoints = self.points[1].tolist()            
 
         rows = [[""] + xpoints]
         if self.values is None:
@@ -802,6 +826,6 @@ class CalcPlane(CalcZone):
         rows += np.concatenate(([np.flip(ypoints)], vals)).T.tolist()
         rows += [""]
         # zvals
-        zvals = self.coords.T[2].reshape(num_x, num_y).T
+        zvals = self.coords.T[2].reshape(num_x, num_y).T[::-1]
         rows += [[""]+list(line) for line in zvals]
         return rows
