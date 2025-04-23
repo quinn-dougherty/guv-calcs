@@ -5,3 +5,4 @@ photompy==0.0.8
 plotly==5.22.0
 scipy==1.13.1
 setuptools==68.2.2
+kaleido==0.2.1

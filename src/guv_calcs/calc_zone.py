@@ -4,6 +4,7 @@ import json
 import copy
 import numpy as np
 import matplotlib.pyplot as plt
+import plotly.graph_objs as go
 from .calc_manager import LightingCalculator
 from ._helpers import rows_to_bytes
 
@@ -61,7 +62,7 @@ class CalcZone(object):
     ):
         self.zone_id = str(zone_id)
         self.name = zone_id if name is None else name
-        self.offset = True if offset is None else offset        
+        self.offset = True if offset is None else offset
         self.dose = False if dose is None else dose
         if self.dose:
             self.units = "mJ/cm²"
@@ -166,24 +167,24 @@ class CalcZone(object):
 
     def set_value_type(self, dose):
         """
-        if true values will be in dose over time
-        if false
+        if true get_values() will return in dose (mJ/cm2) over hours
+        otherwise get_values() will return in irradiance or fluence (uW/cm2)
         """
         if type(dose) is not bool:
             raise TypeError("Dose must be either True or False")
 
-        # convert values if they need converting
-        if self.values is not None:
-            if dose and not self.dose:
-                self.values = self.values * 3.6 * self.hours
-            elif self.dose and not dose:
-                self.values = self.values / (3.6 * self.hours)
+        # # convert values if they need converting
+        # if self.values is not None:
+        # if dose and not self.dose:
+        # self.values = self.values * 3.6 * self.hours
+        # elif self.dose and not dose:
+        # self.values = self.values / (3.6 * self.hours)
 
         self.dose = dose
         if self.dose:
-            self.units = "mJ/cm2"
+            self.units = "mJ/cm²"
         else:
-            self.units = "uW/cm2"
+            self.units = "uW/cm²"
 
     def set_dose_time(self, hours):
         """
@@ -192,9 +193,9 @@ class CalcZone(object):
         if type(hours) not in [float, int]:
             raise TypeError("Hours must be numeric")
         self.hours = hours
-        
-        if self.values is not None and self.dose:
-            self.values = (self.values * hours) / self.hours    
+
+        # if self.values is not None and self.dose:
+        # self.values = (self.values * hours) / self.hours
 
     def _set_spacing(self, pt1, pt2, num, spacing):
         """set the spacing value conservatively from a num_points value"""
@@ -232,17 +233,23 @@ class CalcZone(object):
             self.reflected_values = np.zeros(self.num_points).astype("float32")
 
         # sum
-        values = self.base_values + self.reflected_values
-
-        # convert to dose
-        if self.dose:
-            values *= 3.6 * self.hours
-
-        self.values = values
+        self.values = self.base_values + self.reflected_values
         self.calc_state = new_calc_state
 
-        return self.values
-               
+        return self.get_values()
+
+    def get_values(self):
+        """
+        return
+        """
+        if self.values is None:
+            values = None
+        else:
+            if self.dose:
+                values = self.values * 3.6 * self.hours
+            else:
+                values = self.values
+        return values
 
     def export(self, fname=None):
         """
@@ -377,7 +384,7 @@ class CalcVol(CalcZone):
             self.z2,
             self.z_spacing,
         ]
-    
+
     def get_update_state(self):
         """
         return a set of parameters that, if changed, indicate that the
@@ -495,18 +502,72 @@ class CalcVol(CalcZone):
         rows = [[line] for line in lines]
         rows += [self.num_points]
         rows += self.points
-        num_x = self.num_points[0]
-        num_y = self.num_points[1]
-        num_z = self.num_points[2]
-        for i in range(num_z):
+        values = self.get_values()
+        for i in range(self.num_z):
             rows += [""]
-            if self.values is None:
-                rows += [[""] * num_x] * num_y
-            elif self.values.shape != (num_x, num_y, num_z):
-                rows += [[""] * num_x] * num_y
+            if values is None:
+                rows += [[""] * self.num_x] * self.num_y
+            elif values.shape != (self.num_x, self.num_y, self.num_z):
+                rows += [[""] * self.num_x] * self.num_y
             else:
-                rows += self.values.T[i].tolist()
+                rows += values.T[i].tolist()
         return rows
+
+    def plot_volume(
+        self,
+        fig=None,
+        isomin=None,
+        surface_count=3,
+        opacity=0.25,
+        cmap="Viridis",
+        title=None,
+    ):
+        """
+        Plot the fluence values as an isosurface using Plotly.
+        """
+
+        if self.values is None:
+            raise ValueError("No values calculated for this volume.")
+
+        X, Y, Z = np.meshgrid(*self.points, indexing="ij")
+        x, y, z = X.flatten(), Y.flatten(), Z.flatten()
+        values = self.values.flatten()
+
+        isomin = self.values.mean() / 2 if isomin is None else isomin
+
+        if fig is None:
+            fig = go.Figure()
+
+        fig.add_trace(
+            go.Isosurface(
+                x=x,
+                y=y,
+                z=z,
+                value=values,
+                isomin=isomin,
+                surface_count=surface_count,
+                opacity=opacity,
+                colorscale=cmap,
+                caps=dict(x_show=False, y_show=False, z_show=False),
+                showscale=True,
+                name=self.name + " Values",
+                colorbar=dict(
+                        title=self.units,
+                        titleside="right",
+                        titlefont=dict(size=14)
+                    )
+            )
+        )
+
+        fig.update_layout(
+            title=self.name if title is None else title,
+            scene=dict(
+                xaxis_title="x", yaxis_title="y", zaxis_title="z", aspectmode="data"
+            ),
+            height=750,
+        )
+        fig.update_scenes(camera_projection_type="orthographic")
+        return fig
 
 
 class CalcPlane(CalcZone):
@@ -568,9 +629,9 @@ class CalcPlane(CalcZone):
             raise ValueError("ref_surface must be a string in [`xy`,`xz`,`yz`]")
 
         self.ref_surface = "xy" if ref_surface is None else ref_surface.lower()
-        if direction is not None and not direction in [1,0,-1]:
+        if direction is not None and direction not in [1, 0, -1]:
             raise ValueError("Direction must be in [1, 0, -1]")
-        self.direction = 1 if direction is None else int(direction) # eg planar norm
+        self.direction = 1 if direction is None else int(direction)  # eg planar norm
         self.basis = self._get_basis()
 
         self.fov_vert = 180 if fov_vert is None else fov_vert
@@ -587,42 +648,42 @@ class CalcPlane(CalcZone):
         default_xs = round(xr / nx, -int(np.floor(np.log10(xr / nx))))
         default_ys = round(yr / ny, -int(np.floor(np.log10(yr / ny))))
         # default number of points derived from default spacing
-        default_num_x = int(round(xr / default_xs))# + 1)
-        default_num_y = int(round(yr / default_ys))# + 1)
+        default_num_x = int(round(xr / default_xs))  # + 1)
+        default_num_y = int(round(yr / default_ys))  # + 1)
 
         if x_spacing is None:  # set from num_points if spacing is not provided
             self.num_x = default_num_x if num_x is None else int(num_x)
             self.x_spacing = self._set_spacing(self.x1, self.x2, self.num_x, default_xs)
         else:
             self.x_spacing = x_spacing
-            self.num_x = int(round(xr / self.x_spacing))# + 1)
+            self.num_x = int(round(xr / self.x_spacing))  # + 1)
         if y_spacing is None:
             self.num_y = default_num_y if num_y is None else int(num_y)
             self.y_spacing = self._set_spacing(self.y1, self.y2, self.num_y, default_ys)
         else:
             self.y_spacing = y_spacing
-            self.num_y = int(round(yr / self.y_spacing))#+ 1)
+            self.num_y = int(round(yr / self.y_spacing))  # + 1)
 
         self._update()
         self.values = np.zeros(self.num_points)
         self.reflected_values = np.zeros(self.num_points)
-        
+
     def _get_basis(self):
         """
         Return an orthonormal basis (u, v, n) for the surface:
         - n is the normal vector (points outward from surface)
         - u, v span the surface plane
         """
-        
+
         if self.ref_surface == "xy":
             n = np.array([0, 0, 1])
         elif self.ref_surface == "xz":
             n = np.array([0, 1, 0])
         elif self.ref_surface == "yz":
             n = np.array([1, 0, 0])
-        if self.direction!=0:
+        if self.direction != 0:
             n *= self.direction
-            
+
         # Generate arbitrary vector not parallel to n
         tmp = np.array([1, 0, 0]) if abs(n[0]) < 0.9 else np.array([0, 1, 0])
 
@@ -633,8 +694,7 @@ class CalcPlane(CalcZone):
         basis = np.stack([u, v, n], axis=1)
 
         return basis
-                
-                
+
     def set_height(self, height):
         """set height of calculation plane. currently we only support vertical planes"""
         if type(height) not in [float, int]:
@@ -642,7 +702,7 @@ class CalcPlane(CalcZone):
         self.height = height
         self._update()
         return self
-        
+
     def set_ref_surface(self, ref_surface):
         """
         set the reference surface of the calc plane--must be a string in [`xy`,`xz`,`yz`]
@@ -656,12 +716,12 @@ class CalcPlane(CalcZone):
         self._update()
         return self
 
-    def set_direction(self,direction):
+    def set_direction(self, direction):
         """
         set the direction of the plane normal
-        Valid values are currently 1, -1 and 0 
+        Valid values are currently 1, -1 and 0
         """
-        if not direction in [1,0,-1]:
+        if direction not in [1, 0, -1]:
             raise ValueError("Direction must be in [1, 0, -1]")
         self.direction = int(direction)
         self.basis = self._get_basis()
@@ -681,8 +741,8 @@ class CalcPlane(CalcZone):
         """set the fineness of the grid spacing and update the coordinate points"""
         self.x_spacing = self.x_spacing if x_spacing is None else abs(x_spacing)
         self.y_spacing = self.y_spacing if y_spacing is None else abs(y_spacing)
-        numx = int(round(abs(self.x2 - self.x1) / self.x_spacing) )#+ 1
-        numy = int(round(abs(self.y2 - self.y1) / self.y_spacing) )#+ 1
+        numx = int(round(abs(self.x2 - self.x1) / self.x_spacing))  # + 1
+        numy = int(round(abs(self.y2 - self.y1) / self.y_spacing))  # + 1
         self.num_x = numx
         self.num_y = numy
         self._update()
@@ -723,22 +783,15 @@ class CalcPlane(CalcZone):
             self.y_spacing,
             self.height,
             self.ref_surface,
-            self.direction # only for reflectance...possibly can be optimized
+            self.direction,  # only for reflectance...possibly can be optimized
         ]
 
-    
     def get_update_state(self):
         """
         return a set of parameters that, if changed, indicate that the
         calc zone need not be be recalculated, but may need updating
         """
-        return [
-            self.fov_vert, 
-            self.fov_horiz, 
-            self.vert,
-            self.horiz
-        ]
-
+        return [self.fov_vert, self.fov_horiz, self.vert, self.horiz]
 
     def _update(self):
         """
@@ -771,7 +824,7 @@ class CalcPlane(CalcZone):
             Y = X
             X = np.full(X.shape, self.height)
 
-        self.coords = np.stack([X,Y,Z], axis=-1)
+        self.coords = np.stack([X, Y, Z], axis=-1)
 
         self.num_points = np.array([len(self.xp), len(self.yp)])
 
@@ -787,11 +840,12 @@ class CalcPlane(CalcZone):
                 ax = fig.axes[0]
 
         title = "" if title is None else title
-        if self.values is not None:
-            vmin = self.values.min() if vmin is None else vmin
-            vmax = self.values.max() if vmax is None else vmax
+        values = self.get_values()
+        if values is not None:
+            vmin = values.min() if vmin is None else vmin
+            vmax = values.max() if vmax is None else vmax
             extent = [self.x1, self.x2, self.y1, self.y2]
-            values = self.values.T[::-1]
+            values = values.T[::-1]
             img = ax.imshow(values, extent=extent, vmin=vmin, vmax=vmax)
             cbar = fig.colorbar(img, pad=0.03)
             ax.set_title(title)
@@ -802,30 +856,28 @@ class CalcPlane(CalcZone):
         """
         export solution to csv
         """
-        
-        num_x = self.num_x
-        num_y = self.num_y
 
         if self.ref_surface == "xy":
             xpoints = self.points[0].tolist()
             ypoints = self.points[1].tolist()
         elif self.ref_surface == "xz":
             xpoints = self.points[0].tolist()
-            ypoints = [self.height] * num_y            
+            ypoints = [self.height] * self.num_y
         elif self.ref_surface == "yz":
-            xpoints = [self.height] * num_x
-            ypoints = self.points[1].tolist()            
+            xpoints = [self.height] * self.num_x
+            ypoints = self.points[1].tolist()
 
         rows = [[""] + xpoints]
-        if self.values is None:
-            vals = [[-1] * num_y] * num_x
-        elif self.values.shape != (num_x, num_y):
-            vals = [[-1] * num_y] * num_x
+        values = self.get_values()
+        if values is None:
+            vals = [[-1] * self.num_y] * self.num_x
+        elif values.shape != (self.num_x, self.num_y):
+            vals = [[-1] * self.num_y] * self.num_x
         else:
-            vals = self.values
+            vals = values
         rows += np.concatenate(([np.flip(ypoints)], vals)).T.tolist()
         rows += [""]
         # zvals
-        zvals = self.coords.T[2].reshape(num_x, num_y).T[::-1]
-        rows += [[""]+list(line) for line in zvals]
+        zvals = self.coords.T[2].reshape(self.num_x, self.num_y).T[::-1]
+        rows += [[""] + list(line) for line in zvals]
         return rows

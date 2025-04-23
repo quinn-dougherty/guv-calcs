@@ -180,13 +180,17 @@ class Room:
             if zone.calctype != "Zone":
                 data_dict[zone.name + ".csv"] = zone.export()
                 if include_plots:
+                    if zone.dose:
+                        title = f"{zone.hours} Hour Dose"
+                    else:
+                        title = f"Irradiance"
                     if zone.calctype == "Plane":
                         # Save the figure to a BytesIO object
-                        if zone.dose:
-                            title = f"{zone.hours} Hour Dose ({zone.height} m)"
-                        else:
-                            title = f"Irradiance ({zone.height} m)"
+                        title += f" ({zone.height} m)"
                         fig, ax = zone.plot_plane(title=title)
+                        data_dict[zone.name + ".png"] = fig_to_bytes(fig)
+                    elif zone.calctype=="Volume":
+                        fig = zone.plot_volume()
                         data_dict[zone.name + ".png"] = fig_to_bytes(fig)
 
         for lamp_id, lamp in self.lamps.items():
@@ -461,18 +465,18 @@ class Room:
         self.check_lamp_position(lamp)
         self.lamps[lamp.lamp_id] = lamp
         return self
-        
-    def place_lamp(self,lamp):
+
+    def place_lamp(self, lamp):
         """
         Position a lamp as far from other lamps and the walls as possible
         """
-        idx = len(self.lamps)+1
+        idx = len(self.lamps) + 1
         x, y = new_lamp_position(idx, self.x, self.y)
-        lamp.move(x,y,self.z)
+        lamp.move(x, y, self.z)
         self.add_lamp(lamp)
         return self
-        
-    def place_lamps(self,*args):
+
+    def place_lamps(self, *args):
         """place multiple lamps in the room, as far away from each other and the walls as possible"""
         for obj in args:
             if isinstance(obj, Lamp):
@@ -592,7 +596,7 @@ class Room:
         valid_lamps = {
             k: v for k, v in self.lamps.items() if v.enabled and v.filedata is not None
         }
-        if len(valid_lamps)>0:
+        if len(valid_lamps) > 0:
             new_calc_state = self.get_calc_state()
             new_update_state = self.get_update_state()
 

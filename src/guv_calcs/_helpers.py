@@ -4,7 +4,9 @@ from pathlib import Path
 import numpy as np
 import io
 import csv
-
+import plotly.io as pio
+from plotly.graph_objs._figure import Figure as plotly_fig
+from matplotlib.figure import Figure as mpl_fig
 
 def parse_loadfile(filedata):
     """
@@ -110,12 +112,18 @@ def rows_to_bytes(rows, encoding="cp1252"):
 
 
 def fig_to_bytes(fig):
-    buf = io.BytesIO()
-    fig.savefig(
-        buf, format="png"
-    )  # You can change the format as needed (e.g., 'jpeg', 'pdf')
-    buf.seek(0)  # Rewind the buffer
-    return buf.getvalue()
+    if isinstance(fig, mpl_fig):
+        buf = io.BytesIO()
+        fig.savefig(
+            buf, format="png"
+        )  # You can change the format as needed (e.g., 'jpeg', 'pdf')
+        buf.seek(0)  # Rewind the buffer
+        byt = buf.getvalue()
+    elif isinstance(fig, plotly_fig):
+        byt = pio.to_image(fig, format="png", scale=1)
+    else:
+        raise TypeError("This figure type cannot be converted to bytes")
+    return byt
 
 
 def get_lamp_positions(num_lamps, x, y, num_divisions=100):
