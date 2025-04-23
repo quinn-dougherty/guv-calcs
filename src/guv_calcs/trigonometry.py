@@ -2,7 +2,7 @@ import numpy as np
 import warnings
 
 
-def to_polar(x, y, z, units='degrees'):
+def to_polar(x, y, z, units="degrees"):
     """
     convert arrays of [x,y,z] points to arrays of [phi,theta,r] in degrees
     """
@@ -14,9 +14,9 @@ def to_polar(x, y, z, units='degrees'):
 
     theta = np.nan_to_num(theta, nan=0)
     phi = np.arctan2(x, y)
-    phi[np.where(phi < 0)] = phi[np.where(phi < 0)] + 2*np.pi
+    phi[np.where(phi < 0)] = phi[np.where(phi < 0)] + 2 * np.pi
 
-    if units=='degrees':
+    if units == "degrees":
         theta = np.degrees(theta)
         phi = np.degrees(phi)
 

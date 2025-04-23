@@ -671,7 +671,7 @@ class Lamp:
                 if arg == 0:
                     intensity_units = "mW/sr"
                 elif arg == 1:
-                    intensity_units = "uW/cm2"
+                    intensity_units = "uW/cm²"
                 else:
                     warnings.warn(msg, stacklevel=3)
                     intensity_units = "mW/sr"

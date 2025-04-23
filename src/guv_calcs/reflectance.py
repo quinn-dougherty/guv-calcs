@@ -1,7 +1,6 @@
 import numpy as np
 import copy
 from .calc_zone import CalcPlane
-from .trigonometry import to_polar
 
 
 class ReflectanceManager:
@@ -58,7 +57,7 @@ class ReflectanceManager:
         self.threshold = 0.02 if threshold is None else threshold
         if not isinstance(self.threshold, float):
             raise TypeError("threshold must be a float between 0 and 1")
-        if self.threshold<0 or self.threshold>1:
+        if self.threshold < 0 or self.threshold > 1:
             raise ValueError("threshold must be a float between 0 and 1")
 
         self.zone_dict = {}  # will contain all values from all contributions
@@ -107,7 +106,15 @@ class ReflectanceManager:
     def _initialize_surfaces(self):
 
         for wall, reflectance in self.reflectances.items():
-            x1, x2, y1, y2, height, ref_surface, direction = self._get_surface_dimensions(wall)
+            (
+                x1,
+                x2,
+                y1,
+                y2,
+                height,
+                ref_surface,
+                direction,
+            ) = self._get_surface_dimensions(wall)
             plane = CalcPlane(
                 zone_id=wall,
                 x1=x1,
@@ -191,20 +198,20 @@ class ReflectanceManager:
         """
         # create dict of ref managers for each wall
         managers = self._create_managers()
-        
+
         # for storing the progressively increasing reflectance values
         dct = {}
         for wall, surface in self.surfaces.items():
             dct[wall] = surface.plane.values
 
-        i = 0 # increases to self.max_num_passes
+        i = 0  # increases to self.max_num_passes
         percent = 1  # falls to self.threshold
         while percent > self.threshold and i < self.max_num_passes:
             pc = []
             for wall, surface in self.surfaces.items():
-                
+
                 init = surface.plane.values.mean()
-                
+
                 surface.calculate_incidence(
                     lamps, ref_manager=managers[wall], hard=hard
                 )
@@ -212,7 +219,10 @@ class ReflectanceManager:
                 dct[wall] += surface.plane.reflected_values
 
                 final = surface.plane.values.mean()
-                pc.append((abs(final - init) / final))
+                if final >0:
+                    pc.append((abs(final - init) / final))
+                else:
+                    pc.append(0)
             percent = np.mean(pc)
             managers = self._update_managers(managers)
             i = i + 1
@@ -230,9 +240,7 @@ class ReflectanceManager:
                     self.surfaces[subwall].plane.values,
                 )
                 # create new plane
-                new_plane = copy.deepcopy(
-                    self.surfaces[subwall].plane
-                ) 
+                new_plane = copy.deepcopy(self.surfaces[subwall].plane)
                 # replace the total values with only the reflected values
                 new_plane.values = new_plane.reflected_values
                 # Replace the object instead of deleting in-place
@@ -395,28 +403,27 @@ class ReflectiveSurface:
 
         return (values * self.R).astype("float32")
 
-    def _apply_filters(self, values, theta_zone,zone):
+    def _apply_filters(self, values, theta_zone, zone):
         """apply field-of-view based calculations"""
 
         # clean nans
         if np.isnan(values).any():
             values = np.ma.masked_invalid(values)
-    
-        if zone.calctype=="Plane":  
-            
+
+        if zone.calctype == "Plane":
+
             # apply normals
             if zone.direction != 0:
-                values[theta_zone > np.pi/2] = 0 
-            
+                values[theta_zone > np.pi / 2] = 0
+
             # apply vertical field of view
-            values[theta_zone < (np.pi/2 - np.radians(zone.fov_vert / 2))] = 0
-            values[theta_zone > (np.pi/2 + np.radians(zone.fov_vert / 2))] = 0
- 
+            values[theta_zone < (np.pi / 2 - np.radians(zone.fov_vert / 2))] = 0
+            values[theta_zone > (np.pi / 2 + np.radians(zone.fov_vert / 2))] = 0
+
             if zone.vert:
                 values *= np.sin(theta_zone)
             if zone.horiz:
                 values *= abs(np.cos(theta_zone))
-            
 
         return values
 
@@ -433,19 +440,19 @@ class ReflectiveSurface:
         differences = (
             surface_points[:, :, np.newaxis, np.newaxis, np.newaxis, :] - zone_points
         )
-        x, y, z = differences.reshape(-1,3).T
+        x, y, z = differences.reshape(-1, 3).T
         distances = np.sqrt(x ** 2 + y ** 2 + z ** 2)
         distances = distances.reshape(differences.shape[0:-1])
         # distances = np.linalg.norm(differences, axis=-1) # notably slower!
-        
+
         # angles relative to reflective surface -- always between 0 and 90 unless the calc zone has been misspecified
         rel_surface = differences @ self.plane.basis
         cos_theta_surface = -rel_surface[..., 2] / distances
-        cos_theta_surface[cos_theta_surface<0] = 0 
+        cos_theta_surface[cos_theta_surface < 0] = 0
         # theta_surface = np.arccos(cos_theta_surface)
         form_factors = cos_theta_surface / (np.pi * distances ** 2)
-        form_factors = form_factors.astype('float32')
-        
+        form_factors = form_factors.astype("float32")
+
         #  angles relative to calculation zone. only relevant for planes
         if zone.calctype == "Plane":
             rel_zone = differences @ zone.basis
@@ -453,7 +460,7 @@ class ReflectiveSurface:
             theta_zone = np.arccos(cos_theta_zone).astype("float32")
         else:
             theta_zone = None
-        
+
         # # ? absolute? angles
         # cos_theta = -differences[..., 2] / distances
         # theta = np.arccos(cos_theta)

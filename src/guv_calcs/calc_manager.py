@@ -29,9 +29,11 @@ class LightingCalculator:
         }
 
         # sum the base lamp values
-        if (self.zone.calctype == "Plane" 
-        and self.zone.fov_horiz < 360
-        and len(lamps) > 1):
+        if (
+            self.zone.calctype == "Plane"
+            and self.zone.fov_horiz < 360
+            and len(lamps) > 1
+        ):
             values = self._calculate_horizontal_fov(lamps)
         else:
             values = sum(self.zone.lamp_values.values())
@@ -78,13 +80,13 @@ class LightingCalculator:
         """
         TODO:
         possibly I should really be saving on calculation time
-        by not calculating unnecessary angles to begin with 
-        
+        by not calculating unnecessary angles to begin with
+
         update the values of a single lamp based on the calc zone properties,
         but which don't require a full recalculation
         """
 
-        if self.zone.calctype=="Plane":
+        if self.zone.calctype == "Plane":
             rel_coords = self.zone.coords - lamp.surface.position
             x, y, z = (rel_coords @ self.zone.basis).T
             r = np.sqrt(x ** 2 + y ** 2 + z ** 2)
@@ -92,17 +94,17 @@ class LightingCalculator:
 
             # apply normals/directions
             if self.zone.direction != 0:
-                values[theta > np.pi/2] = 0      
+                values[theta > np.pi / 2] = 0
 
             # apply vertical/horizontal irradiances
             if self.zone.vert:
                 values *= np.sin(theta)
             if self.zone.horiz:
                 values *= abs(np.cos(theta))
-                
-            if self.zone.fov_vert<180:
-                values[theta < (np.pi/2 - np.radians(self.zone.fov_vert / 2))] = 0
-                values[theta > (np.pi/2 + np.radians(self.zone.fov_vert / 2))] = 0     
+
+            if self.zone.fov_vert < 180:
+                values[theta < (np.pi / 2 - np.radians(self.zone.fov_vert / 2))] = 0
+                values[theta > (np.pi / 2 + np.radians(self.zone.fov_vert / 2))] = 0
 
         if lamp.intensity_units.lower() == "mw/sr":
             values = values / 10  # convert from mW/Sr to uW/cm2

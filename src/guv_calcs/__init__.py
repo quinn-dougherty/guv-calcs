@@ -41,8 +41,8 @@ __all__ = [
     "convert_units",
     "new_lamp_position",
     "get_lamp_positions",
-    "read_export_file", 
-    "file_to_zone"
+    "read_export_file",
+    "file_to_zone",
 ]
 
 __version__ = __version__
