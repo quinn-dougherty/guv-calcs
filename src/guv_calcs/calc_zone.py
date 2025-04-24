@@ -515,11 +515,6 @@ class CalcVol(CalcZone):
 
     def plot_volume(
         self,
-        fig=None,
-        isomin=None,
-        surface_count=3,
-        opacity=0.25,
-        cmap="Viridis",
         title=None,
     ):
         """
@@ -532,12 +527,8 @@ class CalcVol(CalcZone):
         X, Y, Z = np.meshgrid(*self.points, indexing="ij")
         x, y, z = X.flatten(), Y.flatten(), Z.flatten()
         values = self.values.flatten()
-
-        isomin = self.values.mean() / 2 if isomin is None else isomin
-
-        if fig is None:
-            fig = go.Figure()
-
+        isomin = self.values.mean() / 2
+        fig = go.Figure()
         fig.add_trace(
             go.Isosurface(
                 x=x,
@@ -545,26 +536,28 @@ class CalcVol(CalcZone):
                 z=z,
                 value=values,
                 isomin=isomin,
-                surface_count=surface_count,
-                opacity=opacity,
-                colorscale=cmap,
+                surface_count=3,
+                opacity=0.25,
+                showscale=False,
+                colorbar=None,
+                colorscale="Viridis",
                 caps=dict(x_show=False, y_show=False, z_show=False),
-                showscale=True,
                 name=self.name + " Values",
-                colorbar=dict(
-                        title=self.units,
-                        titleside="right",
-                        titlefont=dict(size=14)
-                    )
             )
         )
-
         fig.update_layout(
-            title=self.name if title is None else title,
+            title=dict(
+                text=self.name if title is None else title,
+                x=0.5,  # center horizontally
+                y=0.85,  # lower this value to move the title down (default is 0.95)
+                xanchor="center",
+                yanchor="top",
+                font=dict(size=18),
+            ),
             scene=dict(
                 xaxis_title="x", yaxis_title="y", zaxis_title="z", aspectmode="data"
             ),
-            height=750,
+            height=450,
         )
         fig.update_scenes(camera_projection_type="orthographic")
         return fig

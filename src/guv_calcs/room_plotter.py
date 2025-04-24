@@ -33,7 +33,10 @@ class RoomPlotter:
                 fig = self._plot_lamp(lamp=lamp, fig=fig, select_id=select_id)
         for zone_id, zone in self.room.calc_zones.items():
             if isinstance(zone, CalcPlane):
-                fig = self._plot_plane(zone=zone, fig=fig, select_id=select_id)
+                if zone.show_values and zone.values.sum() > 0:
+                    fig = self._plot_plane_values(zone=zone, fig=fig)
+                else:
+                    fig = self._plot_plane(zone=zone, fig=fig, select_id=select_id)
             elif isinstance(zone, CalcVol):
                 fig = self._plot_vol(zone=zone, fig=fig, select_id=select_id)
 
@@ -224,6 +227,44 @@ class RoomPlotter:
 
         return fig
 
+    def _plot_plane_values(self, zone, fig):
+        if zone.ref_surface == "xy":
+            X, Y = np.meshgrid(zone.xp, zone.yp, indexing="ij")
+            Z = np.full_like(X, zone.height)
+        elif zone.ref_surface == "xz":
+            X, Z = np.meshgrid(zone.xp, zone.yp, indexing="ij")
+            Y = np.full_like(X, zone.height)
+        elif zone.ref_surface == "yz":
+            Y, Z = np.meshgrid(zone.xp, zone.yp, indexing="ij")
+            X = np.full_like(X, zone.height)
+        zone_value_trace = go.Surface(
+            x=X,
+            y=Y,
+            z=Z,
+            surfacecolor=zone.values,
+            colorscale="viridis",
+            showscale=False,
+            colorbar=None,
+            legendgroup="zones",
+            legendgrouptitle_text="Calculation Zones",
+            showlegend=True,
+            name=zone.name,
+            customdata=["zone_" + zone.zone_id],
+        )
+        traces = [trace.name for trace in fig.data]
+        if zone_value_trace.name not in traces:
+            fig.add_trace(zone_value_trace)
+        else:
+            self._update_trace_by_id(
+                fig,
+                zone.zone_id,
+                x=X,
+                y=Y,
+                z=Z,
+                surfacecolor=zone.values,
+            )
+        return fig 
+
     def _plot_vol(self, zone, fig, select_id=None):
         # Define the vertices of the rectangular prism
         (x1, y1, z1), (x2, y2, z2) = zone.dimensions
@@ -302,11 +343,12 @@ class RoomPlotter:
                     y=y,
                     z=z,
                     value=values,
-                    surface_count=3,
                     isomin=isomin,
+                    surface_count=3,
                     opacity=0.25,
                     showscale=False,
                     colorbar=None,
+                    colorscale="Viridis",
                     name=zone.name + " Values",
                     customdata=["zone_" + zone.zone_id + "_values"],
                     legendgroup="zones",
