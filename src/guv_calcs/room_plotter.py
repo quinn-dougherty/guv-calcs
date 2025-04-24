@@ -135,8 +135,9 @@ class RoomPlotter:
             opacity=0.4,
             name=lamp.name,
             customdata=["lamp_" + lamp.lamp_id],
-            legendgroup="lamps",
-            legendgrouptitle_text="Lamps",
+            legendgroup="lamp_" + lamp.lamp_id,
+            # legendgroup="lamps",
+            # legendgrouptitle_text="Lamps",
             showlegend=True,
         )
         xi, yi, zi = lamp.surface.position
@@ -149,6 +150,9 @@ class RoomPlotter:
             line=dict(color="black", width=2, dash="dash"),
             name=lamp.name,
             customdata=["lamp_" + lamp.lamp_id + "_aim"],
+            legendgroup="lamp_" + lamp.lamp_id,
+            # legendgroup="lamps",
+            # legendgrouptitle_text="Lamps",
             showlegend=False,
         )
         xs, ys, zs = lamp.surface.surface_points.T
@@ -159,10 +163,12 @@ class RoomPlotter:
             mode="markers",
             marker=dict(size=2, color=lampcolor),
             opacity=0.9,
-            legendgroup="surfaces",
-            showlegend=False,
             name=lamp.name,
             customdata=["lamp_" + lamp.lamp_id + "_surface"],
+            legendgroup="lamp_" + lamp.lamp_id,
+            # legendgroup="lamps",
+            # legendgrouptitle_text="Lamps",
+            showlegend=False,
         )
 
         traces = [trace.customdata[0] for trace in fig.data]
@@ -206,8 +212,8 @@ class RoomPlotter:
             mode="markers",
             marker=dict(size=2, color=zonecolor),
             opacity=0.5,
-            legendgroup="zones",
-            legendgrouptitle_text="Calculation Zones",
+            # legendgroup="planes",
+            # legendgrouptitle_text="Calculation Planes",
             showlegend=True,
             name=zone.name,
             customdata=["zone_" + zone.zone_id],
@@ -245,8 +251,8 @@ class RoomPlotter:
             colorscale="viridis",
             showscale=False,
             colorbar=None,
-            legendgroup="zones",
-            legendgrouptitle_text="Calculation Zones",
+            # legendgroup="planes",
+            # legendgrouptitle_text="Calculation Planes",
             showlegend=True,
             name=zone.name,
             customdata=["zone_" + zone.zone_id],
@@ -314,8 +320,8 @@ class RoomPlotter:
             z=z_coords,
             mode="lines",
             line=dict(color=zonecolor, width=5, dash="dot"),
-            legendgroup="zones",
-            legendgrouptitle_text="Calculation Zones",
+            # legendgroup="volumes",
+            # legendgrouptitle_text="Calculation Volumes",
             name=zone.name,
             customdata=["zone_" + zone.zone_id],
         )
@@ -351,8 +357,8 @@ class RoomPlotter:
                     colorscale="Viridis",
                     name=zone.name + " Values",
                     customdata=["zone_" + zone.zone_id + "_values"],
-                    legendgroup="zones",
-                    legendgrouptitle_text="Calculation Zones",
+                    # legendgroup="volumes",
+                    # legendgrouptitle_text="Calculation Volumes",
                     showlegend=True,
                 )
                 fig.add_trace(zone_value_trace)
