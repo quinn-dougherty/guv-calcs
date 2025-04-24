@@ -8,6 +8,7 @@ import plotly.io as pio
 from plotly.graph_objs._figure import Figure as plotly_fig
 from matplotlib.figure import Figure as mpl_fig
 
+
 def parse_loadfile(filedata):
     """
     validate and parse a loadfile

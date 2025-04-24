@@ -219,7 +219,7 @@ class ReflectanceManager:
                 dct[wall] += surface.plane.reflected_values
 
                 final = surface.plane.values.mean()
-                if final >0:
+                if final > 0:
                     pc.append((abs(final - init) / final))
                 else:
                     pc.append(0)
