@@ -34,6 +34,7 @@ class Room:
         z=None,
         units=None,
         standard=None,
+        enable_reflectance=None,
         reflectances=None,
         reflectance_x_spacings=None,
         reflectance_y_spacings=None,
@@ -60,6 +61,9 @@ class Room:
         )
         self.air_changes = 1.0 if air_changes is None else air_changes
 
+        self.enable_reflectance = (
+            True if enable_reflectance is None else enable_reflectance
+        )
         self.ref_manager = ReflectanceManager(
             x=self.x,
             y=self.y,
@@ -100,6 +104,7 @@ class Room:
         data["y"] = self.y
         data["z"] = self.z
         data["units"] = self.units
+        data["enable_reflectance"] = self.enable_reflectance
         data["reflectances"] = self.ref_manager.reflectances
         data["reflectance_x_spacings"] = self.ref_manager.x_spacings
         data["reflectance_y_spacings"] = self.ref_manager.y_spacings
@@ -189,7 +194,7 @@ class Room:
                         title += f" ({zone.height} m)"
                         fig, ax = zone.plot_plane(title=title)
                         data_dict[zone.name + ".png"] = fig_to_bytes(fig)
-                    elif zone.calctype=="Volume":
+                    elif zone.calctype == "Volume":
                         fig = zone.plot_volume()
                         data_dict[zone.name + ".png"] = fig_to_bytes(fig)
 
@@ -238,6 +243,7 @@ class Room:
         """
 
         room_state = [  # temp..this should be put with the ref_manager eventually
+            self.enable_reflectance,
             self.ref_manager.x_spacings.copy(),
             self.ref_manager.y_spacings.copy(),
         ]
@@ -566,13 +572,16 @@ class Room:
             REF_UPDATE = self.update_state.get("room") != new_update_state.get("room")
 
             # calculate incidence on the surfaces if the reflectances or lamps have changed
-            if LAMP_RECALC or REF_RECALC or REF_UPDATE or hard:
+            if (
+                LAMP_RECALC or REF_RECALC or REF_UPDATE or hard
+            ) and self.enable_reflectance:
                 self.ref_manager.calculate_incidence(valid_lamps, hard=hard)
 
+            ref_manager = self.ref_manager if self.enable_reflectance else None
             for name, zone in self.calc_zones.items():
                 if zone.enabled and len(valid_lamps) > 0:
                     zone.calculate_values(
-                        lamps=valid_lamps, ref_manager=self.ref_manager, hard=hard
+                        lamps=valid_lamps, ref_manager=ref_manager, hard=hard
                     )
             # update calc states.
             self.calc_state = new_calc_state
@@ -605,9 +614,14 @@ class Room:
             REF_UPDATE = self.update_state.get("room") != new_update_state.get("room")
 
             # calculate incidence on the surfaces if the reflectances or lamps have changed
-            if LAMP_RECALC or REF_RECALC or REF_UPDATE or hard:
+            if (
+                LAMP_RECALC or REF_RECALC or REF_UPDATE or hard
+            ) and self.enable_reflectance:
                 self.ref_manager.calculate_incidence(valid_lamps, hard=hard)
-            self.calc_zones[zone_id].calculate_values(lamps=valid_lamps)
+            ref_manager = self.ref_manager if self.enable_reflectance else None
+            self.calc_zones[zone_id].calculate_values(
+                lamps=valid_lamps, ref_manager=ref_manager, hard=hard
+            )
             self.calc_state = self.get_calc_state()
             self.update_state = self.get_update_state()
         return self
