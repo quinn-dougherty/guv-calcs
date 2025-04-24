@@ -304,9 +304,11 @@ class LampSurface:
             # intensity map does not need updating
             intensity_map = self.intensity_map
         else:
-            # reshape the provided relative map to the current coordinates
-            # make interpolator based on original intensity map
-            if self.intensity_map_orig is not None:
+            if self.intensity_map_orig is None:
+                intensity_map = np.ones((self.num_points_length, self.num_points_width))
+            else:
+                # reshape the provided relative map to the current coordinates
+                # make interpolator based on original intensity map
                 num_points_u, num_points_v = self.intensity_map_orig.shape
                 x_orig, y_orig = self._generate_raw_points(num_points_u, num_points_v)
                 interpolator = RegularGridInterpolator(
@@ -329,9 +331,7 @@ class LampSurface:
 
                 # normalize
                 intensity_map = intensity_map / intensity_map.mean()
-            else:
-                intensity_map = self.intensity_map
-
+        
         return intensity_map
 
     def plot_surface_points(self, fig=None, ax=None, title="", figsize=(6, 4)):

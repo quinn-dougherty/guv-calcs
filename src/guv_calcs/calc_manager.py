@@ -124,18 +124,22 @@ class LightingCalculator:
         values[near_idx] = 0
         # redo calculation in a loop
         num_points = len(lamp.surface.surface_points)
-        for point, val in zip(
-            lamp.surface.surface_points, lamp.surface.intensity_map.reshape(-1)
-        ):
+        points = lamp.surface.surface_points
+        intensity_values = lamp.surface.intensity_map.reshape(-1)
+        for point, val in zip(points,intensity_values):
+
             rel_coords = self.zone.coords - point
             Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
             Theta_n, Phi_n, R_n = Theta[near_idx], Phi[near_idx], R[near_idx]
-            interpdict = lamp.lampdict["interp_vals"]
+            
             if lamp.surface.units.lower() != "meters":
                 R_n = np.array(convert_units(lamp.surface.units, "meters", *R_n))
+            
+            interpdict = lamp.lampdict["interp_vals"]
             near_values = get_intensity(Theta_n, Phi_n, interpdict) / R_n ** 2
             near_values = near_values * val / num_points
             values[near_idx] += near_values
+
         return values
 
     def _calculate_horizontal_fov(self, lamps):
