@@ -401,6 +401,14 @@ class CalcVol(CalcZone):
         self.z1 = self.z1 if z1 is None else z1
         self.z2 = self.z2 if z2 is None else z2
         self.dimensions = ((self.x1, self.y1, self.z1), (self.x2, self.y2, self.z2))
+
+        # update number of points, keeping spacing
+        xr = abs(self.x2 - self.x1)
+        yr = abs(self.y2 - self.y1)
+        zr = abs(self.z2 - self.z1)
+        self.num_x = int(round(xr / self.x_spacing))
+        self.num_y = int(round(yr / self.y_spacing))
+        self.num_z = int(round(zr / self.z_spacing))
         self._update()
 
     def set_spacing(self, x_spacing=None, y_spacing=None, z_spacing=None):
@@ -455,20 +463,20 @@ class CalcVol(CalcZone):
         if self.z1 == self.z2:
             self.num_z = 1
 
-        xpoints = np.array([i * self.x_spacing for i in range(self.num_x)])
-        ypoints = np.array([i * self.y_spacing for i in range(self.num_y)])
-        zpoints = np.array([i * self.z_spacing for i in range(self.num_z)])
+        x_offset = min(self.x1, self.x2)
+        y_offset = min(self.y1, self.y2)
+        z_offset = min(self.z1, self.z2)
+        xp = np.array([i * self.x_spacing + x_offset for i in range(self.num_x)])
+        yp = np.array([i * self.y_spacing + y_offset for i in range(self.num_y)])
+        zp = np.array([i * self.z_spacing + z_offset for i in range(self.num_z)])
 
         if self.offset:
-            x_offset = (abs(self.x2 - self.x1) - xpoints[-1]) / 2
-            y_offset = (abs(self.y2 - self.y1) - ypoints[-1]) / 2
-            z_offset = (abs(self.z2 - self.z1) - zpoints[-1]) / 2
-            xpoints += x_offset
-            ypoints += y_offset
-            zpoints += z_offset
+            xp += (abs(self.x2 - self.x1) - abs(xp[-1] - xp[0])) / 2
+            yp += (abs(self.y2 - self.y1) - abs(yp[-1] - yp[0])) / 2
+            zp += (abs(self.z2 - self.z1) - abs(zp[-1] - zp[0])) / 2
 
-        self.points = [xpoints, ypoints, zpoints]
-        self.xp, self.yp, self.zp = self.points
+        self.xp, self.yp, self.zp = xp, yp, zp
+        self.points = [self.xp, self.yp, self.zp]
 
         X, Y, Z = [
             grid.reshape(-1) for grid in np.meshgrid(*self.points, indexing="ij")
@@ -641,21 +649,21 @@ class CalcPlane(CalcZone):
         default_xs = round(xr / nx, -int(np.floor(np.log10(xr / nx))))
         default_ys = round(yr / ny, -int(np.floor(np.log10(yr / ny))))
         # default number of points derived from default spacing
-        default_num_x = int(round(xr / default_xs))  # + 1)
-        default_num_y = int(round(yr / default_ys))  # + 1)
+        default_num_x = int(round(xr / default_xs))
+        default_num_y = int(round(yr / default_ys))
 
         if x_spacing is None:  # set from num_points if spacing is not provided
             self.num_x = default_num_x if num_x is None else int(num_x)
             self.x_spacing = self._set_spacing(self.x1, self.x2, self.num_x, default_xs)
         else:
             self.x_spacing = x_spacing
-            self.num_x = int(round(xr / self.x_spacing))  # + 1)
+            self.num_x = int(round(xr / self.x_spacing))
         if y_spacing is None:
             self.num_y = default_num_y if num_y is None else int(num_y)
             self.y_spacing = self._set_spacing(self.y1, self.y2, self.num_y, default_ys)
         else:
             self.y_spacing = y_spacing
-            self.num_y = int(round(yr / self.y_spacing))  # + 1)
+            self.num_y = int(round(yr / self.y_spacing))
 
         self._update()
         self.values = np.zeros(self.num_points)
@@ -727,6 +735,11 @@ class CalcPlane(CalcZone):
         self.y1 = self.y1 if y1 is None else y1
         self.y2 = self.y2 if y2 is None else y2
         self.dimensions = ((self.x1, self.y1), (self.x2, self.y2))
+        # update number of points, keeping spacing
+        xr = abs(self.x2 - self.x1)
+        yr = abs(self.y2 - self.y1)
+        self.num_x = int(round(xr / self.x_spacing))
+        self.num_y = int(round(yr / self.y_spacing))
         self._update()
         return self
 
@@ -795,16 +808,17 @@ class CalcPlane(CalcZone):
         if self.y1 == self.y2:
             self.num_y = 1
 
-        xpoints = np.array([i * self.x_spacing for i in range(self.num_x)])
-        ypoints = np.array([i * self.y_spacing for i in range(self.num_y)])
+        x_offset = min(self.x1, self.x2)
+        y_offset = min(self.y1, self.y2)
+        xp = np.array([i * self.x_spacing + x_offset for i in range(self.num_x)])
+        yp = np.array([i * self.y_spacing + y_offset for i in range(self.num_y)])
         if self.offset:
-            x_offset = (abs(self.x2 - self.x1) - xpoints[-1]) / 2
-            y_offset = (abs(self.y2 - self.y1) - ypoints[-1]) / 2
-            xpoints += x_offset
-            ypoints += y_offset
+            xp += (abs(self.x2 - self.x1) - abs(xp[-1] - xp[0])) / 2
+            yp += (abs(self.y2 - self.y1) - abs(yp[-1] - yp[0])) / 2
 
-        self.points = [xpoints, ypoints]
-        self.xp, self.yp = self.points
+        self.xp, self.yp = xp, yp
+        self.points = [self.xp, self.yp]
+
         X, Y = [grid.reshape(-1) for grid in np.meshgrid(*self.points, indexing="ij")]
 
         if self.ref_surface in ["xy"]:
