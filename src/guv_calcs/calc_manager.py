@@ -17,29 +17,35 @@ class LightingCalculator:
         Calculate and return irradiance values at all coordinate points within the zone.
         """
 
-        # this will only recalculate if the lamp has changed--unless it is a 'hard' recalculation
-        self.zone.lamp_values_base = {
-            lamp_id: self._calculate_lamp(lamp, hard) for lamp_id, lamp in lamps.items()
-        }
+        if len(lamps) > 0:
+            # this will only recalculate if the lamp has changed--unless it is a 'hard' recalculation
+            self.zone.lamp_values_base = {
+                lamp_id: self._calculate_lamp(lamp, hard)
+                for lamp_id, lamp in lamps.items()
+            }
 
-        # this step is always cheap
-        self.zone.lamp_values = {
-            lamp_id: self._apply_filters(lamps[lamp_id], values.copy())
-            for lamp_id, values in self.zone.lamp_values_base.items()
-        }
+            # this step is always cheap
+            self.zone.lamp_values = {
+                lamp_id: self._apply_filters(lamps[lamp_id], values.copy())
+                for lamp_id, values in self.zone.lamp_values_base.items()
+            }
 
-        # sum the base lamp values
-        if (
-            self.zone.calctype == "Plane"
-            and self.zone.fov_horiz < 360
-            and len(lamps) > 1
-        ):
-            values = self._calculate_horizontal_fov(lamps)
+            # sum the base lamp values
+            if (
+                self.zone.calctype == "Plane"
+                and self.zone.fov_horiz < 360
+                and len(lamps) > 1
+            ):
+                values = self._calculate_horizontal_fov(lamps)
+            else:
+                values = sum(self.zone.lamp_values.values())
+
+            # reshape
+            values = values.reshape(*self.zone.num_points).astype("float32")
         else:
-            values = sum(self.zone.lamp_values.values())
-
-        # reshape
-        values = values.reshape(*self.zone.num_points)
+            self.zone.lamp_values_base = {}
+            self.zone.lamp_values = {}
+            values = np.zeros(self.zone.num_points).astype("float32")
 
         return values
 
@@ -126,15 +132,15 @@ class LightingCalculator:
         num_points = len(lamp.surface.surface_points)
         points = lamp.surface.surface_points
         intensity_values = lamp.surface.intensity_map.reshape(-1)
-        for point, val in zip(points,intensity_values):
+        for point, val in zip(points, intensity_values):
 
             rel_coords = self.zone.coords - point
             Theta, Phi, R = self._transform_lamp_coords(rel_coords, lamp)
             Theta_n, Phi_n, R_n = Theta[near_idx], Phi[near_idx], R[near_idx]
-            
+
             if lamp.surface.units.lower() != "meters":
                 R_n = np.array(convert_units(lamp.surface.units, "meters", *R_n))
-            
+
             interpdict = lamp.lampdict["interp_vals"]
             near_values = get_intensity(Theta_n, Phi_n, interpdict) / R_n ** 2
             near_values = near_values * val / num_points

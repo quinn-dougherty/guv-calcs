@@ -92,10 +92,14 @@ class DisinfectionCalculator:
         """fetch a list of unique wavelengths contributing to the zone"""
         wavelengths = []
         for lamp_id in zone.lamp_values.keys():
-            lamp = self.room.lamps[lamp_id]
-            if lamp.wavelength is not None:
-                wavelengths.append(lamp.wavelength)
+            if lamp_id in self.room.lamps.keys():
+                lamp = self.room.lamps[lamp_id]
+                if lamp.wavelength is not None:
+                    wavelengths.append(lamp.wavelength)
+                else:
+                    msg = f"{lamp.name} ({lamp_id}) has an undefined wavelength. Its fluence contribution will not be counted."
+                    warnings.warn(msg, stacklevel=3)
             else:
-                msg = f"{lamp_id} has an undefined wavelength. Its fluence contribution will not be counted."
+                msg = f"{lamp_id} has been removed from the room"
                 warnings.warn(msg, stacklevel=3)
         return np.unique(wavelengths)

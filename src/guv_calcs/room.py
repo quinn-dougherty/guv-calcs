@@ -391,21 +391,6 @@ class Room:
 
         self.add_calc_zone(
             CalcPlane(
-                zone_id="SkinLimits",
-                name="Skin Dose (8 Hours)",
-                x1=0,
-                x2=self.x,
-                y1=0,
-                y2=self.y,
-                # num_x=min(int(self.x * 20), max_plane_val),
-                # num_y=min(int(self.y * 20), max_plane_val),
-                dose=True,
-                hours=8,
-            )
-        )
-
-        self.add_calc_zone(
-            CalcPlane(
                 zone_id="EyeLimits",
                 name="Eye Dose (8 Hours)",
                 x1=0,
@@ -416,6 +401,21 @@ class Room:
                 # num_y=min(int(self.y * 20), max_plane_val),
                 horiz=False,
                 fov_horiz=180,
+                dose=True,
+                hours=8,
+            )
+        )
+
+        self.add_calc_zone(
+            CalcPlane(
+                zone_id="SkinLimits",
+                name="Skin Dose (8 Hours)",
+                x1=0,
+                x2=self.x,
+                y1=0,
+                y2=self.y,
+                # num_x=min(int(self.x * 20), max_plane_val),
+                # num_y=min(int(self.y * 20), max_plane_val),
                 dose=True,
                 hours=8,
             )
@@ -562,40 +562,38 @@ class Room:
 
         valid_lamps = self._get_valid_lamps()
 
-        if len(valid_lamps) > 0:
+        new_calc_state = self.get_calc_state()
+        new_update_state = self.get_update_state()
 
-            new_calc_state = self.get_calc_state()
-            new_update_state = self.get_update_state()
+        LAMP_RECALC = self.calc_state.get("lamps") != new_calc_state.get("lamps")
+        REF_RECALC = self.calc_state.get("room") != new_calc_state.get("room")
+        REF_UPDATE = self.update_state.get("room") != new_update_state.get("room")
 
-            LAMP_RECALC = self.calc_state.get("lamps") != new_calc_state.get("lamps")
-            REF_RECALC = self.calc_state.get("room") != new_calc_state.get("room")
-            REF_UPDATE = self.update_state.get("room") != new_update_state.get("room")
+        # calculate incidence on the surfaces if the reflectances or lamps have changed
+        if (
+            LAMP_RECALC or REF_RECALC or REF_UPDATE or hard
+        ) and self.enable_reflectance:
+            self.ref_manager.calculate_incidence(valid_lamps, hard=hard)
 
-            # calculate incidence on the surfaces if the reflectances or lamps have changed
-            if (
-                LAMP_RECALC or REF_RECALC or REF_UPDATE or hard
-            ) and self.enable_reflectance:
-                self.ref_manager.calculate_incidence(valid_lamps, hard=hard)
+        ref_manager = self.ref_manager if self.enable_reflectance else None
+        for name, zone in self.calc_zones.items():
+            if zone.enabled:
+                zone.calculate_values(
+                    lamps=valid_lamps, ref_manager=ref_manager, hard=hard
+                )
+        # update calc states.
+        self.calc_state = new_calc_state
+        self.update_state = new_update_state
 
-            ref_manager = self.ref_manager if self.enable_reflectance else None
-            for name, zone in self.calc_zones.items():
-                if zone.enabled and len(valid_lamps) > 0:
-                    zone.calculate_values(
-                        lamps=valid_lamps, ref_manager=ref_manager, hard=hard
-                    )
-            # update calc states.
-            self.calc_state = new_calc_state
-            self.update_state = new_update_state
+        # possibly this should be per-calc zone? idk maybe it's fine
+        for lamp_id in valid_lamps.keys():
+            new_calc_state = self.lamps[lamp_id].get_calc_state()
+            self.lamps[lamp_id].calc_state = new_calc_state
 
-            # possibly this should be per-calc zone? idk maybe it's fine
-            for lamp_id in valid_lamps.keys():
-                new_calc_state = self.lamps[lamp_id].get_calc_state()
-                self.lamps[lamp_id].calc_state = new_calc_state
-        else:
+        if len(valid_lamps) == 0:
+            msg = "No valid lamps are present in the room--either lamps have been disabled, or filedata has not been provided."
             if len(self.lamps) == 0:
                 msg = "No lamps are present in the room."
-            else:
-                msg = "No valid lamps are present in the room--either lamps have been disabled, or filedata has not been provided."
             warnings.warn(msg, stacklevel=3)
 
         return self
