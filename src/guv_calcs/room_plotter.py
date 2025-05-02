@@ -250,7 +250,7 @@ class RoomPlotter:
             surfacecolor=zone.values,
             colorscale="viridis",
             showscale=False,
-            colorbar=None,
+            # colorbar=None,
             # legendgroup="planes",
             # legendgrouptitle_text="Calculation Planes",
             showlegend=True,
@@ -269,7 +269,7 @@ class RoomPlotter:
                 z=Z,
                 surfacecolor=zone.values,
             )
-        return fig 
+        return fig
 
     def _plot_vol(self, zone, fig, select_id=None):
         # Define the vertices of the rectangular prism

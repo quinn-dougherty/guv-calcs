@@ -331,7 +331,7 @@ class LampSurface:
 
                 # normalize
                 intensity_map = intensity_map / intensity_map.mean()
-        
+
         return intensity_map
 
     def plot_surface_points(self, fig=None, ax=None, title="", figsize=(6, 4)):
