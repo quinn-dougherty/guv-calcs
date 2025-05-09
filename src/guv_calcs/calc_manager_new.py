@@ -1,7 +1,7 @@
 import numpy as np
 from photompy import get_intensity
 from .trigonometry import attitude, to_polar
-from .units import convert_units
+from ._units import convert_units
 
 
 class LightingCalculator:

@@ -6,11 +6,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objs as go
 from .calc_manager import LightingCalculator
-from ._helpers import rows_to_bytes
+from .io import rows_to_bytes
 
 
 class CalcZone(object):
     """
+    TODO: dummy this out?
+
     Base class representing a calculation zone.
 
     This class provides a template for setting up zones within which various
@@ -27,21 +29,7 @@ class CalcZone(object):
         identification tag for internal tracking
     name: str, default=None
         externally visible name for zone
-    dimensions: array of floats, default=None
-        array of len 2 if CalcPlane, of len 3 if CalcVol
     offset: bool, default=True
-    fov80: bool, default=False
-        apply 80 degree field of view filtering - used for calculating eye limits
-        Legacy property. To be removed.
-    fov_vert: float
-        vertical field of view filtering. For calculating eye limits
-    fov_horiz: float
-        horizontal field of view filtering. Useful for not double-counting lamps
-        pointed in opposite direction
-    vert: bool, default=False
-        calculate vertical irradiance only
-    horiz: bool, default=False
-        calculate horizontal irradiance only
     dose: bool, default=False
         whether to calculate a dose over N hours or just fluence
     hours: float, default = 8.0
@@ -107,7 +95,7 @@ class CalcZone(object):
         self.lamp_values_base = {}
         self.calc_state = None
 
-    def save_zone(self, filename=None):
+    def to_dict(self):
 
         data = {}
         data["zone_id"] = self.zone_id
@@ -138,12 +126,13 @@ class CalcZone(object):
             data["z_spacing"] = self.z_spacing
             # data["num_z"] = self.num_z
             data["calctype"] = "Volume"
-
-        if filename is not None:
-            with open(filename, "w") as json_file:
-                json_file.write(json.dumps(data))
-
         return data
+
+    def save(self, filename):
+        """save zone data to json file"""
+        data = self.to_dict()
+        with open(filename, "w") as json_file:
+            json_file.write(json.dumps(data))
 
     @classmethod
     def from_dict(cls, data):
@@ -310,7 +299,6 @@ class CalcVol(CalcZone):
         hours=None,
         enabled=None,
         show_values=None,
-        values=None,
     ):
 
         super().__init__(
@@ -548,7 +536,7 @@ class CalcVol(CalcZone):
                 opacity=0.25,
                 showscale=False,
                 colorbar=None,
-                colorscale="Viridis",
+                colorscale="plasma",
                 caps=dict(x_show=False, y_show=False, z_show=False),
                 name=self.name + " Values",
             )
@@ -852,8 +840,9 @@ class CalcPlane(CalcZone):
             vmin = values.min() if vmin is None else vmin
             vmax = values.max() if vmax is None else vmax
             extent = [self.x1, self.x2, self.y1, self.y2]
+
             values = values.T[::-1]
-            img = ax.imshow(values, extent=extent, vmin=vmin, vmax=vmax)
+            img = ax.imshow(values, extent=extent, vmin=vmin, vmax=vmax, cmap="plasma")
             cbar = fig.colorbar(img, pad=0.03)
             ax.set_title(title)
             cbar.set_label(self.units, loc="center")
@@ -864,27 +853,44 @@ class CalcPlane(CalcZone):
         export solution to csv
         """
 
-        if self.ref_surface == "xy":
-            xpoints = self.points[0].tolist()
-            ypoints = self.points[1].tolist()
-        elif self.ref_surface == "xz":
-            xpoints = self.points[0].tolist()
-            ypoints = [self.height] * self.num_y
-        elif self.ref_surface == "yz":
-            xpoints = [self.height] * self.num_x
-            ypoints = self.points[1].tolist()
+        # if self.ref_surface == "xy":
+        # xpoints = self.points[0].tolist()
+        # ypoints = self.points[1].tolist()
+        # elif self.ref_surface == "xz":
+        # xpoints = self.points[0].tolist()
+        # ypoints = [self.height] * self.num_y
+        # elif self.ref_surface == "yz":
+        # xpoints = [self.height] * self.num_x
+        # ypoints = self.points[1].tolist()
 
-        rows = [[""] + xpoints]
+        # num_x, num_y, *rest = [len(np.unique(val)) for val in self.coords.T if len(np.unique(val))>1]
+
+        points = [np.unique(val) for val in self.coords.T]
+        num_x, num_y, *rest = [len(val) for val in points if len(val) > 1]
+
         values = self.get_values()
         if values is None:
-            vals = [[-1] * self.num_y] * self.num_x
-        elif values.shape != (self.num_x, self.num_y):
-            vals = [[-1] * self.num_y] * self.num_x
+            vals = [[-1] * num_y] * num_x
+        elif values.shape != (num_x, num_y):
+            vals = [[-1] * num_y] * num_x
         else:
             vals = values
+        zvals = self.coords.T[2].reshape(num_x, num_y).T[::-1]
+
+        xpoints = self.coords.T[0].reshape(num_x, num_y).T[0].tolist()
+        ypoints = self.coords.T[1].reshape(num_x, num_y)[0].tolist()
+
+        if len(np.unique(xpoints)) == 1 and len(np.unique(ypoints)) == 1:
+            xpoints = self.coords.T[0].reshape(num_x, num_y)[0].tolist()
+            ypoints = self.coords.T[1].reshape(num_x, num_y).T[0].tolist()
+            vals = vals.T
+            zvals = zvals.T
+
+        rows = [[""] + xpoints]
+
         rows += np.concatenate(([np.flip(ypoints)], vals)).T.tolist()
         rows += [""]
         # zvals
-        zvals = self.coords.T[2].reshape(self.num_x, self.num_y).T[::-1]
+
         rows += [[""] + list(line) for line in zvals]
         return rows

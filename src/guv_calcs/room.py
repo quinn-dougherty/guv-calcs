@@ -1,19 +1,13 @@
 import warnings
-from pathlib import Path
-import datetime
 import inspect
-import json
-import zipfile
-import io
-import numpy as np
-from collections.abc import Iterable
 from .lamp import Lamp
-from .calc_zone import CalcZone, CalcPlane, CalcVol
-from ._data import get_version
-from ._helpers import parse_loadfile, check_savefile, fig_to_bytes, new_lamp_position
+from .calc_zone import CalcPlane, CalcVol
 from .room_plotter import RoomPlotter
 from .disinfection_calculator import DisinfectionCalculator
 from .reflectance import ReflectanceManager
+from .geometry import RoomDimensions
+from .scene import Scene
+from .io import load_room, save_room, export_room_zip
 
 VALID_UNITS = ["meters", "feet"]
 
@@ -42,67 +36,65 @@ class Room:
         reflectance_threshold=None,
         air_changes=None,
         ozone_decay_constant=None,
+        unit_mode="auto",
+        overwrite="warn",
     ):
-        self.units = "meters" if units is None else units.lower()
-        if self.units not in VALID_UNITS:
-            raise KeyError(f"Invalid unit {units}")
-        default_dimensions = (
-            [6.0, 4.0, 2.7] if self.units == "meters" else [20.0, 13.0, 9.0]
-        )
-        self.x = default_dimensions[0] if x is None else x
-        self.y = default_dimensions[1] if y is None else y
-        self.z = default_dimensions[2] if z is None else z
 
-        self.standard = (
-            "ANSI IES RP 27.1-22 (ACGIH Limits)" if standard is None else standard
-        )
-        self.ozone_decay_constant = (
-            2.7 if ozone_decay_constant is None else ozone_decay_constant
-        )
-        self.air_changes = 1.0 if air_changes is None else air_changes
+        ### Dimensions
+        if units is not None:
+            if units.lower() not in VALID_UNITS:
+                raise KeyError(f"Invalid unit {units}")
+            default = [6.0, 4.0, 2.7] if units.lower() == "meters" else [20.0, 13.0, 9.0]
+        else:
+            default = [6.0, 4.0, 2.7]
 
+        self.dim = RoomDimensions(
+            x if x is not None else default[0],
+            y if y is not None else default[1],
+            z if z is not None else default[2],
+            "meters" if units is None else units.lower(),
+        )
+        # to preserve apis--for now
+        self.x, self.y, self.z = self.dim.x, self.dim.y, self.dim.z
+        self.units = self.dim.units
+
+        ### Misc flags
+        self.standard = standard or "ANSI IES RP 27.1-22 (ACGIH Limits)"
+        self.ozone_decay_constant = ozone_decay_constant or 2.7
+        self.air_changes = air_changes or 1.0
+
+        ### Scene - lamps and zones
+        self.scene = Scene(dim=self.dim, unit_mode=unit_mode, overwrite=overwrite)
+        self.lamps = self.scene.lamps
+        self.calc_zones = self.scene.calc_zones
+
+        ### Reflectance
         self.enable_reflectance = (
             True if enable_reflectance is None else enable_reflectance
         )
         self.ref_manager = ReflectanceManager(
-            x=self.x,
-            y=self.y,
-            z=self.z,
+            x=self.dim.x,
+            y=self.dim.y,
+            z=self.dim.z,
             reflectances=reflectances,
             x_spacings=reflectance_x_spacings,
             y_spacings=reflectance_y_spacings,
             max_num_passes=reflectance_max_num_passes,
             threshold=reflectance_threshold,
         )
+
+        ### Plotting and data extraction
         self.plotter = RoomPlotter(self)
         self.disinfection = DisinfectionCalculator(self)
 
-        self.set_dimensions()
-
-        self.lamps = {}
-        self.calc_zones = {}
         self.calc_state = {}
         self.update_state = {}
 
-    def set_max_num_passes(self, max_num_passes):
-        self.ref_manager.max_num_passes = max_num_passes
-        return self
-
-    def set_reflectance(self, R, wall_id=None):
-        self.ref_manager.set_reflectance(R=R, wall_id=wall_id)
-        return self
-
-    def set_reflectance_spacing(self, x_spacing=None, y_spacing=None, wall_id=None):
-        self.ref_manager.set_spacing(
-            x_spacing=x_spacing, y_spacing=y_spacing, wall_id=wall_id
-        )
-        return self
-
     def to_dict(self):
         data = {}
-        data["x"] = self.x
-        data["y"] = self.y
-        data["z"] = self.z
+        data["x"] = self.dim.x
+        data["y"] = self.dim.y
+        data["z"] = self.dim.z
         data["units"] = self.units
         data["enable_reflectance"] = self.enable_reflectance
         data["reflectances"] = self.ref_manager.reflectances
@@ -113,57 +105,39 @@ class Room:
         data["standard"] = self.standard
         data["air_changes"] = self.air_changes
         data["ozone_decay_constant"] = self.ozone_decay_constant
+        data["overwrite"] = self.scene.overwrite
+        data["unit_mode"] = self.scene.unit_mode
 
         dct = self.__dict__.copy()
-        data["lamps"] = {k: v.save_lamp() for k, v in dct["lamps"].items()}
-        data["calc_zones"] = {k: v.save_zone() for k, v in dct["calc_zones"].items()}
+        data["lamps"] = {k: v.to_dict() for k, v in dct["lamps"].items()}
+        data["calc_zones"] = {k: v.to_dict() for k, v in dct["calc_zones"].items()}
         return data
 
-    def save(self, fname=None):
-        """save all relevant parameters to a json file"""
-        savedata = {}
-        version = get_version(Path(__file__).parent / "_version.py")
-        savedata["guv-calcs_version"] = version
-
-        now = datetime.datetime.now()
-        now_local = datetime.datetime.now(now.astimezone().tzinfo)
-        timestamp = now_local.strftime("%Y-%m-%d %H:%M:%S %Z%z")
-        savedata["timestamp"] = timestamp
-
-        savedata["data"] = self.to_dict()
-        if fname is not None:
-            filename = check_savefile(fname, ".guv")
-            with open(filename, "w") as json_file:
-                json.dump(savedata, json_file, indent=4)
-        else:
-            return json.dumps(savedata, indent=4)
-
     @classmethod
-    def load(cls, filedata):
-        """load from a file"""
+    def from_dict(cls, data: dict):
+        """recreate a room from a dict"""
 
-        load_data = parse_loadfile(filedata)
+        room_kwargs = list(inspect.signature(cls.__init__).parameters.keys())[1:]
+        room = cls(**{k: v for k, v in data.items() if k in room_kwargs})
 
-        saved_version = load_data["guv-calcs_version"]
-        current_version = get_version(Path(__file__).parent / "_version.py")
-        if saved_version != current_version:
-            warnings.warn(
-                f"This file was saved with guv-calcs {saved_version}, while you have {current_version} installed."
-            )
-        room_dict = load_data["data"]
-
-        roomkeys = list(inspect.signature(cls.__init__).parameters.keys())[1:]
-        room = cls(**{k: v for k, v in room_dict.items() if k in roomkeys})
-
-        for lampid, lamp in room_dict["lamps"].items():
+        for lampid, lamp in data["lamps"].items():
             room.add_lamp(Lamp.from_dict(lamp))
 
-        for zoneid, zone in room_dict["calc_zones"].items():
+        for zoneid, zone in data["calc_zones"].items():
             if zone["calctype"] == "Plane":
                 room.add_calc_zone(CalcPlane.from_dict(zone))
             elif zone["calctype"] == "Volume":
                 room.add_calc_zone(CalcVol.from_dict(zone))
         return room
+
+    def save(self, fname=None):
+        """save all relevant parameters to a json file"""
+        return save_room(self, fname)
+
+    @classmethod
+    def load(cls, filedata):
+        """load a room from a json object"""
+        return load_room(filedata)
 
     def export_zip(
         self,
@@ -176,66 +150,13 @@ class Room:
         write the project file and all results files to a zip file. Optionally include
         extra files like lamp ies files, spectra files, and plots.
         """
-
-        # save project
-        data_dict = {"room.guv": self.save()}
-
-        # save all results
-        for zone_id, zone in self.calc_zones.items():
-            if zone.calctype != "Zone":
-                data_dict[zone.name + ".csv"] = zone.export()
-                if include_plots:
-                    if zone.dose:
-                        title = f"{zone.hours} Hour Dose"
-                    else:
-                        title = f"Irradiance"
-                    if zone.calctype == "Plane":
-                        # Save the figure to a BytesIO object
-                        title += f" ({zone.height} m)"
-                        fig, ax = zone.plot_plane(title=title)
-                        data_dict[zone.name + ".png"] = fig_to_bytes(fig)
-                    elif zone.calctype == "Volume":
-                        fig = zone.plot_volume()
-                        data_dict[zone.name + ".png"] = fig_to_bytes(fig)
-
-        for lamp_id, lamp in self.lamps.items():
-            if lamp.filedata is not None:
-                if include_lamp_files:
-                    data_dict[lamp.name + ".ies"] = lamp.save_ies()
-                if include_lamp_plots:
-                    ies_fig, ax = lamp.plot_ies(title=lamp.name)
-                    data_dict[lamp.name + "_ies.png"] = fig_to_bytes(ies_fig)
-            if lamp.spectra is not None:
-                if include_lamp_plots:
-                    linfig, _ = lamp.spectra.plot(
-                        title=lamp.name, yscale="linear", weights=True, label=True
-                    )
-                    logfig, _ = lamp.spectra.plot(
-                        title=lamp.name, yscale="log", weights=True, label=True
-                    )
-                    linkey = lamp.name + "_spectra_linear.png"
-                    logkey = lamp.name + "_spectra_log.png"
-                    data_dict[linkey] = fig_to_bytes(linfig)
-                    data_dict[logkey] = fig_to_bytes(logfig)
-
-        zip_buffer = io.BytesIO()
-        # Create a zip file within this BytesIO object
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            # Loop through the dictionary, adding each string/byte stream to the zip
-            for filename, content in data_dict.items():
-                # Ensure the content is in bytes
-                if isinstance(content, str):
-                    content = content.encode("utf-8")
-                # Add the file to the zip; writing the bytes to a BytesIO object for the file
-                file_buffer = io.BytesIO(content)
-                zip_file.writestr(filename, file_buffer.getvalue())
-        zip_bytes = zip_buffer.getvalue()
-
-        if fname is not None:
-            with open(fname, "wb") as f:
-                f.write(zip_bytes)
-        else:
-            return zip_bytes
+        return export_room_zip(
+            self,
+            fname=fname,
+            include_plots=include_plots,
+            include_lamp_files=include_lamp_files,
+            include_lamp_plots=include_lamp_plots,
+        )
 
     def get_calc_state(self):
         """
@@ -244,17 +165,17 @@ class Room:
 
         room_state = [  # temp..this should be put with the ref_manager eventually
             self.enable_reflectance,
-            self.ref_manager.x_spacings.copy(),
-            self.ref_manager.y_spacings.copy(),
+            tuple(self.ref_manager.x_spacings),
+            tuple(self.ref_manager.y_spacings),
         ]
 
         lamp_state = {}
-        for key, lamp in self.lamps.items():
+        for key, lamp in self.scene.lamps.items():
             if lamp.enabled:
                 lamp_state[key] = lamp.get_calc_state()
 
         zone_state = {}
-        for key, zone in self.calc_zones.items():
+        for key, zone in self.scene.calc_zones.items():
             if zone.calctype != "Zone" and zone.enabled:
                 zone_state[key] = zone.get_calc_state()
 
@@ -272,16 +193,16 @@ class Room:
         """
 
         room_state = [
-            self.ref_manager.reflectances.copy(),
+            tuple(self.ref_manager.reflectances),
             self.units,
         ]
 
         lamp_state = {}
-        for key, lamp in self.lamps.items():
+        for key, lamp in self.scene.lamps.items():
             lamp_state[key] = lamp.get_update_state()
 
         zone_state = {}
-        for key, zone in self.calc_zones.items():
+        for key, zone in self.scene.calc_zones.items():
             if zone.calctype != "Zone":
                 zone_state[key] = zone.get_update_state()
 
@@ -292,258 +213,136 @@ class Room:
 
         return update_state
 
-    def set_units(self, units):
-        """set room units"""
-        if units not in ["meters", "feet"]:
-            raise KeyError("Valid units are `meters` or `feet`")
-        self.units = units
-        self._update_standard_zones()
-        self.harmonize_units()
-        return self
-
-    def harmonize_units(self):
-        """ensure that all lamps in the state have the correct units"""
-        for lamp in self.lamps.values():
-            if lamp.surface.units != self.units:
-                lamp.set_units(self.units)
-
-    def set_dimensions(self, x=None, y=None, z=None):
-        """set room dimensions"""
-        self.x = self.x if x is None else x
-        self.y = self.y if y is None else y
-        self.z = self.z if z is None else z
-        self.dimensions = (self.x, self.y, self.z)
-        self.volume = self.x * self.y * self.z
-
-        self.ref_manager.update_dimensions(self.x, self.y, self.z)
-        return self
-
-    def get_units(self):
-        """return room units"""
-        return self.units
-
-    def get_dimensions(self):
-        """return room dimensions"""
-        self.dimensions = np.array((self.x, self.y, self.z))
-        return self.dimensions
-
-    def get_volume(self):
-        """return room volume"""
-        self.volume = self.x * self.y * self.z
-        return self.volume
-
-    def get_disinfection_data(self, zone_id="WholeRoomFluence"):
-        """return the fluence_dict, dataframe, and violin plot"""
-        return self.disinfection.get_disinfection_data(zone_id=zone_id)
-
-    def _update_standard_zones(self):
-        """update the standard safety calculation zones based on the current standard and units"""
-        if "UL8802" in self.standard:
-            height = 1.9 if self.units == "meters" else 6.25
-            skin_horiz = False
-            eye_vert = False
-            fov_vert = 180
-        else:
-            height = 1.8 if self.units == "meters" else 5.9
-            skin_horiz = True
-            eye_vert = True
-            fov_vert = 80
-
-        if "SkinLimits" in self.calc_zones.keys():
-            self.calc_zones["SkinLimits"].set_height(height)
-            self.calc_zones["SkinLimits"].horiz = skin_horiz
-        if "EyeLimits" in self.calc_zones.keys():
-            self.calc_zones["EyeLimits"].set_height(height)
-            self.calc_zones["EyeLimits"].fov_vert = fov_vert
-            self.calc_zones["EyeLimits"].vert = eye_vert
+    # --------------------- Misc flags -----------------------
 
     def set_standard(self, standard):
         """update the photobiological safety standard the Room is subject to"""
         self.standard = standard
-        self._update_standard_zones()
+        self.scene.update_standard_zones(standard)
         return self
 
-    def add_standard_zones(self):
-        """
-        convenience function. Add skin and eye limit calculation planes,
-        plus whole room fluence.
-        """
+    # --------------------- Reflectance ----------------------
 
-        # max_vol_val = 20
-        # max_plane_val = 50
-
-        self.add_calc_zone(
-            CalcVol(
-                zone_id="WholeRoomFluence",
-                name="Whole Room Fluence",
-                x1=0,
-                x2=self.x,
-                y1=0,
-                y2=self.y,
-                z1=0,
-                z2=self.z,
-                # num_x=min(int(self.x * 20), max_vol_val),
-                # num_y=min(int(self.y * 20), max_vol_val),
-                # num_z=min(int(self.z * 20), max_vol_val),
-                show_values=False,
-            )
-        )
-
-        self.add_calc_zone(
-            CalcPlane(
-                zone_id="EyeLimits",
-                name="Eye Dose (8 Hours)",
-                x1=0,
-                x2=self.x,
-                y1=0,
-                y2=self.y,
-                # num_x=min(int(self.x * 20), max_plane_val),
-                # num_y=min(int(self.y * 20), max_plane_val),
-                horiz=False,
-                fov_horiz=180,
-                dose=True,
-                hours=8,
-            )
-        )
-
-        self.add_calc_zone(
-            CalcPlane(
-                zone_id="SkinLimits",
-                name="Skin Dose (8 Hours)",
-                x1=0,
-                x2=self.x,
-                y1=0,
-                y2=self.y,
-                # num_x=min(int(self.x * 20), max_plane_val),
-                # num_y=min(int(self.y * 20), max_plane_val),
-                dose=True,
-                hours=8,
-            )
-        )
-
-        # sets the height and field of view parameters
-        self._update_standard_zones()
-
+    def set_reflectance(self, R, wall_id=None):
+        self.ref_manager.set_reflectance(R=R, wall_id=wall_id)
         return self
 
-    def _check_position(self, dimensions, obj_name):
+    def set_reflectance_spacing(self, x_spacing=None, y_spacing=None, wall_id=None):
+        self.ref_manager.set_spacing(
+            x_spacing=x_spacing, y_spacing=y_spacing, wall_id=wall_id
+        )
+        return self
+
+    def set_max_num_passes(self, max_num_passes):
+        self.ref_manager.max_num_passes = max_num_passes
+        return self
+
+    def set_reflectance_threshold(self, reflectance_threshold):
+        self.ref_manager.threshold = reflectance_threshold
+        return self
+
+    # -------------- Dimensions and Units -----------------------
+
+    def set_units(self, units, unit_mode="auto"):
+        """set room units"""
+        if units.lower() not in ["meters", "feet"]:
+            raise KeyError("Valid units are `meters` or `feet`")
+        self.dim = self.dim.with_(units=units)
+        self.units = self.dim.units
+
+        self.scene.dim = self.dim
+        self.scene.update_standard_zones(self.standard)
+        self.scene.to_units(unit_mode=unit_mode)
+        return self
+
+    def set_dimensions(self, x=None, y=None, z=None):
+        """set room dimensions"""
+        self.dim = self.dim.with_(x=x, y=y, z=z)
+        # for api compatability -- for now
+        self.x, self.y, self.z = self.dim.x, self.dim.y, self.dim.z
+        self.ref_manager.update_dimensions(self.dim.x, self.dim.y, self.dim.z)
+        self.scene.dim = self.dim
+        self.scene.update_standard_zones(self.standard)
+        return self
+
+    @property
+    def volume(self) -> float:
+        return self.dim.volume()
+
+    @property
+    def dimensions(self) -> tuple[float, float, float]:
+        return (self.dim.x, self.dim.y, self.dim.z)
+
+    # -------------------- Scene: lamps and zones ---------------------
+
+
+    def add(self, *args):
         """
-        Method to check if an object's dimensions exceed the room's boundaries.
+        Add objects to the Scene.
+        - If an object is a Lamp, it is added as a lamp.
+        - If an object is a CalcZone, CalcPlane, or CalcVol, it is added as a calculation zone.
+        - If an object is iterable, it is recursively processed.
+        - Otherwise, a warning is printed.
         """
-        msg = None
-        for coord, roomcoord in zip(dimensions, self.dimensions):
-            if coord > roomcoord:
-                msg = f"{obj_name} exceeds room boundaries!"
-                warnings.warn(msg, stacklevel=2)
-        return msg
-
-    def check_lamp_position(self, lamp):
-        return self._check_position(lamp.position, lamp.name)
-
-    def check_zone_position(self, calc_zone):
-        if isinstance(calc_zone, CalcPlane):
-            dimensions = [calc_zone.x2, calc_zone.y2]
-        elif isinstance(calc_zone, CalcVol):
-            dimensions = [calc_zone.x2, calc_zone.y2, calc_zone.z2]
-        elif isinstance(calc_zone, CalcZone):
-            # this is a hack; a generic CalcZone is just a placeholder
-            dimensions = self.dimensions
-        return self._check_position(dimensions, calc_zone.name)
-
-    def check_positions(self):
-        msgs = []
-        for lamp_id, lamp in self.lamps.items():
-            msgs.append(self.check_lamp_position(lamp))
-        for zone_id, zone in self.calc_zones.items():
-            msgs.append(self.check_zone_position(zone))
-        return msgs
-
+        self.scene.add(*args)
+        return self
+    
     def add_lamp(self, lamp):
         """
-        Adds a lamp to the room if it fits within the room's boundaries.
+        Add a lamp to the room scene
         """
-        if not isinstance(lamp, Lamp):
-            raise TypeError(f"Must be type Lamp, not {type(lamp)}")
-        # check units
-        if lamp.surface.units != self.units:
-            lamp.set_units(self.units)
-        # check position
-        self.check_lamp_position(lamp)
-        self.lamps[lamp.lamp_id] = lamp
+        self.scene.add_lamp(lamp)
         return self
 
     def place_lamp(self, lamp):
         """
         Position a lamp as far from other lamps and the walls as possible
         """
-        idx = len(self.lamps) + 1
-        x, y = new_lamp_position(idx, self.x, self.y)
-        lamp.move(x, y, self.z)
-        self.add_lamp(lamp)
+        self.scene.place_lamp(lamp)
         return self
 
     def place_lamps(self, *args):
-        """place multiple lamps in the room, as far away from each other and the walls as possible"""
-        for obj in args:
-            if isinstance(obj, Lamp):
-                self.place_lamp(obj)
-            else:
-                msg = f"Cannot add object of type {type(obj).__name__} to Room."
-                warnings.warn(msg, stacklevel=3)
+        """
+        Place multiple lamps in the room, as far away from each other and the walls as possible
+        """
+        self.scene.place_lamps(*args)
         return self
 
     def remove_lamp(self, lamp_id):
-        """remove a lamp from the room"""
-        del self.lamps[lamp_id]
+        """Remove a lamp from the room scene"""
+        self.scene.remove_lamp(lamp_id)
         return self
 
     def add_calc_zone(self, calc_zone):
         """
-        Adds a calculation zone to the room if it fits within the room's boundaries.
+        Add a calculation zone to the room
         """
-        if not isinstance(calc_zone, (CalcZone, CalcPlane, CalcVol)):
-            raise TypeError(
-                f"Must be CalcZone, CalcPlane, or CalcVol not {type(calc_zone)}"
-            )
-        self.check_zone_position(calc_zone)
-        self.calc_zones[calc_zone.zone_id] = calc_zone
+        self.scene.add_calc_zone(calc_zone)
         return self
 
-    def add(self, *args):
+    def add_standard_zones(self, overwrite=None):
         """
-        Add objects to the Room.
-
-        - If an object is a Lamp, it is added as a lamp.
-        - If an object is a CalcZone, CalcPlane, or CalcVol, it is added as a calculation zone.
-        - If an object is iterable, it is recursively processed.
-        - Otherwise, a warning is printed.
+        Add the special calculation zones SkinLimits, EyeLimits, and
+        WholeRoomFluence to the room scene.
         """
-
-        for obj in args:
-            if isinstance(obj, Lamp):
-                self.add_lamp(obj)
-            elif isinstance(obj, (CalcZone, CalcPlane, CalcVol)):
-                self.add_calc_zone(obj)
-            elif isinstance(obj, dict):
-                self.add(*obj.values())
-            elif isinstance(obj, Iterable) and not isinstance(obj, (str, bytes)):
-                self.add(*obj)  # Recursively process other iterables
-            else:
-                msg = f"Cannot add object of type {type(obj).__name__} to Room."
-                warnings.warn(msg, stacklevel=3)
-
+        policy = overwrite or "silent"
+        self.scene.add_standard_zones(self.standard, overwrite=policy)
         return self
 
     def remove_calc_zone(self, zone_id):
-        """remove calculation zone from room"""
-        del self.calc_zones[zone_id]
+        """
+        Remove a calculation zone from the room
+        """
+        self.scene.remove_calc_zone(zone_id)
         return self
 
-    def _get_valid_lamps(self):
-        """return"""
-        return {
-            k: v for k, v in self.lamps.items() if v.enabled and v.filedata is not None
-        }
+    def check_positions(self):
+        """
+        Verify the positions of all objects in the scene and return any warning messages
+        """
+        msgs = self.scene.check_positions()
+        return msgs
+    # -------------------------- Calculation ---------------------------
 
     def calculate(self, hard=False):
         """
@@ -558,9 +357,7 @@ class Room:
         recalculation will be performed
         """
 
-        self.harmonize_units()
-
-        valid_lamps = self._get_valid_lamps()
+        valid_lamps = self.scene.get_valid_lamps()
 
         new_calc_state = self.get_calc_state()
         new_update_state = self.get_update_state()
@@ -600,9 +397,8 @@ class Room:
 
     def calculate_by_id(self, zone_id, hard=False):
         """calculate just the calc zone selected"""
-        valid_lamps = {
-            k: v for k, v in self.lamps.items() if v.enabled and v.filedata is not None
-        }
+        valid_lamps = self.scene.get_valid_lamps()
+
         if len(valid_lamps) > 0:
             new_calc_state = self.get_calc_state()
             new_update_state = self.get_update_state()
@@ -624,7 +420,12 @@ class Room:
             self.update_state = self.get_update_state()
         return self
 
+    # ------------------- Data and Plotting ----------------------
+
+    def get_disinfection_data(self, zone_id="WholeRoomFluence"):
+        """return the fluence_dict, dataframe, and violin plot"""
+        return self.disinfection.get_disinfection_data(zone_id=zone_id)
+
     def plotly(self, fig=None, select_id=None, title=""):
         """return a plotly figure of all the room's components"""
-        self.harmonize_units()
         return self.plotter.plotly(fig=fig, select_id=select_id, title=title)

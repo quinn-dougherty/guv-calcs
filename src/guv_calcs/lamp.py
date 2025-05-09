@@ -207,6 +207,50 @@ class Lamp:
             self._load()
             self._orient()
 
+    def to_dict(self):
+        """
+        save just the minimum number of parameters required to re-instantiate the lamp
+        Returns dict. If filename is not None, saves dict as json.
+        """
+
+        data = {}
+        data["lamp_id"] = self.lamp_id
+        data["name"] = self.name
+        data["x"] = float(self.x)
+        data["y"] = float(self.y)
+        data["z"] = float(self.z)
+        data["angle"] = float(self.angle)
+        data["aimx"] = float(self.aimx)
+        data["aimy"] = float(self.aimy)
+        data["aimz"] = float(self.aimz)
+        data["intensity_units"] = self.intensity_units
+        data["guv_type"] = self.guv_type
+        data["wavelength"] = self.wavelength
+        data["width"] = self.surface.width
+        data["length"] = self.surface.length
+        data["depth"] = self.surface.depth
+        data["units"] = self.surface.units
+        data["source_density"] = self.surface.source_density
+
+        if self.surface.intensity_map_orig is None:
+            data["intensity_map"] = None
+        else:
+            data["intensity_map"] = self.surface.intensity_map_orig.tolist()
+
+        data["enabled"] = True
+
+        data["filename"] = str(self.filename)
+        filedata = self.save_ies()
+        data["filedata"] = filedata.decode() if filedata is not None else None
+
+        if self.spectra is not None:
+            spectra_dict = self.spectra.to_dict(as_string=True)
+            keys = list(spectra_dict.keys())[0:2]  # keep the first two keys only
+            data["spectra"] = {key: spectra_dict[key] for key in keys}
+        else:
+            data["spectra"] = None
+        return data
+
     @classmethod
     def from_dict(cls, data):
         """initialize class from dict"""
@@ -452,7 +496,7 @@ class Lamp:
         self.filename = filename
         self.filedata = filedata
         # if filename is a path, filedata is filename
-        self._check_filename
+        self._check_filename()
 
         if self.filedata is not None:
             self._load()
@@ -500,53 +544,12 @@ class Lamp:
         else:
             return None
 
-    def save_lamp(self, filename=None):
-        """
-        save just the minimum number of parameters required to re-instantiate the lamp
-        Returns dict. If filename is not None, saves dict as json.
-        """
 
-        data = {}
-        data["lamp_id"] = self.lamp_id
-        data["name"] = self.name
-        data["x"] = float(self.x)
-        data["y"] = float(self.y)
-        data["z"] = float(self.z)
-        data["angle"] = float(self.angle)
-        data["aimx"] = float(self.aimx)
-        data["aimy"] = float(self.aimy)
-        data["aimz"] = float(self.aimz)
-        data["intensity_units"] = self.intensity_units
-        data["guv_type"] = self.guv_type
-        data["wavelength"] = self.wavelength
-        data["width"] = self.surface.width
-        data["length"] = self.surface.length
-        data["depth"] = self.surface.depth
-        data["units"] = self.surface.units
-        data["source_density"] = self.surface.source_density
-
-        if self.surface.intensity_map_orig is None:
-            data["intensity_map"] = None
-        else:
-            data["intensity_map"] = self.surface.intensity_map_orig.tolist()
-
-        data["enabled"] = True
-
-        data["filename"] = str(self.filename)
-        filedata = self.save_ies()
-        data["filedata"] = filedata.decode() if filedata is not None else None
-
-        if self.spectra is not None:
-            spectra_dict = self.spectra.to_dict(as_string=True)
-            keys = list(spectra_dict.keys())[0:2]  # keep the first two keys only
-            data["spectra"] = {key: spectra_dict[key] for key in keys}
-        else:
-            data["spectra"] = None
-
-        if filename is not None:
-            with open(filename, "w") as json_file:
-                json.dump(data, json_file, indent=4)
-
+    def save(self, filename):
+        """save lamp information as json"""
+        data = self.to_dict()
+        with open(filename, "w") as json_file:
+            json.dump(data, json_file, indent=4)
         return data
 
     def plot_ies(self, **kwargs):

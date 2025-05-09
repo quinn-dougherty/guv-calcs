@@ -1,79 +1,7 @@
-import json
-import pathlib
-from pathlib import Path
 import numpy as np
-import io
-import csv
-import plotly.io as pio
-from plotly.graph_objs._figure import Figure as plotly_fig
-from matplotlib.figure import Figure as mpl_fig
 
 
-def parse_loadfile(filedata):
-    """
-    validate and parse a loadfile
-    """
-
-    if isinstance(filedata, (str, bytes or bytearray)):
-        try:
-            dct = json.loads(filedata)
-        except json.JSONDecodeError:
-            path = Path(filedata)
-            dct = load_file(path)
-    elif isinstance(filedata, pathlib.PosixPath):
-        dct = load_file(filedata)
-
-    return dct
-
-
-def load_file(path):
-    """load json from a"""
-    if path.is_file():
-        if path.suffix.lower() != ".guv":
-            raise ValueError("Please provide a valid .guv file")
-        with open(path, "r") as json_file:
-            try:
-                dct = json.load(json_file)
-            except json.JSONDecodeError:
-                raise ValueError(".guv file is malformed")
-    else:
-        raise FileNotFoundError("Please provide a valid .guv file")
-    return dct
-
-
-def load_csv(datasource):
-    """load csv data from either path or bytes"""
-    if isinstance(datasource, (str, pathlib.PosixPath)):
-        filepath = Path(datasource)
-        filetype = filepath.suffix.lower()
-        if filetype != ".csv":
-            raise TypeError("Currently, only .csv files are supported")
-        csv_data = open(datasource, mode="r")
-    elif isinstance(datasource, bytes):
-        # Convert bytes to a string using io.StringIO to simulate a file
-        csv_data = io.StringIO(datasource.decode("utf-8"), newline="")
-    else:
-        raise TypeError(f"File type {type(datasource)} not valid")
-    return csv_data
-
-
-def check_savefile(filename, ext):
-    """
-    enforce that a savefile has the correct extension
-    """
-
-    if not ext.startswith("."):
-        ext = "." + ext
-
-    if isinstance(filename, str):
-        if not filename.lower().endswith(ext):
-            filename += ext
-    elif isinstance(filename, pathlib.PosixPath):
-        if not filename.suffix == ext:
-            filename = filename.parent / (filename.name + ext)
-    return filename
-
-
+## is this even used anywhere anymore?? it might need to be dummied out
 def validate_spectra(spectra, required_keys=None):
     """check that a spectra passed not-from-source"""
 
@@ -99,32 +27,6 @@ def validate_spectra(spectra, required_keys=None):
 def validate_key(key, dct):
     if key not in dct:
         raise KeyError("Required key {key} is absent.")
-
-
-def rows_to_bytes(rows, encoding="cp1252"):
-    buffer = io.StringIO()
-    writer = csv.writer(buffer)
-    writer.writerows(rows)
-
-    # Get the CSV data from buffer, convert to bytes
-    csv_data = buffer.getvalue()
-    csv_bytes = csv_data.encode(encoding)  # encode to bytes
-    return csv_bytes
-
-
-def fig_to_bytes(fig):
-    if isinstance(fig, mpl_fig):
-        buf = io.BytesIO()
-        fig.savefig(
-            buf, format="png"
-        )  # You can change the format as needed (e.g., 'jpeg', 'pdf')
-        buf.seek(0)  # Rewind the buffer
-        byt = buf.getvalue()
-    elif isinstance(fig, plotly_fig):
-        byt = pio.to_image(fig, format="png", scale=1)
-    else:
-        raise TypeError("This figure type cannot be converted to bytes")
-    return byt
 
 
 def get_lamp_positions(num_lamps, x, y, num_divisions=100):

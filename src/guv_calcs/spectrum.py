@@ -3,7 +3,7 @@ import warnings
 from importlib import resources
 import numpy as np
 import matplotlib.pyplot as plt
-from ._helpers import load_csv, rows_to_bytes
+from .io import load_csv, rows_to_bytes
 
 
 class Spectrum:

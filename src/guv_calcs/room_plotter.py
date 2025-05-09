@@ -3,7 +3,7 @@ import numpy as np
 from scipy.spatial import Delaunay
 from .trigonometry import to_polar
 from .calc_zone import CalcPlane, CalcVol
-from ._units import convert_units
+from .units import convert_units
 
 
 class RoomPlotter:
@@ -40,7 +40,7 @@ class RoomPlotter:
             elif isinstance(zone, CalcVol):
                 fig = self._plot_vol(zone=zone, fig=fig, select_id=select_id)
 
-        x, y, z = self.room.x, self.room.y, self.room.z
+        x, y, z = self.room.dim.x, self.room.dim.y, self.room.dim.z
 
         # set views
         fig.update_layout(
@@ -248,7 +248,7 @@ class RoomPlotter:
             y=Y,
             z=Z,
             surfacecolor=zone.values,
-            colorscale="viridis",
+            colorscale="plasma",
             showscale=False,
             # colorbar=None,
             # legendgroup="planes",
@@ -354,7 +354,7 @@ class RoomPlotter:
                     opacity=0.25,
                     showscale=False,
                     colorbar=None,
-                    colorscale="Viridis",
+                    colorscale="plasma",
                     name=zone.name + " Values",
                     customdata=["zone_" + zone.zone_id + "_values"],
                     # legendgroup="volumes",

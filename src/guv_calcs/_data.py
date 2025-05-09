@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from itertools import product
 from .spectrum import Spectrum
-from ._helpers import load_csv
+from .io import load_csv
 
 pd.options.mode.chained_assignment = None
 
@@ -228,9 +228,9 @@ def _get_cadr(df, room):
     """
     calculate CADR from a dataframe which contains a key called `eACH-UV`
     """
-    volume = room.get_volume()
+    volume = room.volume
     # convert to cubic feet for cfm
-    if room.units == "meters":
+    if room.dim.units == "meters":
         volume = volume / (0.3048 ** 3)
     cadr_uv_cfm = df["eACH-UV"] * volume / 60
     cadr_uv_lps = cadr_uv_cfm * 0.47195
@@ -409,10 +409,3 @@ def get_tlv(ref, standard=0):
         raise TypeError(msg)
     return tlv
 
-
-def get_version(path) -> dict:
-
-    version = {}
-    with open(path) as f:
-        exec(f.read(), version)
-    return version["__version__"]

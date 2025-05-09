@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from scipy.interpolate import RegularGridInterpolator
-from ._units import convert_units
+from .units import convert_units
 
 
 class LampSurface:
@@ -113,7 +113,7 @@ class LampSurface:
         if current length, width and units values aren't present,
         up, populate them all from the ies data instead
 
-        if override is true,
+        TODO: add override?
 
         """
         # if not all([self.width, self.length, self.units]):
