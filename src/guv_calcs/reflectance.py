@@ -283,7 +283,6 @@ class ReflectanceManager:
         total_values = {}
         for wall, surface in self.surfaces.items():
             if surface.R * surface.plane.values.mean() > threshold:
-
                 surface.calculate_reflectance(zone, hard=hard)
                 values = surface.zone_dict[zone.zone_id]["values"]
                 total_values[wall] = values
@@ -298,7 +297,7 @@ class ReflectanceManager:
         dct = self.zone_dict[zone.zone_id]
         values = np.zeros(zone.num_points).astype("float32")
         for wall, surface_vals in dct.items():
-            if surface_vals is not None:
+            if surface_vals is not None:   
                 values += surface_vals * self.reflectances[wall]
         return values
 
@@ -368,18 +367,17 @@ class ReflectiveSurface:
         )
 
         RECALCULATE = NEW_ZONE or ZONE_RECALC or SURF_RECALC or hard
-        UPDATE = NEW_ZONE or ZONE_UPDATE or SURF_UPDATE or hard
-
+        UPDATE = RECALCULATE or NEW_ZONE or ZONE_UPDATE or SURF_UPDATE or hard
+        
         if RECALCULATE:
             form_factors, theta_zone = self._calculate_coordinates(zone)
         else:
             form_factors = self.zone_dict[zone.zone_id]["form_factors"]
             theta_zone = self.zone_dict[zone.zone_id]["theta_zone"]
-
         if UPDATE:
             I_r = self.plane.values[:, :, np.newaxis, np.newaxis, np.newaxis]
             element_size = self.plane.x_spacing * self.plane.y_spacing
-
+            
             values = (I_r * element_size * form_factors).astype("float32")
 
             values = self._apply_filters(values, theta_zone, zone)
