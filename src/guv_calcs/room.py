@@ -7,7 +7,7 @@ from .disinfection_calculator import DisinfectionCalculator
 from .reflectance import ReflectanceManager
 from .geometry import RoomDimensions
 from .scene import Scene
-from .io import load_room, save_room, export_room_zip
+from .io import load_room, save_room, export_room_zip, generate_report
 
 VALID_UNITS = ["meters", "feet"]
 
@@ -157,6 +157,10 @@ class Room:
             include_lamp_files=include_lamp_files,
             include_lamp_plots=include_lamp_plots,
         )
+
+    def generate_report(self, fname=None):
+        """generate a csv report of all the rooms contents and zone statistics"""
+        return generate_report(self, fname)
 
     def get_calc_state(self):
         """
