@@ -3,7 +3,7 @@ import warnings
 from .geometry import RoomDimensions
 from .lamp import Lamp
 from .calc_zone import CalcZone, CalcPlane, CalcVol
-from ._helpers import new_lamp_position
+from .lamp_helpers import new_lamp_position
 
 
 class Scene:

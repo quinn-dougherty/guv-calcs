@@ -15,7 +15,7 @@ from ._data import (
     plot_disinfection_data,
 )
 from .units import convert_units
-from ._helpers import new_lamp_position, get_lamp_positions
+from .lamp_helpers import new_lamp_position, get_lamp_positions
 from ._read import read_export_file, file_to_zone
 from ._version import __version__
 

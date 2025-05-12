@@ -1,34 +1,5 @@
 import numpy as np
 
-
-## is this even used anywhere anymore?? it might need to be dummied out
-def validate_spectra(spectra, required_keys=None):
-    """check that a spectra passed not-from-source"""
-
-    # first, spectra must be a dict
-    if not isinstance(spectra, dict):
-        raise TypeError("Must be dict")
-
-    # check any required keys
-    if required_keys is not None:
-        if isinstance(required_keys, list):
-            for key in required_keys:
-                validate_key(key, spectra)
-        elif isinstance(required_keys, str):
-            validate_key(required_keys, spectra)
-
-    # check that all values within a dict are the same length
-    if len(np.unique([len(val) for key, val in spectra.items()])) > 1:
-        raise ValueError("All entries in the spectra dict must be of the same length")
-
-    return spectra
-
-
-def validate_key(key, dct):
-    if key not in dct:
-        raise KeyError("Required key {key} is absent.")
-
-
 def get_lamp_positions(num_lamps, x, y, num_divisions=100):
     """
     generate a list of (x,y) positions for a lamp given room dimensions and
