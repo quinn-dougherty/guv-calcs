@@ -408,4 +408,3 @@ def get_tlv(ref, standard=0):
         msg = f"Argument `ref` must be either float, int, or Spectrum object, not {type(ref)}"
         raise TypeError(msg)
     return tlv
-

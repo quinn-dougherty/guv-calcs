@@ -44,7 +44,9 @@ class Room:
         if units is not None:
             if units.lower() not in VALID_UNITS:
                 raise KeyError(f"Invalid unit {units}")
-            default = [6.0, 4.0, 2.7] if units.lower() == "meters" else [20.0, 13.0, 9.0]
+            default = (
+                [6.0, 4.0, 2.7] if units.lower() == "meters" else [20.0, 13.0, 9.0]
+            )
         else:
             default = [6.0, 4.0, 2.7]
 
@@ -54,9 +56,6 @@ class Room:
             z if z is not None else default[2],
             "meters" if units is None else units.lower(),
         )
-        # to preserve apis--for now
-        self.x, self.y, self.z = self.dim.x, self.dim.y, self.dim.z
-        self.units = self.dim.units
 
         ### Misc flags
         self.standard = standard or "ANSI IES RP 27.1-22 (ACGIH Limits)"
@@ -84,8 +83,8 @@ class Room:
         )
 
         ### Plotting and data extraction
-        self.plotter = RoomPlotter(self)
-        self.disinfection = DisinfectionCalculator(self)
+        self._plotter = RoomPlotter(self)
+        self._disinfection = DisinfectionCalculator(self)
 
         self.calc_state = {}
         self.update_state = {}
@@ -171,6 +170,8 @@ class Room:
             self.enable_reflectance,
             tuple(self.ref_manager.x_spacings),
             tuple(self.ref_manager.y_spacings),
+            self.ref_manager.max_num_passes,
+            self.ref_manager.threshold,
         ]
 
         lamp_state = {}
@@ -228,20 +229,33 @@ class Room:
     # --------------------- Reflectance ----------------------
 
     def set_reflectance(self, R, wall_id=None):
+        """
+        set the reflectance (a float between 0 and 1) for the reflective walls
+        If wall_id is none, the value is set for all walls.
+        """
         self.ref_manager.set_reflectance(R=R, wall_id=wall_id)
         return self
 
     def set_reflectance_spacing(self, x_spacing=None, y_spacing=None, wall_id=None):
+        """
+        set the spacing of the calculation points for the reflective walls
+        If wall_id is none, the value is set for all walls.
+        """
         self.ref_manager.set_spacing(
             x_spacing=x_spacing, y_spacing=y_spacing, wall_id=wall_id
         )
         return self
 
     def set_max_num_passes(self, max_num_passes):
+        """set the maximum number of passes for the interreflection module"""
         self.ref_manager.max_num_passes = max_num_passes
         return self
 
     def set_reflectance_threshold(self, reflectance_threshold):
+        """
+        set the threshold percentage (a float between 0 and 1) for the
+        interreflection module 
+        """
         self.ref_manager.threshold = reflectance_threshold
         return self
 
@@ -252,7 +266,6 @@ class Room:
         if units.lower() not in ["meters", "feet"]:
             raise KeyError("Valid units are `meters` or `feet`")
         self.dim = self.dim.with_(units=units)
-        self.units = self.dim.units
 
         self.scene.dim = self.dim
         self.scene.update_standard_zones(self.standard)
@@ -262,23 +275,52 @@ class Room:
     def set_dimensions(self, x=None, y=None, z=None):
         """set room dimensions"""
         self.dim = self.dim.with_(x=x, y=y, z=z)
-        # for api compatability -- for now
-        self.x, self.y, self.z = self.dim.x, self.dim.y, self.dim.z
         self.ref_manager.update_dimensions(self.dim.x, self.dim.y, self.dim.z)
         self.scene.dim = self.dim
         self.scene.update_standard_zones(self.standard)
         return self
 
     @property
-    def volume(self) -> float:
-        return self.dim.volume()
+    def units(self) -> str:
+        return self.dim.units
+
+    @property
+    def x(self) -> float:
+        return self.dim.x
+
+    @property
+    def y(self) -> float:
+        return self.dim.y
+
+    @property
+    def z(self) -> float:
+        return self.dim.z
+
+    @units.setter
+    def units(self, value: str):
+        self.set_units(value)
+
+    @x.setter
+    def x(self, value: float):
+        self.set_dimensions(x=value)
+
+    @y.setter
+    def y(self, value: float):
+        self.set_dimensions(y=value)
+
+    @z.setter
+    def z(self, value: float):
+        self.set_dimensions(z=value)
 
     @property
     def dimensions(self) -> tuple[float, float, float]:
         return (self.dim.x, self.dim.y, self.dim.z)
 
-    # -------------------- Scene: lamps and zones ---------------------
+    @property
+    def volume(self) -> float:
+        return self.dim.volume()
 
+    # -------------------- Scene: lamps and zones ---------------------
 
     def add(self, *args):
         """
@@ -290,7 +332,7 @@ class Room:
         """
         self.scene.add(*args)
         return self
-    
+
     def add_lamp(self, lamp):
         """
         Add a lamp to the room scene
@@ -346,6 +388,7 @@ class Room:
         """
         msgs = self.scene.check_positions()
         return msgs
+
     # -------------------------- Calculation ---------------------------
 
     def calculate(self, hard=False):
@@ -428,8 +471,8 @@ class Room:
 
     def get_disinfection_data(self, zone_id="WholeRoomFluence"):
         """return the fluence_dict, dataframe, and violin plot"""
-        return self.disinfection.get_disinfection_data(zone_id=zone_id)
+        return self._disinfection.get_disinfection_data(zone_id=zone_id)
 
     def plotly(self, fig=None, select_id=None, title=""):
         """return a plotly figure of all the room's components"""
-        return self.plotter.plotly(fig=fig, select_id=select_id, title=title)
+        return self._plotter.plotly(fig=fig, select_id=select_id, title=title)

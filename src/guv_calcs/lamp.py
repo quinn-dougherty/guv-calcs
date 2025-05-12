@@ -544,7 +544,6 @@ class Lamp:
         else:
             return None
 
-
     def save(self, filename):
         """save lamp information as json"""
         data = self.to_dict()

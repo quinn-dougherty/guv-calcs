@@ -12,6 +12,7 @@ from matplotlib.figure import Figure as mpl_fig
 
 # -------------- Loading a room from file -------------------
 
+
 def load_room(filedata):
     """load a room object from json filedata"""
     from .room import Room
@@ -170,6 +171,7 @@ def export_room_zip(
     else:
         return zip_bytes
 
+
 def generate_report(self, fname=None):
     """
     Dump a one file CSV with a snapshot of the current room.
@@ -181,7 +183,7 @@ def generate_report(self, fname=None):
     rows += [["", "Dimensions", "x", "y", "z", "units"]]
     d = self.dim
     rows += [["", "", d.x, d.y, d.z, d.units]]
-    rows += [["", "Volume", round(self.volume,3)]]
+    rows += [["", "Volume", round(self.volume, 3)]]
     rows += [[""]]
 
     # ───  Reflectance  ──────────────────────────────────
@@ -194,56 +196,71 @@ def generate_report(self, fname=None):
     if self.scene.lamps:
         rows += [["Luminaires"]]
         rows += [["", "", "", "Surface Position", "", "", "Aim"]]
-        rows += [[   "",
-                    "ID",
-                    "Name",
-                    "x",
-                    "y",
-                    "z",
-                    "x",
-                    "y",
-                    "z",
-                    "Orientation",
-                    "Tilt",
-                    "Surface Length",
-                    "Surface Width",
-                    "Fixture Depth",
-                ]]            
+        rows += [
+            [
+                "",
+                "ID",
+                "Name",
+                "x",
+                "y",
+                "z",
+                "x",
+                "y",
+                "z",
+                "Orientation",
+                "Tilt",
+                "Surface Length",
+                "Surface Width",
+                "Fixture Depth",
+            ]
+        ]
         for lamp in self.scene.lamps.values():
-            rows += [[ "",
+            rows += [
+                [
+                    "",
                     lamp.lamp_id,
                     lamp.name,
-                    lamp.x,lamp.y,lamp.z,
-                    lamp.aimx,lamp.aimy,lamp.aimz,
+                    lamp.x,
+                    lamp.y,
+                    lamp.z,
+                    lamp.aimx,
+                    lamp.aimy,
+                    lamp.aimz,
                     lamp.heading,
                     lamp.bank,
                     lamp.surface.length,
                     lamp.surface.width,
                     lamp.surface.depth,
-                    ]]
+                ]
+            ]
         rows += [[""]]
 
     # ───  Calculation planes  ───────────────────────────
     planes = [z for z in self.scene.calc_zones.values() if z.calctype == "Plane"]
     if planes:
         rows += [["Calculation Planes"]]
-        rows += [[   "",
-                    "ID",
-                    "Name",
-                    "x1",
-                    "x2",
-                    "y1",
-                    "y2",
-                    "height",
-                    "Vertical irradiance",
-                    "Horizontal irradiance",
-                    "Vertical field of view",
-                    "Horizontal field of view",
-                    "Dose",
-                    "Dose Hours",
-                ]]
+        rows += [
+            [
+                "",
+                "ID",
+                "Name",
+                "x1",
+                "x2",
+                "y1",
+                "y2",
+                "height",
+                "Vertical irradiance",
+                "Horizontal irradiance",
+                "Vertical field of view",
+                "Horizontal field of view",
+                "Dose",
+                "Dose Hours",
+            ]
+        ]
         for pl in planes:
-            rows += [[ "",
+            rows += [
+                [
+                    "",
                     pl.zone_id,
                     pl.name,
                     pl.x1,
@@ -257,27 +274,33 @@ def generate_report(self, fname=None):
                     pl.fov_horiz,
                     pl.dose,
                     pl.hours if pl.dose else "",
-                ]]
+                ]
+            ]
         rows += [[""]]
 
     # ───  Calculation volumes  ──────────────────────────
     vols = [z for z in self.scene.calc_zones.values() if z.calctype == "Volume"]
     if vols:
         rows += [["Calculation Volumes"]]
-        rows += [[   "",
-                    "ID",
-                    "Name",
-                    "x1",
-                    "x2",
-                    "y1",
-                    "y2",
-                    "z1",
-                    "z2",
-                    "Dose",
-                    "Dose Hours",
-                ]]
+        rows += [
+            [
+                "",
+                "ID",
+                "Name",
+                "x1",
+                "x2",
+                "y1",
+                "y2",
+                "z1",
+                "z2",
+                "Dose",
+                "Dose Hours",
+            ]
+        ]
         for v in vols:
-            rows += [["",
+            rows += [
+                [
+                    "",
                     v.zone_id,
                     v.name,
                     v.x1,
@@ -288,14 +311,17 @@ def generate_report(self, fname=None):
                     v.z2,
                     v.dose,
                     v.hours if v.dose else "",
-                ]]
+                ]
+            ]
         rows += [[""]]
 
     # ───  Statistics  ──────────────────────────
-    zones = list(self.scene.calc_zones.values())
+    zones = [z for z in self.scene.calc_zones.values() if z.calctype != "Zone"]
     if zones:
         rows += [["Statistics"]]
-        rows += [["", "Calculation Zone", "Avg", "Max", "Min", "Max/Min", "Avg/Min", "Units"]]
+        rows += [
+            ["", "Calculation Zone", "Avg", "Max", "Min", "Max/Min", "Avg/Min", "Units"]
+        ]
         for zone in zones:
             values = zone.get_values()
             avg = values.mean()
@@ -303,17 +329,20 @@ def generate_report(self, fname=None):
             mn = values.min()
             mxmin = mx / mn
             avgmin = avg / mn
-            rows += [["",
-                        zone.name,
-                        round(avg, 3),
-                        round(mx, 3),
-                        round(mn, 3),
-                        round(mxmin, 3),
-                        round(avgmin, 3),
-                        zone.units,
-                    ]]
+            rows += [
+                [
+                    "",
+                    zone.name,
+                    round(avg, 3),
+                    round(mx, 3),
+                    round(mn, 3),
+                    round(mxmin, 3),
+                    round(avgmin, 3),
+                    zone.units,
+                ]
+            ]
         rows += [[""]]
-    
+
     # footer
     rows += [[f"Generated {datetime.datetime.now().isoformat(timespec='seconds')}"]]
     csv_bytes = rows_to_bytes(rows)
@@ -323,6 +352,7 @@ def generate_report(self, fname=None):
             csvfile.write(csv_bytes)
     else:
         return csv_bytes
+
 
 # ------- Conversions to bytes ---------------
 
@@ -370,6 +400,7 @@ def load_csv(datasource):
     else:
         raise TypeError(f"File type {type(datasource)} not valid")
     return csv_data
+
 
 def get_version(path) -> dict:
 
