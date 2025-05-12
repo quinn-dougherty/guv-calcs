@@ -1,16 +1,12 @@
-# import inspect
-# import warnings
-# import json
-# import copy
 import numpy as np
 from collections.itertools import combinations
 import matplotlib.pyplot as plt
-from .calc_manager_new import LightingCalculator
-
-# from ._helpers import rows_to_bytes
+from .calc_manager import LightingCalculator
 
 
 class Zone:
+    """Flags + shared behaviour common to ALL zones (planes, volumes, …)."""
+
     def __init__(
         self,
         zone_id=None,
@@ -22,6 +18,7 @@ class Zone:
         show_values=None,
         **kwargs,
     ):
+
         self.zone_id = str(zone_id)
         self.name = zone_id if name is None else name
         self.offset = True if offset is None else offset
@@ -33,7 +30,7 @@ class Zone:
         self.hours = 8.0 if hours is None else abs(hours)  # only used if dose is true
         self.enabled = True if enabled is None else enabled
         self.show_values = True if show_values is None else show_values
-        
+
         # may need a different lighting calculator defined for Planes and Volumes...
         self.calculator = LightingCalculator(self)
 
@@ -51,7 +48,8 @@ class Zone:
         data.update(self._extra_dict())
 
     def _extra_dict(self):
-        return {} 
+        return {}
+
 
 class Plane(Zone):
     def __init__(
@@ -70,40 +68,41 @@ class Plane(Zone):
 
     def plot(self):
         """"""
-        pass #tmp
+        pass  # tmp
 
     def export(self, fname):
         """"""
-        pass #tmp
+        pass  # tmp
 
     def _extra_dict(self):
-        
+
         zone_data = super()._extra_dict()
-        
+
         data = {
-            "fov_vert" :  self.fov_vert
-            "fov_horiz" : self.fov_horiz
-            "vert" : self.vert
-            "horiz" : self.horiz
-            "normal" : self.normal
-            }
+            "fov_vert": self.fov_vert,
+            "fov_horiz": self.fov_horiz,
+            "vert": self.vert,
+            "horiz": self.horiz,
+            "normal": self.normal,
+        }
         zone_data.update(data)
         return zone_data
+
 
 class CalcRectangle(Plane):
     def __init__(
         self,
-        x1=0, x2=6,
-        y1=0, y2=4,
-        z1=0, z2=2.7,
-        )
-        
-        self.x1=x1
-        self.x2=x2
-        self.y1=y1
-        self.y2=y2
+        x1=0,
+        x2=6,
+        y1=0,
+        y2=4,
+    ):
 
-    
+        self.x1 = x1
+        self.x2 = x2
+        self.y1 = y1
+        self.y2 = y2
+
 
 class Volume(Zone):
     def __init__(self, *args, **kwargs):
