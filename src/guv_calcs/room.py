@@ -254,7 +254,7 @@ class Room:
     def set_reflectance_threshold(self, reflectance_threshold):
         """
         set the threshold percentage (a float between 0 and 1) for the
-        interreflection module 
+        interreflection module
         """
         self.ref_manager.threshold = reflectance_threshold
         return self

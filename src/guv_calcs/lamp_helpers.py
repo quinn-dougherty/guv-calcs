@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def get_lamp_positions(num_lamps, x, y, num_divisions=100):
     """
     generate a list of (x,y) positions for a lamp given room dimensions and
