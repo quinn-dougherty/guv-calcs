@@ -22,6 +22,7 @@ VALID_LAMPS = [
     "uvpro222_b1",
     "uvpro222_b2",
     "visium",
+    "aerolamp"
 ]
 
 KRCL_KEYS = [
