@@ -1,4 +1,4 @@
-from guv_calcs import CalcVol, CalcPlane
+from .calc_zone import CalcVol, CalcPlane
 from pathlib import Path
 import numpy as np
 
