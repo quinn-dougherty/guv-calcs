@@ -36,6 +36,7 @@ class Room:
         reflectance_threshold=None,
         air_changes=None,
         ozone_decay_constant=None,
+        precision=1,
         unit_mode="auto",
         overwrite="warn",
     ):
@@ -59,8 +60,9 @@ class Room:
 
         ### Misc flags
         self.standard = standard or "ANSI IES RP 27.1-22 (ACGIH Limits)"
-        self.ozone_decay_constant = ozone_decay_constant or 2.7
         self.air_changes = air_changes or 1.0
+        self.ozone_decay_constant = ozone_decay_constant or 2.7
+        self.precision = precision
 
         ### Scene - lamps and zones
         self.scene = Scene(dim=self.dim, unit_mode=unit_mode, overwrite=overwrite)
@@ -106,6 +108,7 @@ class Room:
         data["ozone_decay_constant"] = self.ozone_decay_constant
         data["overwrite"] = self.scene.overwrite
         data["unit_mode"] = self.scene.unit_mode
+        data["precision"] = self.precision
 
         dct = self.__dict__.copy()
         data["lamps"] = {k: v.to_dict() for k, v in dct["lamps"].items()}

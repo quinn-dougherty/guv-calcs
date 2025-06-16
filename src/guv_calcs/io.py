@@ -178,18 +178,21 @@ def generate_report(self, fname=None):
     Sections are separated by blank lines so Excel shows each
     header group clearly.
     """
+    precision = self.precision if self.precision>3 else 3
+    fmt = lambda v: round(v, precision) if isinstance(v, (int, float)) else v
     # ───  Room parameters  ───────────────────────────────
     rows = [["Room Parameters"]]
     rows += [["", "Dimensions", "x", "y", "z", "units"]]
     d = self.dim
-    rows += [["", "", d.x, d.y, d.z, d.units]]
-    rows += [["", "Volume", round(self.volume, 3)]]
+    rows += [["", "", fmt(d.x), fmt(d.y), fmt(d.z), d.units]]
+    vol_units = "ft 3" if self.units=='feet' else 'm 3'
+    rows += [["", "Volume", fmt(self.volume),vol_units]]
     rows += [[""]]
 
     # ───  Reflectance  ──────────────────────────────────
     rows += [["", "Reflectance"]]
-    rows += [["", "", "Floor", "Ceiling", "North", "South", "East", "West"]]
-    rows += [["", "", *self.ref_manager.reflectances.values()]]
+    rows += [["", "", "Floor", "Ceiling", "North", "South", "East", "West", "Enabled"]]
+    rows += [["", "", *self.ref_manager.reflectances.values(), self.enable_reflectance]]
     rows += [[""]]
 
     # ───  Luminaires  ───────────────────────────────────
@@ -220,17 +223,17 @@ def generate_report(self, fname=None):
                     "",
                     lamp.lamp_id,
                     lamp.name,
-                    lamp.x,
-                    lamp.y,
-                    lamp.z,
-                    lamp.aimx,
-                    lamp.aimy,
-                    lamp.aimz,
-                    lamp.heading,
-                    lamp.bank,
-                    lamp.surface.length,
-                    lamp.surface.width,
-                    lamp.surface.depth,
+                    fmt(lamp.x),
+                    fmt(lamp.y),
+                    fmt(lamp.z),
+                    fmt(lamp.aimx),
+                    fmt(lamp.aimy),
+                    fmt(lamp.aimz),
+                    fmt(lamp.heading),
+                    fmt(lamp.bank),
+                    fmt(lamp.surface.length),
+                    fmt(lamp.surface.width),
+                    fmt(lamp.surface.depth),
                 ]
             ]
         rows += [[""]]
@@ -263,11 +266,11 @@ def generate_report(self, fname=None):
                     "",
                     pl.zone_id,
                     pl.name,
-                    pl.x1,
-                    pl.x2,
-                    pl.y1,
-                    pl.y2,
-                    pl.height,
+                    fmt(pl.x1),
+                    fmt(pl.x2),
+                    fmt(pl.y1),
+                    fmt(pl.y2),
+                    fmt(pl.height),
                     pl.vert,
                     pl.horiz,
                     pl.fov_vert,
@@ -303,12 +306,12 @@ def generate_report(self, fname=None):
                     "",
                     v.zone_id,
                     v.name,
-                    v.x1,
-                    v.x2,
-                    v.y1,
-                    v.y2,
-                    v.z1,
-                    v.z2,
+                    fmt(v.x1),
+                    fmt(v.x2),
+                    fmt(v.y1),
+                    fmt(v.y2),
+                    fmt(v.z1),
+                    fmt(v.z2),
                     v.dose,
                     v.hours if v.dose else "",
                 ]
@@ -333,11 +336,11 @@ def generate_report(self, fname=None):
                 [
                     "",
                     zone.name,
-                    round(avg, 3),
-                    round(mx, 3),
-                    round(mn, 3),
-                    round(mxmin, 3),
-                    round(avgmin, 3),
+                    round(avg,precision),
+                    round(mx,precision),
+                    round(mn,precision),
+                    round(mxmin,precision),
+                    round(avgmin,precision),
                     zone.units,
                 ]
             ]
