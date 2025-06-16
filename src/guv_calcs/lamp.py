@@ -332,9 +332,9 @@ class Lamp:
     def move(self, x=None, y=None, z=None):
         """Designate lamp position in cartesian space"""
         # determine new position   selected_lamp.
-        x = self.x if x is None else x
-        y = self.y if y is None else y
-        z = self.z if z is None else z
+        x = self.x if x is None else float(x)
+        y = self.y if y is None else float(y)
+        z = self.z if z is None else float(z)
         position = np.array([x, y, z])
         # update aim point based on new position
         diff = position - self.position
@@ -351,15 +351,15 @@ class Lamp:
 
     def rotate(self, angle):
         """designate lamp orientation with respect to its z axis"""
-        self.angle = angle
+        self.angle = float(angle)
         self.surface.set_angle(angle)
         return self
 
     def aim(self, x=None, y=None, z=None):
         """aim lamp at a point in cartesian space"""
-        x = self.aimx if x is None else x
-        y = self.aimy if y is None else y
-        z = self.aimz if z is None else z
+        x = self.aimx if x is None else float(x)
+        y = self.aimy if y is None else float(y)
+        z = self.aimz if z is None else float(z)
         self.aim_point = np.array([x, y, z])
         self.aimx, self.aimy, self.aimz = self.aim_point
         xr, yr, zr = self.aim_point - self.position
