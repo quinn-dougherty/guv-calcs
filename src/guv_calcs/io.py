@@ -178,15 +178,15 @@ def generate_report(self, fname=None):
     Sections are separated by blank lines so Excel shows each
     header group clearly.
     """
-    precision = self.precision if self.precision>3 else 3
+    precision = self.precision if self.precision > 3 else 3
     fmt = lambda v: round(v, precision) if isinstance(v, (int, float)) else v
     # ───  Room parameters  ───────────────────────────────
     rows = [["Room Parameters"]]
     rows += [["", "Dimensions", "x", "y", "z", "units"]]
     d = self.dim
     rows += [["", "", fmt(d.x), fmt(d.y), fmt(d.z), d.units]]
-    vol_units = "ft 3" if self.units=='feet' else 'm 3'
-    rows += [["", "Volume", fmt(self.volume),vol_units]]
+    vol_units = "ft 3" if self.units == "feet" else "m 3"
+    rows += [["", "Volume", fmt(self.volume), vol_units]]
     rows += [[""]]
 
     # ───  Reflectance  ──────────────────────────────────
@@ -336,11 +336,11 @@ def generate_report(self, fname=None):
                 [
                     "",
                     zone.name,
-                    round(avg,precision),
-                    round(mx,precision),
-                    round(mn,precision),
-                    round(mxmin,precision),
-                    round(avgmin,precision),
+                    round(avg, precision),
+                    round(mx, precision),
+                    round(mn, precision),
+                    round(mxmin, precision),
+                    round(avgmin, precision),
                     zone.units,
                 ]
             ]
