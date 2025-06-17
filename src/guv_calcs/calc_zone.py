@@ -47,6 +47,7 @@ class CalcZone(object):
         hours=None,
         enabled=None,
         show_values=None,
+        colormap=None,
     ):
         self.zone_id = str(zone_id)
         self.name = zone_id if name is None else name
@@ -59,6 +60,7 @@ class CalcZone(object):
         self.hours = 8.0 if hours is None else abs(hours)  # only used if dose is true
         self.enabled = True if enabled is None else enabled
         self.show_values = True if show_values is None else show_values
+        self.colormap = colormap
 
         self.calculator = LightingCalculator(self)
 
@@ -536,7 +538,7 @@ class CalcVol(CalcZone):
                 opacity=0.25,
                 showscale=False,
                 colorbar=None,
-                colorscale="plasma",
+                colorscale=self.colormap,
                 caps=dict(x_show=False, y_show=False, z_show=False),
                 name=self.name + " Values",
             )
@@ -842,7 +844,7 @@ class CalcPlane(CalcZone):
             extent = [self.x1, self.x2, self.y1, self.y2]
 
             values = values.T[::-1]
-            img = ax.imshow(values, extent=extent, vmin=vmin, vmax=vmax, cmap="plasma")
+            img = ax.imshow(values, extent=extent, vmin=vmin, vmax=vmax, cmap=self.colormap)
             cbar = fig.colorbar(img, pad=0.03)
             ax.set_title(title)
             cbar.set_label(self.units, loc="center")

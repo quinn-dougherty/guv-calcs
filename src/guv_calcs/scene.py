@@ -1,5 +1,6 @@
 from collections.abc import Iterable
 import warnings
+from matplotlib import colormaps
 from .geometry import RoomDimensions
 from .lamp import Lamp
 from .calc_zone import CalcZone, CalcPlane, CalcVol
@@ -7,10 +8,13 @@ from .lamp_helpers import new_lamp_position
 
 
 class Scene:
-    def __init__(self, dim: RoomDimensions, unit_mode: str, overwrite: str):
+    def __init__(
+        self, dim: RoomDimensions, unit_mode: str, overwrite: str, colormap: str
+    ):
         self.dim = dim
         self.unit_mode: str = unit_mode  # "strict" → raise; "auto" → convert in place
         self.overwrite: str = overwrite  # "error" | "warn" | "silent"
+        self.colormap: str = colormap
 
         self.lamps: dict[str, Lamp] = {}
         self.calc_zones: dict[str, CalcZone] = {}
@@ -69,10 +73,20 @@ class Scene:
         """Remove a lamp from the scene"""
         self.lamps.pop(lamp_id, None)
 
+    def set_colormap(self, colormap: str):
+        """Set the scene's colormap"""
+        if colormap.lower() not in list(colormaps):
+            warnings.warn(f"{colormap} is not a valid colormap.")
+        else:
+            self.colormap = colormap.lower()
+            for zone in self.calc_zones.values():
+                zone.colormap = self.colormap
+
     def add_calc_zone(self, calc_zone, *, overwrite=None):
         """
         Add a calculation zone to the scene
         """
+        calc_zone.colormap = self.colormap
         self.calc_zones[calc_zone.zone_id] = self._check_zone(
             calc_zone, overwrite=overwrite
         )

@@ -39,6 +39,7 @@ class Room:
         precision=1,
         unit_mode="auto",
         overwrite="warn",
+        colormap="plasma",
     ):
 
         ### Dimensions
@@ -65,7 +66,9 @@ class Room:
         self.precision = precision
 
         ### Scene - lamps and zones
-        self.scene = Scene(dim=self.dim, unit_mode=unit_mode, overwrite=overwrite)
+        self.scene = Scene(
+            dim=self.dim, unit_mode=unit_mode, overwrite=overwrite, colormap=colormap
+        )
         self.lamps = self.scene.lamps
         self.calc_zones = self.scene.calc_zones
 
@@ -106,9 +109,10 @@ class Room:
         data["standard"] = self.standard
         data["air_changes"] = self.air_changes
         data["ozone_decay_constant"] = self.ozone_decay_constant
+        data["precision"] = self.precision
         data["overwrite"] = self.scene.overwrite
         data["unit_mode"] = self.scene.unit_mode
-        data["precision"] = self.precision
+        data["colormap"] = self.scene.colormap
 
         dct = self.__dict__.copy()
         data["lamps"] = {k: v.to_dict() for k, v in dct["lamps"].items()}
@@ -383,6 +387,13 @@ class Room:
         Remove a calculation zone from the room
         """
         self.scene.remove_calc_zone(zone_id)
+        return self
+
+    def set_colormap(self, colormap):
+        """
+        Set the room colormap
+        """
+        self.scene.set_colormap(colormap)
         return self
 
     def check_positions(self):
