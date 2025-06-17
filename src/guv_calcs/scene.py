@@ -75,10 +75,10 @@ class Scene:
 
     def set_colormap(self, colormap: str):
         """Set the scene's colormap"""
-        if colormap.lower() not in list(colormaps):
+        if colormap not in list(colormaps):
             warnings.warn(f"{colormap} is not a valid colormap.")
         else:
-            self.colormap = colormap.lower()
+            self.colormap = colormap
             for zone in self.calc_zones.values():
                 zone.colormap = self.colormap
 
