@@ -14,17 +14,17 @@ from .trigonometry import to_cartesian, to_polar, attitude
 from ._data import get_tlvs
 
 VALID_LAMPS = [
+    "aerolamp",
     "beacon",
     "lumenizer_zone",
+    "nukit_lantern",
+    "nukit_torch",
     "sterilray",
     "ushio_b1",
     "ushio_b1.5",
     "uvpro222_b1",
     "uvpro222_b2",
     "visium",
-    "aerolamp",
-    "nukit_torch",
-    "nukit_lantern",
 ]
 
 KRCL_KEYS = [
@@ -268,65 +268,46 @@ class Lamp:
                 data["spectra_source"][k] = np.array(lst)
         return cls(**{k: v for k, v in data.items() if k in keys})
 
-    @classmethod
-    def from_keyword(
-        cls,
-        key,
-        lamp_id=None,
-        name=None,
-        x=None,
-        y=None,
-        z=None,
-        angle=None,
-        aimx=None,
-        aimy=None,
-        aimz=None,
-        intensity_units=None,
-        guv_type=None,
-        wavelength=None,
-        width=None,
-        length=None,
-        depth=None,
-        units=None,
-        source_density=None,
-        intensity_map=None,
-        enabled=None,
-    ):
+    @property
+    def keywords(self):
+        return VALID_LAMPS
 
+    @classmethod
+    def from_keyword(cls, key, lamp_id=None, **kwargs):
+        """define a Lamp object from a predefined keyword"""
+        if not isinstance(key,str):
+            raise TypeError(f"Keyword must be str, not {type(key)}")
         if key.lower() in VALID_LAMPS:
             path = "guv_calcs.data.lamp_data"
-            fname = key.lower() + ".ies"
-            spec_fname = key.lower() + ".csv"
-            filename = resources.files(path).joinpath(fname)
-            spectra_source = resources.files(path).joinpath(spec_fname)
+            fn = resources.files(path).joinpath(key.lower() + ".ies")
+            sn = resources.files(path).joinpath(key.lower() + ".csv")
         else:
-            msg = f"{key} is not a valid lamp key. Photometric and spectral data will not be loaded."
-            warnings.warn(msg, stacklevel=3)
-            filename = None
-            spectra_source = None
+            raise KeyError(f"{key} is not a valid lamp key. Valid keys are {VALID_LAMPS}")
 
         return cls(
             lamp_id=key if lamp_id is None else lamp_id,
-            name=name,
-            filename=filename,
-            x=x,
-            y=y,
-            z=z,
-            angle=angle,
-            aimx=aimx,
-            aimy=aimy,
-            aimz=aimz,
-            intensity_units=intensity_units,
-            guv_type=guv_type,
-            wavelength=wavelength,
-            spectra_source=spectra_source,
-            width=width,
-            length=length,
-            depth=depth,
-            units=units,
-            source_density=source_density,
-            intensity_map=intensity_map,
-            enabled=enabled,
+            filename=fn,
+            spectra_source=sn,
+            **kwargs,
+        )
+        
+    @classmethod
+    def from_index(cls, key_index=0, lamp_id=None, **kwargs):
+        """define a Lamp object from an index value"""
+        if not isinstance(key_index, int):
+            raise TypeError(f"Keyword index must be int, not {type(key_index)}")
+        if key_index < len(VALID_LAMPS):
+            key = VALID_LAMPS[key_index]
+            path = "guv_calcs.data.lamp_data"
+            fn = resources.files(path).joinpath(key.lower() + ".ies")
+            sn = resources.files(path).joinpath(key.lower() + ".csv")
+        else:
+            raise IndexError(f"Only {len(VALID_LAMPS)} lamps are available. Available lamps: {VALID_LAMPS}")
+        return cls(
+            lamp_id=key if lamp_id is None else lamp_id,
+            filename=fn,
+            spectra_source=sn,
+            **kwargs,
         )
 
     def move(self, x=None, y=None, z=None):
