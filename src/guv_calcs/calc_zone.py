@@ -844,7 +844,9 @@ class CalcPlane(CalcZone):
             extent = [self.x1, self.x2, self.y1, self.y2]
 
             values = values.T[::-1]
-            img = ax.imshow(values, extent=extent, vmin=vmin, vmax=vmax, cmap=self.colormap)
+            img = ax.imshow(
+                values, extent=extent, vmin=vmin, vmax=vmax, cmap=self.colormap
+            )
             cbar = fig.colorbar(img, pad=0.03)
             ax.set_title(title)
             cbar.set_label(self.units, loc="center")
