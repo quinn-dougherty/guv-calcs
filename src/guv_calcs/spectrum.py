@@ -5,7 +5,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from .io import load_csv, rows_to_bytes
 
-
 class Spectrum:
     """
     Attributes:
@@ -142,7 +141,7 @@ class Spectrum:
         """weight by spectral effectiveness"""
         if standard in self.weights.keys():
             weight_wavelengths, weights_orig = self.weights[standard]
-            weights = self._log_interp(
+            weights = log_interp(
                 self.wavelengths, weight_wavelengths, weights_orig
             )
             weighted_intensity = self.intensities * weights
@@ -226,7 +225,7 @@ class Spectrum:
     def get_tlv(self, standard):
         """return the total uv dose over 8 hours for this specific lamp,
         per a particular spectral effectiveness standard. units: mJ/cm2"""
-        weights = self._log_interp(
+        weights = log_interp(
             self.wavelengths, *self.weights[standard]
         )  # get weights
         i_new = self.intensities / self.sum()  # scale
@@ -244,7 +243,7 @@ class Spectrum:
         provided an irradiance value in uW/cm2
         and a spectral effectiveness standard
         """
-        weights = self._log_interp(
+        weights = log_interp(
             self.wavelengths, *self.weights[standard]
         )  # get weights
         i_new = self.intensities * irradiance / self.sum()  # scale
@@ -326,3 +325,8 @@ def sum_spectrum(wavelength, intensity):
         for i in range(1, len(wavelength))
     ]
     return sum(weighted_intensity)
+
+def log_interp(wvs, weight_wvs, weight_values):
+    """log10 interpolation for the tlv weights"""
+    logterp = np.interp(wvs, weight_wvs, np.log10(weight_values))
+    return np.power(10, logterp)

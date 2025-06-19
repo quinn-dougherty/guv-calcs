@@ -7,7 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from itertools import product
-from .spectrum import Spectrum
+from .spectrum import Spectrum, log_interp
 from .io import load_csv
 
 pd.options.mode.chained_assignment = None
@@ -400,7 +400,7 @@ def get_tlv(ref, standard=0):
     if isinstance(ref, (int, float)):
         tlv_wavelengths = weights["Wavelength (nm)"]
         tlv_values = weights[key]
-        weighting = np.interp(ref, tlv_wavelengths, tlv_values)
+        weighting = log_interp(ref, tlv_wavelengths, tlv_values)
         tlv = 3 / weighting  # value not to be exceeded in 8 hours
     elif isinstance(ref, Spectrum):
         tlv = ref.get_tlv(key)
@@ -408,3 +408,4 @@ def get_tlv(ref, standard=0):
         msg = f"Argument `ref` must be either float, int, or Spectrum object, not {type(ref)}"
         raise TypeError(msg)
     return tlv
+
