@@ -27,14 +27,14 @@ install:
 	rm -rf dist build */*.egg-info *.egg-info
 	$(PYTHON_INTERPRETER) setup.py sdist
 	pip install . --no-cache-dir
-	
-build:
+
+publish:
 	rm -rf dist build */*.egg-info *.egg-info
 	$(PYTHON_INTERPRETER) setup.py sdist bdist_wheel
 	twine upload dist/*
 
 ## Lint using flake8 and black
-lint:
+lint: 
 	black src/guv_calcs/*
 	flake8 --ignore=E114,E116,E117,E231,E266,E303,E501,W293,W291,W503 src/guv_calcs/*
 
@@ -50,4 +50,4 @@ clean:
 test: 
 	$(PYTHON_INTERPRETER) tests/test.py
 	
-all: clean test install lint
+all: install lint test
