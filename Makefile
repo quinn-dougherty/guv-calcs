@@ -50,4 +50,4 @@ clean:
 test: 
 	$(PYTHON_INTERPRETER) tests/test.py
 	
-all: lint install test clean
+all: clean test install lint

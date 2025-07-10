@@ -4,7 +4,9 @@ from pathlib import Path
     
 with open("README.md", "r") as fh:
     long_description = fh.read()
-    setup(
+with open("requirements.txt", "r") as thefile: 
+    requirements = thefile.readlines()
+setup(
         name="guv_calcs",
         url="https://github.com/jvbelenky/guv-calcs",
         version=get_version(Path(__file__).parent / 'src' / 'guv_calcs' / '_version.py'),
@@ -23,12 +25,5 @@ with open("README.md", "r") as fh:
         package_data={'guv_calcs': ['data/*', 'data/*/*']},
         zip_safe=True,
         python_requires=">=3.8",
-        install_requires=[
-            "numpy",
-            "scipy",
-            "matplotlib",
-            "seaborn",
-            "plotly",
-            "photompy"
-        ],
+        install_requires=requirements,
     )
