@@ -4,7 +4,7 @@
 #################################################################################
 
 PROJECT_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
-PYTHON_INTERPRETER = python3
+PYTHON_INTERPRETER = python
 
 ifeq (,$(shell which conda))
 HAS_CONDA=False
@@ -34,8 +34,10 @@ publish:
 	twine upload dist/*
 
 ## Lint using flake8 and black
-lint: 
+format: 
 	black src/guv_calcs/*
+	
+lint: format
 	flake8 --ignore=E114,E116,E117,E231,E266,E303,E501,W293,W291,W503 src/guv_calcs/*
 
 ## Remove compiled python files
