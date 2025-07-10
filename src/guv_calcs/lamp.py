@@ -275,14 +275,16 @@ class Lamp:
     @classmethod
     def from_keyword(cls, key, lamp_id=None, **kwargs):
         """define a Lamp object from a predefined keyword"""
-        if not isinstance(key,str):
+        if not isinstance(key, str):
             raise TypeError(f"Keyword must be str, not {type(key)}")
         if key.lower() in VALID_LAMPS:
             path = "guv_calcs.data.lamp_data"
             fn = resources.files(path).joinpath(key.lower() + ".ies")
             sn = resources.files(path).joinpath(key.lower() + ".csv")
         else:
-            raise KeyError(f"{key} is not a valid lamp key. Valid keys are {VALID_LAMPS}")
+            raise KeyError(
+                f"{key} is not a valid lamp key. Valid keys are {VALID_LAMPS}"
+            )
 
         return cls(
             lamp_id=key if lamp_id is None else lamp_id,
@@ -290,7 +292,7 @@ class Lamp:
             spectra_source=sn,
             **kwargs,
         )
-        
+
     @classmethod
     def from_index(cls, key_index=0, lamp_id=None, **kwargs):
         """define a Lamp object from an index value"""
@@ -302,7 +304,9 @@ class Lamp:
             fn = resources.files(path).joinpath(key.lower() + ".ies")
             sn = resources.files(path).joinpath(key.lower() + ".csv")
         else:
-            raise IndexError(f"Only {len(VALID_LAMPS)} lamps are available. Available lamps: {VALID_LAMPS}")
+            raise IndexError(
+                f"Only {len(VALID_LAMPS)} lamps are available. Available lamps: {VALID_LAMPS}"
+            )
         return cls(
             lamp_id=key if lamp_id is None else lamp_id,
             filename=fn,

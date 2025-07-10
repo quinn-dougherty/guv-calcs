@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from .io import load_csv, rows_to_bytes
 
+
 class Spectrum:
     """
     Attributes:
@@ -141,9 +142,7 @@ class Spectrum:
         """weight by spectral effectiveness"""
         if standard in self.weights.keys():
             weight_wavelengths, weights_orig = self.weights[standard]
-            weights = log_interp(
-                self.wavelengths, weight_wavelengths, weights_orig
-            )
+            weights = log_interp(self.wavelengths, weight_wavelengths, weights_orig)
             weighted_intensity = self.intensities * weights
         else:
             warnings.warn(f"{standard} not in available weightings.")
@@ -225,9 +224,7 @@ class Spectrum:
     def get_tlv(self, standard):
         """return the total uv dose over 8 hours for this specific lamp,
         per a particular spectral effectiveness standard. units: mJ/cm2"""
-        weights = log_interp(
-            self.wavelengths, *self.weights[standard]
-        )  # get weights
+        weights = log_interp(self.wavelengths, *self.weights[standard])  # get weights
         i_new = self.intensities / self.sum()  # scale
         s_lambda = sum_spectrum(self.wavelengths, weights * i_new)
         return 3 / s_lambda
@@ -243,9 +240,7 @@ class Spectrum:
         provided an irradiance value in uW/cm2
         and a spectral effectiveness standard
         """
-        weights = log_interp(
-            self.wavelengths, *self.weights[standard]
-        )  # get weights
+        weights = log_interp(self.wavelengths, *self.weights[standard])  # get weights
         i_new = self.intensities * irradiance / self.sum()  # scale
         weighted_irradiance = sum_spectrum(self.wavelengths, weights * i_new)
         return 3000 / weighted_irradiance
@@ -325,6 +320,7 @@ def sum_spectrum(wavelength, intensity):
         for i in range(1, len(wavelength))
     ]
     return sum(weighted_intensity)
+
 
 def log_interp(wvs, weight_wvs, weight_values):
     """log10 interpolation for the tlv weights"""
